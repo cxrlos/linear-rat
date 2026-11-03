@@ -16,7 +16,7 @@ lrat supports Linux and macOS, and one Linear workspace at a time. Issues labell
 
 ## Workflow
 
-1. Open an issue, or comment on an existing one, before starting larger work.
+1. Open an issue, or comment on an existing one, before starting larger work. Questions and loose ideas go to [Discussions](https://github.com/cxrlos/linear-rat/discussions).
 2. Branch off `main` as `<type>/<issue>-<slug>`, for example `feat/42-board-view`.
 3. Before opening a PR, run the checks listed under Commands in [AGENTS.md](AGENTS.md). CI runs the same ones.
 4. When a snapshot changes, review it with `cargo insta review` and commit the accepted `.snap` files.
