@@ -1,0 +1,5 @@
+---
+source: tests/keys.rs
+expression: "row(&app, 22)"
+---
+config.toml:6: unknown action `mvoe-up`; [keys.list] uses the default keys

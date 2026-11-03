@@ -1,0 +1,28 @@
+---
+source: tests/keys.rs
+expression: app.backend()
+---
+" My Issues │ Team Issues │ Analytics                                            "
+"┌My Issues─────────────────────────────────────────────────────────────────────┐"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"└──────────────────────────────────────────────────────────────────────────────┘"
+"config.toml:3: missing comma between array elements, expected `,`; using the def"
+"ault config                                                                     "
+" j down  k up  gg top  G bottom  Enter open  Esc close  ? keys  q quit          "

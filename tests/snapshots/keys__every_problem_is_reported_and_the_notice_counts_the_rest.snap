@@ -1,0 +1,7 @@
+---
+source: tests/keys.rs
+expression: "messages.join(\"\\n\")"
+---
+config.toml:2: `<Nope>` is not a key; [keys.list] uses the default keys
+config.toml:3: `quit` does not apply in [keys.list]; [keys.list] uses the default keys
+config.toml:5: unknown context `[keys.everywhere]`; expected global, list, detail or overlay

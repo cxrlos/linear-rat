@@ -24,5 +24,5 @@ expression: app.backend()
 "│                                                                              │"
 "│                                                                              │"
 "│                                                                              │"
-"│                                                                              │"
 "└──────────────────────────────────────────────────────────────────────────────┘"
+" j down  k up  gg top  G bottom  Enter open  Esc close  ? keys  q quit          "

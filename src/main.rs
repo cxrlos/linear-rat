@@ -6,6 +6,7 @@ use crossterm::event::EventStream;
 use linear_rat::app::{App, State};
 use linear_rat::auth::{self, Credentials, OsKeyring, WorkspaceFile};
 use linear_rat::cli::{AuthCommand, Cli, Command};
+use linear_rat::config::{self, Loaded};
 use linear_rat::linear::HttpClient;
 use linear_rat::terminal::{self, TerminalGuard};
 use linear_rat::{logging, runtime};
@@ -24,9 +25,21 @@ async fn main() -> anyhow::Result<()> {
     let _log_guard = logging::init().context("setting up the log file")?;
     tracing::info!(version = env!("CARGO_PKG_VERSION"), "starting");
 
+    let loaded = match config::path() {
+        Ok(path) => config::load(&path),
+        Err(error) => {
+            tracing::warn!("{error:#}; using the default config");
+            Loaded::default()
+        }
+    };
+    for error in &loaded.errors {
+        tracing::warn!(%error, "config problem");
+    }
+    let state = State::with_config(&loaded);
+
     let shutdown = terminal::shutdown_signal().context("listening for SIGTERM and SIGHUP")?;
     let guard = TerminalGuard::enter().context("preparing the terminal")?;
-    let result = match App::new(CrosstermBackend::new(io::stdout()), State::default()) {
+    let result = match App::new(CrosstermBackend::new(io::stdout()), state) {
         Ok(app) => runtime::run(app, EventStream::new(), shutdown).await,
         Err(error) => Err(error).context("drawing the first frame"),
     };
