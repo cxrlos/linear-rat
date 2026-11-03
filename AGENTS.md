@@ -44,7 +44,16 @@ Done when someone reading only the issue and the PR could pick up the next piece
 
 ## Map
 
-Filled in once the crate exists.
+- `src/main.rs`: the `lrat` binary. Parses the CLI, starts logging, enters the terminal guard and runs the runtime.
+- `src/app/`: the core. `State` (screens, modal stack), `Event` in, `update(state, event)` returning an `Update` (redraw flag and `Effect`s), and `App`, the driver that applies events and redraws only when asked. Tests drive `App`.
+- `src/ui.rs`: rendering, a pure function of `State`.
+- `src/runtime.rs`: the async loop. Reads terminal input and the shutdown signal, feeds events to `App` and carries out effects.
+- `src/linear/`: the `LinearClient` trait and `FakeClient`. All Linear access goes through here.
+- `src/terminal.rs`: the terminal guard (raw mode, alternate screen, panic hook) and the SIGTERM/SIGHUP shutdown signal.
+- `src/logging.rs`: `tracing` to a daily file under `$XDG_STATE_HOME/lrat/`, level from `LRAT_LOG`.
+- `src/cli.rs`: clap flags.
+- `tests/`: app-driver tests (`app.rs`, `runtime.rs`) and their insta snapshots.
+- `examples/force_panic.rs`: panics inside the guard, to check the terminal is restored.
 
 ## Commands
 
