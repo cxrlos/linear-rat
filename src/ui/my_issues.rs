@@ -6,7 +6,7 @@ use ratatui::style::{Modifier, Style, Stylize};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Paragraph, Wrap};
 
-use super::icons;
+use super::{icons, style};
 use crate::app::{Group, MyIssues, Pane};
 use crate::linear::model::{Issue, Priority, StateType, WorkflowState};
 
@@ -52,8 +52,8 @@ fn pane_block(title: impl Into<Line<'static>>, focus: Focus) -> Block<'static> {
         Focus::Alone => block,
         Focus::Focused => block
             .border_type(BorderType::Thick)
-            .border_style(icons::ACCENT),
-        Focus::Unfocused => block.border_style(icons::MUTED),
+            .border_style(style::ACCENT),
+        Focus::Unfocused => block.border_style(style::MUTED),
     }
 }
 
@@ -67,7 +67,7 @@ fn render_list(my_issues: &MyIssues, frame: &mut Frame, area: Rect, focus: Focus
     let inner = block.inner(area);
     frame.render_widget(block, area);
     if my_issues.groups().is_empty() {
-        let empty = Paragraph::new("No open issues are assigned to you.").fg(icons::MUTED);
+        let empty = Paragraph::new("No open issues are assigned to you.").fg(style::MUTED);
         frame.render_widget(empty, inner);
         return;
     }
@@ -126,7 +126,7 @@ fn render_list(my_issues: &MyIssues, frame: &mut Frame, area: Rect, focus: Focus
                 if is_focused {
                     frame.render_widget("▸", marker);
                 }
-                frame.render_widget(Span::raw(&issue.identifier).fg(icons::MUTED), identifier);
+                frame.render_widget(Span::raw(&issue.identifier).fg(style::MUTED), identifier);
                 frame.render_widget(issue.title.as_str(), title);
                 frame.render_widget(state_line(&issue.state), state);
                 frame.render_widget(priority_line(issue.priority), priority);
@@ -210,7 +210,7 @@ fn render_detail(my_issues: &MyIssues, frame: &mut Frame, area: Rect, focus: Foc
     ]);
     match &issue.description {
         Some(description) => lines.extend(description.lines().map(Line::from)),
-        None => lines.push(Line::from("No description.").fg(icons::MUTED)),
+        None => lines.push(Line::from("No description.").fg(style::MUTED)),
     }
     let detail = Paragraph::new(lines)
         .wrap(Wrap { trim: false })
@@ -219,7 +219,7 @@ fn render_detail(my_issues: &MyIssues, frame: &mut Frame, area: Rect, focus: Foc
 }
 
 fn field<'a>(name: &'a str, value: Line<'a>) -> Line<'a> {
-    let mut spans = vec![Span::raw(format!("{name:FIELD_WIDTH$}")).fg(icons::MUTED)];
+    let mut spans = vec![Span::raw(format!("{name:FIELD_WIDTH$}")).fg(style::MUTED)];
     spans.extend(value.spans);
     Line::from(spans)
 }
@@ -250,7 +250,7 @@ fn cycle_span<'a>(my_issues: &'a MyIssues, issue: &'a Issue) -> Span<'a> {
     };
     let name = Span::raw(my_issues.cycle_name(id).unwrap_or(id));
     if my_issues.is_in_active_cycle(issue) {
-        name.fg(icons::ACCENT).bold()
+        name.fg(style::ACCENT).bold()
     } else {
         name
     }

@@ -67,8 +67,3 @@ pub fn priority_name(priority: Priority) -> &'static str {
         Priority::None => "None",
     }
 }
-
-/// Marks what is active: the focused pane, the active cycle.
-pub const ACCENT: Color = Color::Cyan;
-/// Marks what is inactive, such as the pane without focus.
-pub const MUTED: Color = Color::DarkGray;
