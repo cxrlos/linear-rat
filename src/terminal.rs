@@ -58,13 +58,17 @@ fn restore_before_panic_message() {
     }));
 }
 
-/// Resolves on SIGTERM or SIGHUP, so the runtime can return and the guard can
-/// restore the terminal instead of the process dying in raw mode.
+/// Resolves on SIGINT, SIGTERM or SIGHUP, so the runtime can return and the
+/// guard can restore the terminal instead of the process dying in raw mode.
+/// Raw mode turns Ctrl-C into a key press, so SIGINT only comes from outside,
+/// as with `kill -INT`.
 pub fn shutdown_signal() -> io::Result<impl Future<Output = ()>> {
+    let mut interrupt = signal(SignalKind::interrupt())?;
     let mut terminate = signal(SignalKind::terminate())?;
     let mut hangup = signal(SignalKind::hangup())?;
     Ok(async move {
         tokio::select! {
+            _ = interrupt.recv() => {}
             _ = terminate.recv() => {}
             _ = hangup.recv() => {}
         }

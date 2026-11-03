@@ -37,7 +37,8 @@ async fn main() -> anyhow::Result<()> {
     }
     let state = State::demo().with_config(&loaded);
 
-    let shutdown = terminal::shutdown_signal().context("listening for SIGTERM and SIGHUP")?;
+    let shutdown =
+        terminal::shutdown_signal().context("listening for SIGINT, SIGTERM and SIGHUP")?;
     let guard = TerminalGuard::enter().context("preparing the terminal")?;
     let result = match App::new(CrosstermBackend::new(io::stdout()), state) {
         Ok(app) => runtime::run(app, EventStream::new(), shutdown).await,
