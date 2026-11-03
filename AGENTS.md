@@ -67,7 +67,7 @@ cargo +1.88 check --locked
 cargo run -- --demo
 ```
 
-CI runs the same set on every PR.
+CI runs all of these except `cargo run` on every PR.
 
 ## Agent skills
 
