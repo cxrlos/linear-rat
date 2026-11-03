@@ -24,7 +24,7 @@ pub fn render(state: &State, frame: &mut Frame) {
     let selected = Screen::ALL
         .iter()
         .position(|&screen| screen == state.screen);
-    let tabs = Tabs::new(Screen::ALL.map(Screen::title)).select(selected);
+    let tabs = Tabs::new(Screen::ALL.map(|screen| tab_title(state, screen))).select(selected);
     frame.render_widget(tabs, tabs_area);
     match state.screen {
         Screen::MyIssues => my_issues::render(&state.my_issues, frame, body_area),
@@ -40,6 +40,19 @@ pub fn render(state: &State, frame: &mut Frame) {
             Modal::Cheatsheet => cheatsheet::render(state, frame, body_area),
             Modal::WhichKey { prefix } => which_key::render(state, prefix, frame, body_area),
         }
+    }
+}
+
+/// The screen's title after the first key that shows it, as `[1] My Issues`,
+/// or the bare title if the viewer unbound every key for it.
+fn tab_title(state: &State, screen: Screen) -> String {
+    match state
+        .keymap
+        .keys_for(Action::ShowScreen(screen), &[Context::Global])
+        .first()
+    {
+        Some(key) => format!("[{key}] {}", screen.title()),
+        None => screen.title().to_owned(),
     }
 }
 

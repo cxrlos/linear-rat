@@ -2,7 +2,7 @@
 source: tests/app.rs
 expression: app.backend()
 ---
-" My Issues │ Team Issues │ Analytics                                            "
+" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
 "┌My Issues─────────────────────────────────────────────────────────────────────┐"
 "│  DES-31 Review copy for permission promp ○ Todo        ▮▯▯ Low     5 Cycle 7 │"
 "│  ENG-65 Rotate refresh tokens on every u ○ Todo        ··· None    2 Cycle 7 │"

@@ -2,7 +2,7 @@
 source: tests/keys.rs
 expression: app.backend()
 ---
-" My Issues │ Team Issues │ Analytics                                            "
+" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
 "┌My Issues─────────────────────────────────────────────────────────────────────┐"
 "│No open issues are assigned to you.                                           │"
 "│                                                                              │"

@@ -2,7 +2,7 @@
 source: tests/app.rs
 expression: app.backend()
 ---
-" My Issues │ Team Issues │ Analytics                                                                                                                                                                    "
+" [1] My Issues │ [2] Team Issues │ [3] Analytics                                                                                                                                                        "
 "┌My Issues─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐┏DES-34━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓"
 "│◐ Started (9)                                                                                                         │┃Design QA for the autumn release                                              ┃"
 "│▸ DES-34 Design QA for the autumn release                                         ◐ In Progress ▮▮▮ High    3 Cycle 7 │┃                                                                              ┃"

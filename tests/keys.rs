@@ -91,6 +91,32 @@ fn the_bottom_bar_accents_esc_and_mutes_moves_while_the_detail_is_open() {
 }
 
 #[test]
+fn each_tab_shows_the_key_that_opens_it() {
+    let app = app();
+
+    assert_eq!(
+        row(&app, 0).trim_end(),
+        " [1] My Issues │ [2] Team Issues │ [3] Analytics"
+    );
+}
+
+#[test]
+fn a_tab_shows_its_overridden_key_and_none_when_unbound() {
+    let app = app_with(
+        r#"
+[keys.global]
+show-team-issues = "t"
+noop = ["3"]
+"#,
+    );
+
+    assert_eq!(
+        row(&app, 0).trim_end(),
+        " [1] My Issues │ [t] Team Issues │ Analytics"
+    );
+}
+
+#[test]
 fn the_bottom_bar_shows_overridden_keys() {
     let app = app_with(OVERRIDES);
 
