@@ -1,0 +1,28 @@
+---
+source: tests/app.rs
+expression: app.backend()
+---
+" My Issues │ Team Issues │ Analytics                                            "
+"┌My Issues─────────────────────────────────────────────────────────────────────┐"
+"│No open issues are assigned to you.                                           │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"└──────────────────────────────────────────────────────────────────────────────┘"
+" j down  k up  gg top  G bottom  Enter open  Esc close  ? keys  q quit          "

@@ -2,11 +2,13 @@
 
 mod cheatsheet;
 mod hints;
+mod icons;
+mod my_issues;
 pub mod style;
 mod which_key;
 
 use ratatui::Frame;
-use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::layout::{Constraint, Layout, Rect, Size};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph, Tabs};
 
@@ -16,25 +18,20 @@ use crate::keys::Context;
 const MAX_NOTICE_ROWS: usize = 3;
 
 pub fn render(state: &State, frame: &mut Frame) {
-    let notice = state
-        .notice
-        .as_deref()
-        .map(|notice| notice_lines(notice, frame.area().width))
-        .unwrap_or_default();
-    let [tabs_area, body_area, notice_area, bar_area] = Layout::vertical([
-        Constraint::Length(1),
-        Constraint::Fill(1),
-        Constraint::Length(u16::try_from(notice.len()).unwrap_or(0)),
-        Constraint::Length(1),
-    ])
-    .areas(frame.area());
+    let notice = notice_rows(state, frame.area().width);
+    let [tabs_area, body_area, notice_area, bar_area] = areas(frame.area(), notice.len());
 
     let selected = Screen::ALL
         .iter()
         .position(|&screen| screen == state.screen);
     let tabs = Tabs::new(Screen::ALL.map(Screen::title)).select(selected);
     frame.render_widget(tabs, tabs_area);
-    frame.render_widget(Block::bordered().title(state.screen.title()), body_area);
+    match state.screen {
+        Screen::MyIssues => my_issues::render(&state.my_issues, frame, body_area),
+        Screen::TeamIssues | Screen::Analytics => {
+            frame.render_widget(Block::bordered().title(state.screen.title()), body_area);
+        }
+    }
     frame.render_widget(Paragraph::new(notice).style(style::error()), notice_area);
     hints::render(state, frame, bar_area);
 
@@ -73,6 +70,33 @@ fn centered(area: Rect, width: u16, height: u16) -> Rect {
         width,
         height,
     }
+}
+
+/// How many issue rows fit in the body of a `viewport`-sized terminal,
+/// inside its border. Page moves and scrolling use it.
+pub fn list_rows(state: &State, viewport: Size) -> usize {
+    let area = Rect::from((ratatui::layout::Position::ORIGIN, viewport));
+    let [_, body_area, _, _] = areas(area, notice_rows(state, viewport.width).len());
+    usize::from(body_area.height.saturating_sub(2))
+}
+
+/// The tab row, the body, the notice and the bottom bar, top to bottom.
+fn areas(area: Rect, notice_rows: usize) -> [Rect; 4] {
+    Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Fill(1),
+        Constraint::Length(u16::try_from(notice_rows).unwrap_or(0)),
+        Constraint::Length(1),
+    ])
+    .areas(area)
+}
+
+fn notice_rows(state: &State, width: u16) -> Vec<Line<'static>> {
+    state
+        .notice
+        .as_deref()
+        .map(|notice| notice_lines(notice, width))
+        .unwrap_or_default()
 }
 
 /// `notice` cut into rows of `width` characters, at most [`MAX_NOTICE_ROWS`].

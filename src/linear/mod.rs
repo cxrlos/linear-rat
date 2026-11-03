@@ -1,6 +1,7 @@
 //! Everything lrat needs from Linear goes through [`LinearClient`], so tests
 //! and `--demo` swap the real client for [`FakeClient`].
 
+pub mod demo;
 mod error;
 pub mod http;
 pub mod model;

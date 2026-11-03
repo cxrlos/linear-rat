@@ -1,7 +1,7 @@
 use crossterm::event::KeyCode;
 
 use super::{Context, Key};
-use crate::app::{Action, Screen, State};
+use crate::app::{Action, Pane, Screen, State};
 
 /// One action as the viewer sees it: what it is called, where it applies,
 /// when it can run and which keys run it by default (the vim preset).
@@ -34,7 +34,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         hint: Some("down"),
         contexts: PANES,
         default_keys: &[&[Key::char('j')]],
-        available: always,
+        available: not_in_detail,
     },
     ActionSpec {
         action: Action::MoveUp,
@@ -43,7 +43,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         hint: Some("up"),
         contexts: PANES,
         default_keys: &[&[Key::char('k')]],
-        available: always,
+        available: not_in_detail,
     },
     ActionSpec {
         action: Action::MoveToTop,
@@ -52,7 +52,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         hint: Some("top"),
         contexts: PANES,
         default_keys: &[&[Key::char('g'), Key::char('g')]],
-        available: always,
+        available: not_in_detail,
     },
     ActionSpec {
         action: Action::MoveToBottom,
@@ -61,7 +61,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         hint: Some("bottom"),
         contexts: PANES,
         default_keys: &[&[Key::char('G')]],
-        available: always,
+        available: not_in_detail,
     },
     ActionSpec {
         action: Action::HalfPageDown,
@@ -70,7 +70,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         hint: None,
         contexts: PANES,
         default_keys: &[&[Key::ctrl('d')]],
-        available: always,
+        available: not_in_detail,
     },
     ActionSpec {
         action: Action::HalfPageUp,
@@ -79,7 +79,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         hint: None,
         contexts: PANES,
         default_keys: &[&[Key::ctrl('u')]],
-        available: always,
+        available: not_in_detail,
     },
     ActionSpec {
         action: Action::FocusLeft,
@@ -115,7 +115,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         hint: Some("close"),
         contexts: &[Context::List, Context::Detail, Context::Overlay],
         default_keys: &[&[Key::named(KeyCode::Esc)]],
-        available: |state| state.modals.top().is_some(),
+        available: |state| state.modals.top().is_some() || in_detail(state),
     },
     ActionSpec {
         action: Action::ShowScreen(Screen::MyIssues),
@@ -166,6 +166,15 @@ pub static ACTIONS: &[ActionSpec] = &[
 
 fn always(_: &State) -> bool {
     true
+}
+
+// The detail does not scroll yet (#7), so moves do nothing there.
+fn not_in_detail(state: &State) -> bool {
+    !in_detail(state)
+}
+
+fn in_detail(state: &State) -> bool {
+    state.screen == Screen::MyIssues && state.my_issues.pane() == Pane::Detail
 }
 
 /// The registry entry for `action`.

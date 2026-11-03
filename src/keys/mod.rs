@@ -10,7 +10,7 @@ pub use key::{Key, KeySequence, ParseKeyError};
 pub use keymap::{Change, Keymap, Override, Resolution, Target};
 pub use registry::{ACTIONS, ActionSpec, by_id, spec};
 
-use crate::app::{Modal, Screen, State};
+use crate::app::{Modal, Pane, Screen, State};
 
 /// Where a binding applies. Several contexts are active at once, most
 /// specific first, and the first one that binds a key wins.
@@ -76,6 +76,9 @@ pub fn active_contexts(state: &State) -> Vec<Context> {
 /// The contexts of the screen under any overlay.
 pub fn screen_contexts(state: &State) -> Vec<Context> {
     match state.screen {
+        Screen::MyIssues if state.my_issues.pane() == Pane::Detail => {
+            vec![Context::Detail, Context::Global]
+        }
         Screen::MyIssues | Screen::TeamIssues => vec![Context::List, Context::Global],
         Screen::Analytics => vec![Context::Global],
     }

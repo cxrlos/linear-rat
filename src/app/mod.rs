@@ -4,6 +4,7 @@ mod action;
 mod effect;
 mod event;
 mod modal;
+mod my_issues;
 mod state;
 mod update;
 
@@ -14,6 +15,7 @@ pub use action::Action;
 pub use effect::Effect;
 pub use event::Event;
 pub use modal::{Modal, ModalStack};
+pub use my_issues::{Group, MyIssues, Pane};
 pub use state::{Screen, State};
 pub use update::{Update, perform, update};
 
@@ -27,10 +29,12 @@ pub struct App<B: Backend> {
 
 impl<B: Backend> App<B> {
     /// Builds the app on `backend` showing `state`, and draws the first frame.
-    pub fn new(backend: B, state: State) -> Result<Self, B::Error> {
+    pub fn new(backend: B, mut state: State) -> Result<Self, B::Error> {
+        let terminal = Terminal::new(backend)?;
+        state.viewport = terminal.size()?;
         let mut app = Self {
             state,
-            terminal: Terminal::new(backend)?,
+            terminal,
             frames_drawn: 0,
         };
         app.draw()?;

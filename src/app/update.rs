@@ -1,7 +1,9 @@
 use crossterm::event::KeyEventKind;
+use ratatui::layout::Size;
 
-use super::{Action, Effect, Event, Modal, State};
+use super::{Action, Effect, Event, Modal, Screen, State};
 use crate::keys::{self, Key, Resolution};
+use crate::ui;
 
 /// What one event did: whether the screen must be drawn again, and what the
 /// runtime must do next.
@@ -22,7 +24,12 @@ impl Update {
 
 pub fn update(state: &mut State, event: Event) -> Update {
     match event {
-        Event::Resize { .. } => Update::redraw(),
+        Event::Resize { columns, rows } => {
+            state.viewport = Size::new(columns, rows);
+            let rows = ui::list_rows(state, state.viewport);
+            state.my_issues.scroll_into_view(rows);
+            Update::redraw()
+        }
         Event::Key(key) if key.kind == KeyEventKind::Release => Update::default(),
         Event::Key(key) => {
             let cleared_notice = state.notice.take().is_some();
@@ -74,6 +81,24 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             Update::redraw()
         }
         Action::Close if state.modals.pop().is_some() => Update::redraw(),
+        Action::MoveDown
+        | Action::MoveUp
+        | Action::MoveToTop
+        | Action::MoveToBottom
+        | Action::HalfPageDown
+        | Action::HalfPageUp
+        | Action::FocusLeft
+        | Action::FocusRight
+        | Action::Open
+        | Action::Close
+            if state.screen == Screen::MyIssues =>
+        {
+            let rows = ui::list_rows(state, state.viewport);
+            Update {
+                redraw: state.my_issues.perform(action, rows),
+                effects: Vec::new(),
+            }
+        }
         _ => Update::default(),
     }
 }

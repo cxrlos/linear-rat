@@ -35,7 +35,7 @@ async fn main() -> anyhow::Result<()> {
     for error in &loaded.errors {
         tracing::warn!(%error, "config problem");
     }
-    let state = State::with_config(&loaded);
+    let state = State::demo().with_config(&loaded);
 
     let shutdown = terminal::shutdown_signal().context("listening for SIGTERM and SIGHUP")?;
     let guard = TerminalGuard::enter().context("preparing the terminal")?;

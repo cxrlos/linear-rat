@@ -21,7 +21,11 @@ noop = ["gg", "k"]
 
 fn app_with(config: &str) -> App<TestBackend> {
     let loaded = config::parse(config, Path::new("config.toml"));
-    App::new(TestBackend::new(80, 24), State::with_config(&loaded)).unwrap()
+    App::new(
+        TestBackend::new(80, 24),
+        State::default().with_config(&loaded),
+    )
+    .unwrap()
 }
 
 fn app() -> App<TestBackend> {
@@ -70,6 +74,20 @@ fn the_bottom_bar_mutes_unavailable_actions_and_accents_the_rest() {
 
     assert_eq!(fg_of(&app, 23, "Esc"), Some(Color::DarkGray));
     assert_eq!(fg_of(&app, 23, "j"), Some(Color::Cyan));
+}
+
+#[test]
+fn the_bottom_bar_accents_esc_and_mutes_moves_while_the_detail_is_open() {
+    let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+
+    app.handle(Event::Key(KeyEvent::new(
+        KeyCode::Enter,
+        KeyModifiers::NONE,
+    )))
+    .unwrap();
+
+    assert_eq!(fg_of(&app, 23, "Esc"), Some(Color::Cyan));
+    assert_eq!(fg_of(&app, 23, "j"), Some(Color::DarkGray));
 }
 
 #[test]
@@ -307,7 +325,11 @@ quit = \"x\"
     let messages: Vec<String> = loaded.errors.iter().map(ToString::to_string).collect();
 
     assert_snapshot!(messages.join("\n"));
-    let app = App::new(TestBackend::new(80, 24), State::with_config(&loaded)).unwrap();
+    let app = App::new(
+        TestBackend::new(80, 24),
+        State::default().with_config(&loaded),
+    )
+    .unwrap();
     let notice = row(&app, 21) + &row(&app, 22);
     assert!(notice.starts_with("config.toml:2: `<Nope>` is not a key"));
     assert!(notice.trim_end().ends_with("(and 2 more; see the log)"));
