@@ -34,7 +34,7 @@ rpassword = "7.5.4"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 thiserror = "2.0.21"
-tokio = { version = "1.53.3", features = ["macros", "rt", "signal"] }
+tokio = { version = "1.53.3", features = ["macros", "rt", "signal", "time"] }
 toml = { version = "1.1.8", default-features = false, features = ["std", "parse"] }
 tracing = "0.1.44"
 tracing-appender = "0.2.5"
@@ -49,7 +49,7 @@ dbus-secret-service-keyring-store = { version = "1.0.1", features = ["crypto-rus
 [dev-dependencies]
 apollo-compiler = "1.33.1"
 insta = "1.49.0"
-tokio = { version = "1.53.3", features = ["net", "time"] }
+tokio = { version = "1.53.3", features = ["net"] }
 wiremock = "0.6.5"
 
 [lints.clippy]

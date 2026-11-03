@@ -3,6 +3,7 @@
 mod action;
 mod effect;
 mod event;
+mod load;
 mod modal;
 mod my_issues;
 mod state;
@@ -14,6 +15,7 @@ use ratatui::backend::Backend;
 pub use action::Action;
 pub use effect::Effect;
 pub use event::Event;
+pub use load::{Load, LoadError};
 pub use modal::{Modal, ModalStack};
 pub use my_issues::{Group, MyIssues, Pane};
 pub use state::{Screen, State};

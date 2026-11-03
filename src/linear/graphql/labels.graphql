@@ -1,0 +1,25 @@
+# budget: 320
+# One page of the labels with the given ids, archived ones included because an
+# issue can still carry an archived label. Pages hold 100 labels (Linear's
+# true maximum `first` is unverified). The client follows `endCursor` until
+# `hasNextPage` is false.
+query Labels($ids: [ID!], $after: String) {
+  issueLabels(
+    first: 100
+    after: $after
+    includeArchived: true
+    filter: { id: { in: $ids } }
+  ) {
+    nodes {
+      id
+      name
+      team {
+        id
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}

@@ -1,6 +1,7 @@
 //! Rendering: a pure function of [`State`].
 
 mod cheatsheet;
+mod error;
 mod hints;
 mod icons;
 mod my_issues;
@@ -12,7 +13,7 @@ use ratatui::layout::{Constraint, Layout, Rect, Size};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph, Tabs};
 
-use crate::app::{Action, Modal, Screen, State};
+use crate::app::{Action, Load, Modal, Screen, State};
 use crate::keys::{self, Context};
 
 const MAX_NOTICE_ROWS: usize = 3;
@@ -27,7 +28,13 @@ pub fn render(state: &State, frame: &mut Frame) {
     let tabs = Tabs::new(Screen::ALL.map(|screen| tab_title(state, screen))).select(selected);
     frame.render_widget(tabs, tabs_area);
     match state.screen {
-        Screen::MyIssues => my_issues::render(&state.my_issues, frame, body_area),
+        Screen::MyIssues => match &state.load {
+            Load::Loaded => my_issues::render(&state.my_issues, frame, body_area),
+            Load::Loading => error::render_loading(frame, body_area),
+            Load::Failed(error) => {
+                error::render(error, state.key_source.as_ref(), frame, body_area);
+            }
+        },
         Screen::TeamIssues | Screen::Analytics => {
             frame.render_widget(Block::bordered().title(state.screen.title()), body_area);
         }

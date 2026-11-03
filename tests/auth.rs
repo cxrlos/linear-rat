@@ -13,7 +13,7 @@ use linear_rat::auth::{
     self, ApiKey, AuthError, Credentials, InvalidApiKey, KeyStore, KeyringError, WorkspaceFile,
 };
 use linear_rat::linear::model::{Viewer, Workspace};
-use linear_rat::linear::{ClientError, FakeClient, LinearClient};
+use linear_rat::linear::{AssignedIssues, ClientError, FakeClient, LinearClient};
 
 const SECRET: &str = "lin_api_fictional0000000000000000000000000000";
 const OTHER_SECRET: &str = "lin_api_fictional1111111111111111111111111111";
@@ -110,6 +110,10 @@ struct RejectingClient;
 
 impl LinearClient for RejectingClient {
     async fn viewer(&self) -> Result<(Viewer, Workspace), ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn assigned_issues(&self) -> Result<AssignedIssues, ClientError> {
         Err(ClientError::InvalidKey)
     }
 }

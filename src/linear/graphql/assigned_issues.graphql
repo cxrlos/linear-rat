@@ -1,0 +1,72 @@
+# budget: 850
+# One page of the viewer's open assigned issues, with the team, workflow
+# state, people, cycle and project each one refers to. Linear filters out
+# completed, canceled and duplicate issues. Pages hold 100 issues: Linear's
+# true maximum `first` is unverified (250 is commonly assumed). The client
+# follows `endCursor` until `hasNextPage` is false.
+query AssignedIssues($after: String) {
+  viewer {
+    id
+    name
+    assignedIssues(
+      first: 100
+      after: $after
+      filter: { state: { type: { nin: ["completed", "canceled", "duplicate"] } } }
+    ) {
+      nodes {
+        id
+        identifier
+        title
+        description
+        url
+        branchName
+        priority
+        estimate
+        labelIds
+        createdAt
+        updatedAt
+        startedAt
+        completedAt
+        canceledAt
+        triagedAt
+        team {
+          id
+          key
+          name
+          issueEstimationType
+        }
+        state {
+          id
+          name
+          type
+          position
+        }
+        assignee {
+          id
+          name
+          displayName
+        }
+        creator {
+          id
+          name
+          displayName
+        }
+        cycle {
+          id
+          number
+          name
+          startsAt
+          endsAt
+          completedAt
+        }
+        project {
+          id
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}

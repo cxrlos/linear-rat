@@ -1,7 +1,7 @@
 use crossterm::event::KeyEventKind;
 use ratatui::layout::Size;
 
-use super::{Action, Effect, Event, Modal, Screen, State};
+use super::{Action, Effect, Event, Load, Modal, Screen, State};
 use crate::keys::{self, Key, Resolution};
 use crate::ui;
 
@@ -24,6 +24,19 @@ impl Update {
 
 pub fn update(state: &mut State, event: Event) -> Update {
     match event {
+        Event::Start if state.load == Load::Loading => Update {
+            redraw: false,
+            effects: vec![Effect::LoadMyIssues],
+        },
+        Event::Start => Update::default(),
+        Event::MyIssuesLoaded(Ok(loaded)) => {
+            state.show_assigned(&loaded);
+            Update::redraw()
+        }
+        Event::MyIssuesLoaded(Err(error)) => {
+            state.load = Load::Failed(error);
+            Update::redraw()
+        }
         Event::Resize { columns, rows } => {
             state.viewport = Size::new(columns, rows);
             let rows = ui::list_rows(state, state.viewport);

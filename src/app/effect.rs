@@ -3,4 +3,7 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Effect {
     Quit,
+    /// Load the viewer's open assigned issues; the result comes back as
+    /// [`Event::MyIssuesLoaded`](super::Event::MyIssuesLoaded).
+    LoadMyIssues,
 }

@@ -1,9 +1,12 @@
+use std::fmt::Display;
+
 use ratatui::layout::Size;
 
-use super::{ModalStack, MyIssues};
+use super::{Load, LoadError, ModalStack, MyIssues};
+use crate::auth::KeySource;
 use crate::config::Loaded;
 use crate::keys::Keymap;
-use crate::linear::demo;
+use crate::linear::AssignedIssues;
 
 /// Everything the screen shows. Rendering reads only this.
 #[derive(Debug, Default)]
@@ -15,44 +18,78 @@ pub struct State {
     /// error. The next key press clears it.
     pub notice: Option<String>,
     pub my_issues: MyIssues,
+    /// Whether My Issues is still loading, and why it failed.
+    pub load: Load,
+    /// Where the API key in use came from, so a rejected key's error screen
+    /// can name it. `None` under `--demo`.
+    pub key_source: Option<KeySource>,
     /// The terminal size, for actions that move by a page.
     pub viewport: Size,
 }
 
 impl State {
-    /// The app on the demo workspace, as `lrat --demo` starts.
+    /// The app on the demo workspace with its issues already loaded, as
+    /// `lrat --demo` shows it once the load is done.
     pub fn demo() -> Self {
-        let data = demo::workspace();
+        let mut state = Self::default();
+        state.show_assigned(&AssignedIssues::demo());
+        state
+    }
+
+    /// The app waiting for My Issues to load with the key from `key_source`.
+    pub fn loading(key_source: Option<KeySource>) -> Self {
         Self {
-            my_issues: MyIssues::new(
-                &data.viewer,
-                &data.issues,
-                &data.cycles,
-                &data.labels,
-                &data.members,
-                &data.teams,
-                demo::NOW,
-            ),
+            load: Load::Loading,
+            key_source,
             ..Self::default()
         }
+    }
+
+    /// The app showing why My Issues cannot load.
+    pub fn failed(error: LoadError) -> Self {
+        Self {
+            load: Load::Failed(error),
+            ..Self::default()
+        }
+    }
+
+    /// Fills My Issues with `loaded`, grouped as of when it was loaded. What
+    /// Linear could not give becomes the notice, unless one is already
+    /// showing.
+    pub fn show_assigned(&mut self, loaded: &AssignedIssues) {
+        if self.notice.is_none() {
+            self.notice = summary(&loaded.problems);
+        }
+        self.my_issues = MyIssues::new(
+            &loaded.viewer,
+            &loaded.issues,
+            &loaded.cycles,
+            &loaded.labels,
+            &loaded.members,
+            &loaded.teams,
+            loaded.as_of,
+        );
+        self.load = Load::Loaded;
     }
 
     /// This state with the keymap from `loaded`, and its first error, if
     /// any, as the notice.
     pub fn with_config(self, loaded: &Loaded) -> Self {
-        let notice = loaded
-            .errors
-            .first()
-            .map(|first| match loaded.errors.len() {
-                1 => first.to_string(),
-                n => format!("{first} (and {} more; see the log)", n - 1),
-            });
         Self {
             keymap: Keymap::new(&loaded.config.keys),
-            notice,
+            notice: summary(&loaded.errors),
             ..self
         }
     }
+}
+
+/// The first of `messages` and how many more there are, or `None` when there
+/// are none.
+fn summary(messages: &[impl Display]) -> Option<String> {
+    messages.first().map(|first| match messages.len() {
+        1 => first.to_string(),
+        n => format!("{first} (and {} more; see the log)", n - 1),
+    })
 }
 
 /// The top-level screens, in tab order.

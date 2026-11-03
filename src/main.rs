@@ -1,13 +1,14 @@
+use std::future::Future;
 use std::io;
 
 use anyhow::Context;
 use clap::Parser;
 use crossterm::event::EventStream;
-use linear_rat::app::{App, State};
+use linear_rat::app::{App, LoadError, State};
 use linear_rat::auth::{self, Credentials, OsKeyring, WorkspaceFile};
 use linear_rat::cli::{AuthCommand, Cli, Command};
 use linear_rat::config::{self, Loaded};
-use linear_rat::linear::HttpClient;
+use linear_rat::linear::{FakeClient, HttpClient, LinearClient};
 use linear_rat::terminal::{self, TerminalGuard};
 use linear_rat::{logging, runtime};
 use ratatui::backend::CrosstermBackend;
@@ -18,9 +19,6 @@ async fn main() -> anyhow::Result<()> {
     if let Some(Command::Auth(command)) = cli.command {
         let _log_guard = logging::init().context("setting up the log file")?;
         return run_auth(command).await;
-    }
-    if !cli.demo {
-        anyhow::bail!("connecting to a Linear workspace is not built yet; run `lrat --demo`");
     }
     let _log_guard = logging::init().context("setting up the log file")?;
     tracing::info!(version = env!("CARGO_PKG_VERSION"), "starting");
@@ -35,21 +33,63 @@ async fn main() -> anyhow::Result<()> {
     for error in &loaded.errors {
         tracing::warn!(%error, "config problem");
     }
-    let state = State::demo().with_config(&loaded);
-
     let shutdown =
         terminal::shutdown_signal().context("listening for SIGINT, SIGTERM and SIGHUP")?;
-    let guard = TerminalGuard::enter().context("preparing the terminal")?;
-    let result = match App::new(CrosstermBackend::new(io::stdout()), state) {
-        Ok(app) => runtime::run(app, EventStream::new(), shutdown).await,
-        Err(error) => Err(error).context("drawing the first frame"),
+    let result = if cli.demo {
+        let state = State::loading(None).with_config(&loaded);
+        run_tui(state, Some(&FakeClient), shutdown).await
+    } else {
+        let (state, client) = connect();
+        run_tui(state.with_config(&loaded), client.as_ref(), shutdown).await
     };
-    drop(guard);
 
     match &result {
         Ok(()) => tracing::info!("quit"),
         Err(error) => tracing::error!("{error:#}"),
     }
+    result
+}
+
+/// The state to start in and the client to load with: the key from
+/// `LINEAR_API_KEY` or the OS keyring, or, when there is no usable key, the
+/// error screen that says why and no client.
+fn connect() -> (State, Option<HttpClient>) {
+    let resolved = WorkspaceFile::in_state_dir()
+        .map_err(|error| LoadError::KeyUnusable(format!("{error:#}")))
+        .and_then(|workspace_file| {
+            let credentials =
+                Credentials::new(OsKeyring, workspace_file, std::env::var(auth::KEY_VAR).ok());
+            credentials
+                .resolve()
+                .map_err(|error| LoadError::from(&error))
+        })
+        .and_then(|(key, source)| {
+            let client = HttpClient::new(&key).map_err(|error| LoadError::from(&error))?;
+            Ok((client, source))
+        });
+    match resolved {
+        Ok((client, source)) => {
+            tracing::info!(%source, "using the API key");
+            (State::loading(Some(source)), Some(client))
+        }
+        Err(error) => {
+            tracing::warn!(?error, "no usable API key");
+            (State::failed(error), None)
+        }
+    }
+}
+
+async fn run_tui<C: LinearClient>(
+    state: State,
+    client: Option<&C>,
+    shutdown: impl Future<Output = ()>,
+) -> anyhow::Result<()> {
+    let guard = TerminalGuard::enter().context("preparing the terminal")?;
+    let result = match App::new(CrosstermBackend::new(io::stdout()), state) {
+        Ok(mut app) => runtime::run(&mut app, client, EventStream::new(), shutdown).await,
+        Err(error) => Err(error).context("drawing the first frame"),
+    };
+    drop(guard);
     result
 }
 
