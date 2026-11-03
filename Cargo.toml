@@ -5,6 +5,7 @@ edition = "2024"
 rust-version = "1.88"
 description = "A fast, keyboard-first terminal client for Linear"
 repository = "https://github.com/cxrlos/linear-rat"
+homepage = "https://github.com/cxrlos/linear-rat"
 license = "MIT OR Apache-2.0"
 keywords = ["linear", "tui", "terminal", "ratatui", "issue-tracker"]
 categories = ["command-line-utilities"]
@@ -12,6 +13,12 @@ categories = ["command-line-utilities"]
 [[bin]]
 name = "lrat"
 path = "src/main.rs"
+
+# Points cargo-binstall at the archives dist attaches to the GitHub release.
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ target }{ archive-suffix }"
+bin-dir = "{ name }-{ target }/{ bin }{ binary-ext }"
+pkg-fmt = "txz"
 
 [dependencies]
 anyhow = "1.0.104"
@@ -33,3 +40,8 @@ tokio = { version = "1.53.3", features = ["time"] }
 [lints.clippy]
 expect_used = "deny"
 unwrap_used = "deny"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"

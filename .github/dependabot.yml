@@ -4,6 +4,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # dist generates release.yml from dist-workspace.toml and its tag-time plan
+    # job fails on any other edit, so its pins change only through dist.
+    exclude-paths:
+      - .github/workflows/release.yml
     # A release waits a week before Dependabot proposes it, so a compromised
     # release has time to be pulled before it reaches the release jobs.
     cooldown:

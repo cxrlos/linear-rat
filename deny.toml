@@ -1,5 +1,3 @@
-# Minimal policy for CI; the release pipeline (#20) refines it.
-
 [graph]
 targets = [
     "x86_64-unknown-linux-gnu",
@@ -10,20 +8,18 @@ targets = [
 all-features = true
 
 [advisories]
+yanked = "deny"
+unmaintained = "all"
+unsound = "all"
 ignore = []
 
 [licenses]
+# One license per line, sorted, so parallel additions merge cleanly.
 allow = [
     "Apache-2.0",
     "MIT",
     "Unicode-3.0",
-    "Unicode-DFS-2016",
     "Zlib",
-]
-exceptions = [
-    # Optional terminfo support behind ratatui's termwiz backend, which lrat
-    # does not enable.
-    { crate = "terminfo", allow = ["WTFPL"] },
 ]
 
 [bans]
