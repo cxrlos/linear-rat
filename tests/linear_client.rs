@@ -227,10 +227,13 @@ async fn a_slow_response_hits_the_request_timeout() {
     assert!(started.elapsed() < Duration::from_secs(3));
 }
 
+// Linux drops further SYNs once a listener's accept queue is full, so the
+// next connection hangs in the handshake until the connect timeout. macOS
+// completes the handshake anyway (CI saw a request timeout there), so this
+// setup cannot make a connect hang on macOS.
+#[cfg(target_os = "linux")]
 #[tokio::test]
 async fn a_server_that_never_accepts_hits_the_connect_timeout() {
-    // A listener whose accept queue is full drops further SYNs, so the next
-    // connection attempt hangs in the handshake until the connect timeout.
     let socket = tokio::net::TcpSocket::new_v4().unwrap();
     socket.bind("127.0.0.1:0".parse().unwrap()).unwrap();
     let address = socket.local_addr().unwrap();
