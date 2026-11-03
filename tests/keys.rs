@@ -117,6 +117,21 @@ noop = ["3"]
 }
 
 #[test]
+fn a_tab_leaves_out_a_key_the_screen_binds_to_something_else() {
+    let app = app_with(
+        r#"
+[keys.list]
+move-down = "2"
+"#,
+    );
+
+    assert_eq!(
+        row(&app, 0).trim_end(),
+        " [1] My Issues │ Team Issues │ [3] Analytics"
+    );
+}
+
+#[test]
 fn the_bottom_bar_shows_overridden_keys() {
     let app = app_with(OVERRIDES);
 

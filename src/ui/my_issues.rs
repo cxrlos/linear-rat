@@ -134,6 +134,7 @@ fn render_list(my_issues: &MyIssues, frame: &mut Frame, area: Rect, focus: Focus
                     Line::from(
                         issue
                             .estimate
+                            .filter(|_| my_issues.uses_estimates(issue))
                             .map(|points| points.to_string())
                             .unwrap_or_default(),
                     )

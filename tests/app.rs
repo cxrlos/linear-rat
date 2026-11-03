@@ -363,6 +363,51 @@ fn the_detail_leaves_out_the_estimate_for_a_team_without_estimates() {
 }
 
 #[test]
+fn the_list_leaves_out_estimates_for_a_team_without_estimates() {
+    let mut data = demo::workspace();
+    let ops = data
+        .teams
+        .iter()
+        .find(|team| team.key == "OPS")
+        .unwrap()
+        .id
+        .clone();
+    let issue = data
+        .issues
+        .iter_mut()
+        .find(|issue| {
+            issue.team_id == ops
+                && issue.assignee_id.as_deref() == Some(data.viewer.id.as_str())
+                && issue.state.state_type.is_open()
+        })
+        .unwrap();
+    issue.estimate = Some(8.0);
+    let identifier = issue.identifier.clone();
+    let state = State {
+        my_issues: MyIssues::new(
+            &data.viewer,
+            &data.issues,
+            &data.cycles,
+            &data.labels,
+            &data.members,
+            &data.teams,
+            demo::NOW,
+        ),
+        ..State::demo()
+    };
+
+    let app = App::new(TestBackend::new(200, 60), state).unwrap();
+
+    let lines = screen(&app);
+    let row = lines
+        .iter()
+        .find(|line| line.contains(&format!(" {identifier} ")))
+        .unwrap();
+    let list_part: String = row.chars().take(120).collect();
+    assert!(!list_part.contains(" 8 "), "{row}");
+}
+
+#[test]
 fn an_empty_list_says_no_open_issues_are_assigned() {
     let app = App::new(TestBackend::new(80, 24), State::default()).unwrap();
 

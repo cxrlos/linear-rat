@@ -13,7 +13,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph, Tabs};
 
 use crate::app::{Action, Modal, Screen, State};
-use crate::keys::Context;
+use crate::keys::{self, Context};
 
 const MAX_NOTICE_ROWS: usize = 3;
 
@@ -43,12 +43,13 @@ pub fn render(state: &State, frame: &mut Frame) {
     }
 }
 
-/// The screen's title after the first key that shows it, as `[1] My Issues`,
-/// or the bare title if the viewer unbound every key for it.
+/// The screen's title after the first key that shows it from here, as
+/// `[1] My Issues`, or the bare title if no key reaches it (unbound, or
+/// shadowed by a binding of the current screen).
 fn tab_title(state: &State, screen: Screen) -> String {
     match state
         .keymap
-        .keys_for(Action::ShowScreen(screen), &[Context::Global])
+        .keys_for(Action::ShowScreen(screen), &keys::screen_contexts(state))
         .first()
     {
         Some(key) => format!("[{key}] {}", screen.title()),
