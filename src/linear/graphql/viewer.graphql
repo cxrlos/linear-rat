@@ -1,0 +1,12 @@
+# budget: 2
+query Viewer {
+  viewer {
+    id
+    name
+  }
+  organization {
+    id
+    name
+    urlKey
+  }
+}
