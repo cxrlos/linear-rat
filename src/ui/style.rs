@@ -1,4 +1,4 @@
-//! The few colors lrat uses, in one place until themes (#19) replace them.
+//! The few colors lrat uses, in one place until themes replace them.
 
 use ratatui::style::{Color, Modifier, Style};
 

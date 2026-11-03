@@ -1,5 +1,5 @@
 //! Glyphs and colors for workflow state types and priorities, kept together so
-//! themes and Nerd Font icons (#19) replace them in one place. Every glyph
+//! themes and Nerd Font icons replace them in one place. Every glyph
 //! differs in shape, so nothing relies on color alone.
 
 use ratatui::style::Color;

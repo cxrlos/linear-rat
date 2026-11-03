@@ -168,7 +168,7 @@ fn always(_: &State) -> bool {
     true
 }
 
-// The detail does not scroll yet (#7), so moves do nothing there.
+// The detail does not scroll yet, so moves do nothing there.
 fn not_in_detail(state: &State) -> bool {
     !in_detail(state)
 }
