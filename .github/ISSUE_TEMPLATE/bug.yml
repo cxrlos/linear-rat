@@ -1,0 +1,48 @@
+name: Bug report
+description: Something in lrat is broken or behaves unexpectedly
+labels: [bug, needs-triage]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Keys pressed and screens visited. If `lrat --demo` reproduces it, say so.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: lrat version
+      description: Output of `lrat --version`
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      options: [Linux, macOS]
+    validations:
+      required: true
+  - type: input
+    id: terminal
+    attributes:
+      label: Terminal and multiplexer
+      placeholder: e.g. kitty 0.40 inside tmux 3.5
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant lines from the lrat log file. Remove any API key before pasting.
+      render: shell

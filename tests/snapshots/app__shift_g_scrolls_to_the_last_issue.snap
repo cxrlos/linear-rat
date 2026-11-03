@@ -1,0 +1,28 @@
+---
+source: tests/app.rs
+expression: app.backend()
+---
+" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+"┌My Issues─────────────────────────────────────────────────────────────────────┐"
+"│  DES-31 Review copy for permission promp ○ Todo        ▮▯▯ Low     5 Cycle 7 │"
+"│  ENG-65 Rotate refresh tokens on every u ○ Todo        ··· None    2 Cycle 7 │"
+"│  DES-16 Accessible focus rings across wh ○ Todo        ▮▮▮ High    5         │"
+"│  ENG-56 Notification settings reset afte ○ Todo        ▮▮▮ High    2         │"
+"│  ENG-6  Migrate burrow storage to the ne ○ Todo        ▮▮▯ Medium  3         │"
+"│  OPS-26 Archive the old marketing site   ○ Todo        ▮▮▯ Medium            │"
+"│  OPS-20 Replace the warehouse label prin ○ Todo        ▮▯▯ Low               │"
+"│◌ Backlog (7)                                                                 │"
+"│  DES-2  Redesign the empty pantry screen ◌ Backlog     ▮▮▮ High              │"
+"│  ENG-35 Split the auth module out of the ◌ Backlog     ▮▮▯ Medium            │"
+"│  ENG-23 Dark mode text is unreadable on  ◌ Backlog     ▮▯▯ Low               │"
+"│  OPS-4  Document the incident review pro ◌ Backlog     ··· None              │"
+"│  ENG-47 Clean up unused GraphQL resolver ◌ Backlog     ··· None              │"
+"│  OPS-35 Reduce container image sizes     ◌ Backlog     ··· None              │"
+"│  ENG-66 Add keyboard shortcuts to the we ◌ Backlog     ··· None              │"
+"│◇ Triage (4)                                                                  │"
+"│  OPS-33 Review the disaster recovery pla ◇ Triage      !!! Urgent            │"
+"│  ENG-70 Gouda batch labels print off-cen ◇ Triage      ▮▮▯ Medium  3         │"
+"│  ENG-63 Precompute nightly cellar report ◇ Triage      ▮▯▯ Low     8         │"
+"│▸ DES-36 Map legend for shelf temperature ◇ Triage      ··· None              │"
+"└──────────────────────────────────────────────────────────────────────────────┘"
+" j down  k up  gg top  G bottom  Enter open  Esc close  ? keys  q quit          "

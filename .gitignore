@@ -2,3 +2,6 @@
 /.scratch
 *.log
 .env
+/.claude/*
+!/.claude/settings.json
+/.gemini/

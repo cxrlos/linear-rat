@@ -1,0 +1,28 @@
+---
+source: tests/app.rs
+expression: app.backend()
+---
+" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+"┌ENG-51────────────────────────────────────────────────────────────────────────┐"
+"│Add a dry-run mode to the importer                                            │"
+"│                                                                              │"
+"│State     ◐ In Progress                                                       │"
+"│Priority  ▮▮▯ Medium                                                          │"
+"│Estimate  2                                                                   │"
+"│Cycle     Cycle 7 (active)                                                    │"
+"│Labels    None                                                                │"
+"│Assignee  Mira Gouda                                                          │"
+"│                                                                              │"
+"│Seen in production since the last release. Steps:                             │"
+"│                                                                              │"
+"│1. Open a shared pantry                                                       │"
+"│2. Scan a wheel                                                               │"
+"│3. Watch the count jump by two                                                │"
+"│                                                                              │"
+"│Expected: the count goes up by one.                                           │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"└──────────────────────────────────────────────────────────────────────────────┘"
+" j down  k up  gg top  G bottom  Esc close  ? keys  q quit                      "

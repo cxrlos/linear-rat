@@ -1,0 +1,5 @@
+---
+source: tests/keys.rs
+expression: "row(&app, 23)"
+---
+ j down  k up  gg top  G bottom  Enter open  Esc close  ? keys  q quit

@@ -1,0 +1,28 @@
+---
+source: tests/keys.rs
+expression: app.backend()
+---
+" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+"┌My Issues─────────────────────────────────────────────────────────────────────┐"
+"│No open issues ┌ Keys ───────────────────────────────────────┐                │"
+"│               │Issue list                                   │                │"
+"│               │  j      Move down                           │                │"
+"│               │  k      Move up                             │                │"
+"│               │  gg     Move to the top                     │                │"
+"│               │  G      Move to the bottom                  │                │"
+"│               │  C-d    Move down half a page               │                │"
+"│               │  C-u    Move up half a page                 │                │"
+"│               │  h      Focus the pane on the left          │                │"
+"│               │  l      Focus the pane on the right         │                │"
+"│               │  Enter  Open the focused issue              │                │"
+"│               │  Esc    Close the top overlay or step back  │                │"
+"│               │                                             │                │"
+"│               │Everywhere                                   │                │"
+"│               │  1      Show My Issues                      │                │"
+"│               │  2      Show Team Issues                    │                │"
+"│               │  3      Show Analytics                      │                │"
+"│               │  ?      Show every key for this context     │                │"
+"│               │  q      Quit lrat                           │                │"
+"│               └ Esc close ──────────────────────────────────┘                │"
+"└──────────────────────────────────────────────────────────────────────────────┘"
+" Esc close                                                                      "

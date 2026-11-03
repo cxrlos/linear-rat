@@ -1,0 +1,28 @@
+---
+source: tests/keys.rs
+expression: app.backend()
+---
+" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+"┌My Issues─────────────────────────────────────────────────────────────────────┐"
+"│No open issues are assigned to you.                                           │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                     ┌ g ────────────────────┐│"
+"│                                                     │ b  Move to the bottom ││"
+"│                                                     └ Esc close ────────────┘│"
+"└──────────────────────────────────────────────────────────────────────────────┘"
+" n down  G bottom  Enter open  Esc close  ? keys  Q quit                        "
