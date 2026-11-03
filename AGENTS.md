@@ -44,15 +44,19 @@ Done when someone reading only the issue and the PR could pick up the next piece
 
 ## Map
 
-- `src/main.rs`: the `lrat` binary. Parses the CLI, starts logging, enters the terminal guard and runs the runtime.
-- `src/app/`: the core. `State` (screens, modal stack), `Event` in, `update(state, event)` returning an `Update` (redraw flag and `Effect`s), and `App`, the driver that applies events and redraws only when asked. Tests drive `App`.
-- `src/ui.rs`: rendering, a pure function of `State`.
+- `src/main.rs`: the `lrat` binary. Parses the CLI, runs the `lrat auth` commands, or loads the config, starts logging, enters the terminal guard and runs the runtime.
+- `src/app/`: the core. `State` (screens, modal stack, keymap, My Issues), `Event` in, `update(state, event)` returning an `Update` (redraw flag and `Effect`s), `perform(state, action)`, and `App`, the driver that applies events and redraws only when asked. Tests drive `App`.
+- `src/keys/`: the action registry (`registry.rs`, the only place a key binding is written), key notation, contexts and the keymap built from the registry plus config overrides.
+- `src/config.rs`: loads `config.toml` from the XDG config path (only `[keys]` so far), with errors naming file and line.
+- `src/ui.rs`, `src/ui/`: rendering, a pure function of `State`: the layout, My Issues, the bottom bar, cheatsheet and which-key, glyphs (`icons.rs`) and colors (`style.rs`).
 - `src/runtime.rs`: the async loop. Reads terminal input and the shutdown signal, feeds events to `App` and carries out effects.
-- `src/linear/`: the `LinearClient` trait and `FakeClient`. All Linear access goes through here.
-- `src/terminal.rs`: the terminal guard (raw mode, alternate screen, panic hook) and the SIGTERM/SIGHUP shutdown signal.
+- `src/linear/`: all Linear access. The `LinearClient` trait, the real `HttpClient`, `FakeClient`, the GraphQL documents (`graphql/`), the pinned `schema.graphql`, the domain types (`model.rs`) and the demo workspace (`demo.rs`).
+- `src/auth/`: the redacting API key type, key resolution (`LINEAR_API_KEY`, then the OS keyring) and the workspace file that names the keyring entry.
+- `src/analytics/`: the pure analytics calculator.
+- `src/terminal.rs`: the terminal guard (raw mode, alternate screen, panic hook) and the SIGINT/SIGTERM/SIGHUP shutdown signal.
 - `src/logging.rs`: `tracing` to a daily file under `$XDG_STATE_HOME/lrat/`, level from `LRAT_LOG`.
-- `src/cli.rs`: clap flags.
-- `tests/`: app-driver tests (`app.rs`, `runtime.rs`) and their insta snapshots.
+- `src/cli.rs`: clap flags and the `auth` subcommands.
+- `tests/`: app-driver tests (`app.rs`, `keys.rs`, `runtime.rs`) and their insta snapshots, the demo data (`demo.rs`), auth and the CLI (`auth.rs`, `cli.rs`), the client against a fake server (`linear_client.rs`), GraphQL validation (`graphql_schema.rs`), analytics (`analytics.rs`) and shutdown signals (`signals.rs`).
 - `examples/force_panic.rs`: panics inside the guard, to check the terminal is restored.
 
 ## Commands
