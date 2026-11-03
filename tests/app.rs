@@ -1,10 +1,10 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
-use linear_rat::app::{App, Effect, Event};
+use linear_rat::app::{App, Effect, Event, State};
 use ratatui::backend::TestBackend;
 
 fn app() -> App<TestBackend> {
-    App::new(TestBackend::new(80, 24)).unwrap()
+    App::new(TestBackend::new(80, 24), State::default()).unwrap()
 }
 
 fn key(c: char) -> Event {

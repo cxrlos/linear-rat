@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use crossterm::event::{Event as TerminalEvent, KeyCode, KeyEvent, KeyModifiers};
 use futures_util::stream::{self, Stream, StreamExt};
-use linear_rat::app::App;
+use linear_rat::app::{App, State};
 use linear_rat::runtime;
 use ratatui::backend::TestBackend;
 
@@ -27,7 +27,7 @@ async fn run(
     events: Vec<io::Result<TerminalEvent>>,
     shutdown: impl Future<Output = ()>,
 ) -> Option<anyhow::Result<()>> {
-    let app = App::new(TestBackend::new(80, 24)).unwrap();
+    let app = App::new(TestBackend::new(80, 24), State::default()).unwrap();
     let running = runtime::run(app, input(events), shutdown);
     tokio::time::timeout(Duration::from_millis(200), running)
         .await

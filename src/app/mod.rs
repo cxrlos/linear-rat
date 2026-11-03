@@ -1,5 +1,6 @@
 //! The app driver: owns the state and the terminal, applies events and redraws.
 
+mod action;
 mod effect;
 mod event;
 mod modal;
@@ -9,11 +10,12 @@ mod update;
 use ratatui::Terminal;
 use ratatui::backend::Backend;
 
+pub use action::Action;
 pub use effect::Effect;
 pub use event::Event;
 pub use modal::{Modal, ModalStack};
 pub use state::{Screen, State};
-pub use update::{Update, update};
+pub use update::{Update, perform, update};
 
 use crate::ui;
 
@@ -24,10 +26,10 @@ pub struct App<B: Backend> {
 }
 
 impl<B: Backend> App<B> {
-    /// Builds the app on `backend` and draws the first frame.
-    pub fn new(backend: B) -> Result<Self, B::Error> {
+    /// Builds the app on `backend` showing `state`, and draws the first frame.
+    pub fn new(backend: B, state: State) -> Result<Self, B::Error> {
         let mut app = Self {
-            state: State::default(),
+            state,
             terminal: Terminal::new(backend)?,
             frames_drawn: 0,
         };

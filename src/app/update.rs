@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use super::{Effect, Event, State};
+use super::{Action, Effect, Event, State};
 
 /// What one event did: whether the screen must be drawn again, and what the
 /// runtime must do next.
@@ -18,18 +18,29 @@ pub fn update(state: &mut State, event: Event) -> Update {
         },
         Event::Key(key) => match state.modals.top() {
             Some(modal) => match *modal {},
-            None => on_key(key),
+            None => match action_for(key) {
+                Some(action) => perform(state, action),
+                None => Update::default(),
+            },
         },
     }
 }
 
-// The action registry (#3) replaces this hard-coded binding.
-fn on_key(key: KeyEvent) -> Update {
-    match (key.code, key.modifiers) {
-        (KeyCode::Char('q'), KeyModifiers::NONE) => Update {
+/// Carries out `action` against `state`.
+pub fn perform(_state: &mut State, action: Action) -> Update {
+    match action {
+        Action::Quit => Update {
             redraw: false,
             effects: vec![Effect::Quit],
         },
         _ => Update::default(),
+    }
+}
+
+// The action registry (#3) replaces this hard-coded binding.
+fn action_for(key: KeyEvent) -> Option<Action> {
+    match (key.code, key.modifiers) {
+        (KeyCode::Char('q'), KeyModifiers::NONE) => Some(Action::Quit),
+        _ => None,
     }
 }

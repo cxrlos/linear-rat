@@ -3,7 +3,7 @@ use std::io;
 use anyhow::Context;
 use clap::Parser;
 use crossterm::event::EventStream;
-use linear_rat::app::App;
+use linear_rat::app::{App, State};
 use linear_rat::cli::Cli;
 use linear_rat::terminal::{self, TerminalGuard};
 use linear_rat::{logging, runtime};
@@ -20,7 +20,7 @@ async fn main() -> anyhow::Result<()> {
 
     let shutdown = terminal::shutdown_signal().context("listening for SIGTERM and SIGHUP")?;
     let guard = TerminalGuard::enter().context("preparing the terminal")?;
-    let result = match App::new(CrosstermBackend::new(io::stdout())) {
+    let result = match App::new(CrosstermBackend::new(io::stdout()), State::default()) {
         Ok(app) => runtime::run(app, EventStream::new(), shutdown).await,
         Err(error) => Err(error).context("drawing the first frame"),
     };
