@@ -2,7 +2,9 @@
 #![allow(clippy::unwrap_used)]
 
 use std::collections::HashMap;
+use std::fs;
 use std::io;
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -112,15 +114,19 @@ impl LinearClient for RejectingClient {
     }
 }
 
-/// A fresh directory for one test's workspace file.
-fn workspace_file() -> WorkspaceFile {
+/// A workspace file path in a fresh directory for one test.
+fn workspace_path() -> PathBuf {
     static NEXT: AtomicUsize = AtomicUsize::new(0);
     let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!(
         "auth-{}-{}",
         std::process::id(),
         NEXT.fetch_add(1, Ordering::SeqCst)
     ));
-    WorkspaceFile::new(dir.join("keyring-workspace"))
+    dir.join("keyring-workspace")
+}
+
+fn workspace_file() -> WorkspaceFile {
+    WorkspaceFile::new(workspace_path())
 }
 
 fn key(raw: &str) -> ApiKey {
@@ -277,6 +283,103 @@ async fn status_with_a_revoked_key_names_where_the_key_came_from() {
         "{message}"
     );
     assert!(!message.contains(SECRET));
+}
+
+#[tokio::test]
+async fn a_revoked_linear_api_key_says_to_replace_or_unset_it() {
+    let credentials = Credentials::new(
+        MemoryStore::default(),
+        workspace_file(),
+        Some(SECRET.to_owned()),
+    );
+
+    let error = auth::status(&credentials, |_| Ok(RejectingClient))
+        .await
+        .unwrap_err();
+
+    let message = error.to_string();
+    assert!(
+        message.contains("put it in LINEAR_API_KEY, or unset LINEAR_API_KEY"),
+        "{message}"
+    );
+    assert!(!message.contains("lrat auth login"), "{message}");
+}
+
+/// A workspace file whose directory can be read but not written, so reading
+/// finds nothing (or the old URL key) and writing fails.
+fn unwritable_workspace_file(previous: Option<&str>) -> (WorkspaceFile, PathBuf) {
+    let path = workspace_path();
+    let file = WorkspaceFile::new(&path);
+    let dir = path.parent().unwrap().to_owned();
+    fs::create_dir_all(&dir).unwrap();
+    if let Some(url_key) = previous {
+        file.write(url_key).unwrap();
+    }
+    fs::set_permissions(&dir, fs::Permissions::from_mode(0o500)).unwrap();
+    if previous.is_some() {
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o400)).unwrap();
+    }
+    (file, dir)
+}
+
+fn make_writable(dir: &PathBuf) {
+    fs::set_permissions(dir, fs::Permissions::from_mode(0o700)).unwrap();
+}
+
+#[tokio::test]
+async fn a_first_login_stores_nothing_when_the_workspace_file_cannot_be_written() {
+    let (file, dir) = unwritable_workspace_file(None);
+    let credentials = Credentials::new(MemoryStore::default(), file, None);
+
+    let result = auth::login(&credentials, key(SECRET), |_| Ok(FakeClient)).await;
+    make_writable(&dir);
+
+    assert!(
+        matches!(result, Err(AuthError::WorkspaceFile { .. })),
+        "{result:?}"
+    );
+    assert!(credentials.store().entries().is_empty());
+}
+
+#[tokio::test]
+async fn a_login_that_cannot_update_the_workspace_file_keeps_the_previous_login() {
+    let (file, dir) = unwritable_workspace_file(Some("old-workspace"));
+    let credentials = Credentials::new(
+        MemoryStore::holding("old-workspace", OTHER_SECRET),
+        file,
+        None,
+    );
+
+    let result = auth::login(&credentials, key(SECRET), |_| Ok(FakeClient)).await;
+    make_writable(&dir);
+
+    assert!(
+        matches!(result, Err(AuthError::WorkspaceFile { .. })),
+        "{result:?}"
+    );
+    assert_eq!(
+        credentials.store().entries(),
+        HashMap::from([("old-workspace".to_owned(), OTHER_SECRET.to_owned())])
+    );
+    assert_eq!(
+        credentials.workspace_file().read().unwrap().as_deref(),
+        Some("old-workspace")
+    );
+}
+
+#[tokio::test]
+async fn a_relogin_that_cannot_update_the_workspace_file_keeps_the_old_key() {
+    let (file, dir) = unwritable_workspace_file(Some(URL_KEY));
+    let credentials = Credentials::new(MemoryStore::holding(URL_KEY, OTHER_SECRET), file, None);
+
+    let result = auth::login(&credentials, key(SECRET), |_| Ok(FakeClient)).await;
+    make_writable(&dir);
+
+    assert!(
+        matches!(result, Err(AuthError::WorkspaceFile { .. })),
+        "{result:?}"
+    );
+    assert_eq!(credentials.store().entries()[URL_KEY], OTHER_SECRET);
 }
 
 #[tokio::test]

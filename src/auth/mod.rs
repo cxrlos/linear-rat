@@ -55,10 +55,7 @@ pub enum AuthError {
          Create a personal API key at {KEYS_URL} and try again"
     )]
     LoginRejected,
-    #[error(
-        "Linear rejected the API key from {0}: it is wrong, revoked or expired. \
-         Create a new personal API key at {KEYS_URL}, then run `lrat auth login`"
-    )]
+    #[error("{}", rejected(.0))]
     Rejected(KeySource),
     #[error(transparent)]
     Malformed(InvalidApiKey),
@@ -160,10 +157,22 @@ where
 
     let account = &workspace.url_key;
     let previous = credentials.workspace_file.read()?;
+    let replaced = credentials.store.get(account)?;
     credentials.store.set(account, &key)?;
     // Point at the new entry before touching the old one, so a failed delete
     // cannot leave the workspace file naming a workspace that was replaced.
-    credentials.workspace_file.write(account)?;
+    if let Err(error) = credentials.workspace_file.write(account) {
+        // Without the pointer, status and logout cannot find the new entry, so
+        // put the keyring back as it was.
+        let undo = match &replaced {
+            Some(old) => credentials.store.set(account, old),
+            None => credentials.store.delete(account).map(drop),
+        };
+        if let Err(undo_error) = undo {
+            tracing::warn!(%undo_error, "could not undo storing the API key");
+        }
+        return Err(error);
+    }
     let mut stale = None;
     if let Some(previous) = previous
         && previous != *account
@@ -234,6 +243,19 @@ pub fn logout<S: KeyStore>(credentials: &Credentials<S>) -> Result<String, AuthE
         format!("No API key for {account} was in the OS keyring.")
     };
     Ok(with_env_note(credentials, output))
+}
+
+/// Why the key from `source` failed and how to replace it. A key from
+/// `LINEAR_API_KEY` wins over the keyring, so logging in again would not help.
+fn rejected(source: &KeySource) -> String {
+    let fix = match source {
+        KeySource::Env => format!("put it in {KEY_VAR}, or unset {KEY_VAR} to use the OS keyring"),
+        KeySource::Keyring { .. } => "run `lrat auth login`".to_owned(),
+    };
+    format!(
+        "Linear rejected the API key from {source}: it is wrong, revoked or expired. \
+         Create a new personal API key at {KEYS_URL}, then {fix}"
+    )
 }
 
 fn with_env_note<S>(credentials: &Credentials<S>, mut output: String) -> String {
