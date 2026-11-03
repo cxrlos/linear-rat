@@ -11,7 +11,7 @@ A terminal client for Linear, written in Rust with ratatui. One crate; the binar
 
 ## Status
 
-Active, pre-release. Working toward `0.1.0` on the `feat/v0.1.0` branch, which is squash-merged into `main` as one commit.
+Active, pre-release. Work toward `0.1.0` lands on the `feat/v0.1.0` branch, which is squash-merged into `main`.
 
 ## Critical rules
 
