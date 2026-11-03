@@ -54,6 +54,7 @@ fn issue(id: &str) -> Build {
         title: format!("Issue {id}"),
         description: None,
         url: format!("https://linear.app/cheese/issue/ENG-{id}"),
+        branch_name: format!("eng-{id}-issue-{id}"),
         team_id: "eng".into(),
         state: state(StateType::Backlog),
         priority: Priority::None,

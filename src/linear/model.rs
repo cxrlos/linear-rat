@@ -133,6 +133,8 @@ pub struct Issue {
     pub title: String,
     pub description: Option<String>,
     pub url: String,
+    /// The Git branch name Linear suggests for the issue, as `branchName`.
+    pub branch_name: String,
     pub team_id: String,
     pub state: WorkflowState,
     pub priority: Priority,

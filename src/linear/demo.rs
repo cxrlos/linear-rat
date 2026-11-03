@@ -474,15 +474,12 @@ fn finish(
             }
         })
         .collect();
+    let title = spec.titles.get(number - 1).copied().unwrap_or("Untitled");
     let issue = Issue {
         id: issue_id,
         url: format!("https://linear.app/{URL_KEY}/issue/{identifier}"),
-        title: spec
-            .titles
-            .get(number - 1)
-            .copied()
-            .unwrap_or("Untitled")
-            .to_owned(),
+        branch_name: branch_name(&identifier, title),
+        title: title.to_owned(),
         identifier,
         description: draft.description,
         team_id: team_id.to_owned(),
@@ -889,3 +886,20 @@ const OPS_TITLES: &[&str] = &[
     "Expense policy for conference travel",
     "Schedule the winter maintenance window",
 ];
+
+/// Linear's suggested branch name: the lowercased identifier, then the title
+/// as a slug, cut to a whole word within 60 characters.
+fn branch_name(identifier: &str, title: &str) -> String {
+    let mut name = identifier.to_lowercase();
+    for word in title
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|word| !word.is_empty())
+    {
+        if name.len() + 1 + word.len() > 60 {
+            break;
+        }
+        name.push('-');
+        name.push_str(&word.to_lowercase());
+    }
+    name
+}
