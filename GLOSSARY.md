@@ -53,3 +53,24 @@ Time from an issue's creation to it entering a completed state.
 
 **Throughput**:
 Number of issues entering a completed state per time bucket.
+
+**Net flow**:
+Issues created minus issues completed in a time bucket; positive means the backlog is growing.
+_Avoid_: burn rate
+
+**Velocity**:
+Estimate points completed in a cycle.
+_Avoid_: speed, capacity
+
+**Scope creep**:
+Estimate points added to a cycle after it started.
+
+**Issue age**:
+Time an open issue has spent in its current started state.
+_Avoid_: staleness (see stale issue)
+
+**Stale issue**:
+An open issue with no update for a configured number of days.
+
+**Triage time**:
+Time from an issue's creation to it leaving triage.
