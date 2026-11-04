@@ -12,7 +12,7 @@ mod update;
 use ratatui::Terminal;
 use ratatui::backend::Backend;
 
-pub use action::Action;
+pub use action::{Action, Copyable};
 pub use effect::Effect;
 pub use event::Event;
 pub use load::{Load, LoadError};

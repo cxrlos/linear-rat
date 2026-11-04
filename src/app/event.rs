@@ -15,4 +15,7 @@ pub enum Event {
     },
     /// The result of [`Effect::LoadMyIssues`](super::Effect::LoadMyIssues).
     MyIssuesLoaded(Result<AssignedIssues, LoadError>),
+    /// The runtime could not carry out an effect. The message, with its
+    /// context, becomes the notice.
+    EffectFailed(String),
 }

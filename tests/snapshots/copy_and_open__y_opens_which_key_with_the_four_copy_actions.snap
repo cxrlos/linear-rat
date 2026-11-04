@@ -1,0 +1,28 @@
+---
+source: tests/copy_and_open.rs
+expression: app.backend()
+---
+" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+"┌My Issues─────────────────────────────────────────────────────────────────────┐"
+"│◐ Started (9)                                                                 │"
+"│▸ DES-34 Design QA for the autumn release ◐ In Progress ▮▮▮ High    3 Cycle 7 │"
+"│  ENG-51 Add a dry-run mode to the import ◐ In Progress ▮▮▯ Medium  2 Cycle 7 │"
+"│  OPS-37 Clean up unused API keys         ◐ In Review   ▮▮▯ Medium    Cycle 7 │"
+"│  ENG-61 Add contract tests for the recip ◐ In Progress ▮▯▯ Low     2 Cycle 7 │"
+"│  OPS-36 Plan the office cheese cave move ◐ In Review   ▮▯▯ Low       Cycle 7 │"
+"│  ENG-60 Improve error messages on sync c ◐ In Progress ··· None    5 Cycle 7 │"
+"│  ENG-22 Store the last sync watermark pe ◐ In Progress ▮▮▮ High    3         │"
+"│  OPS-15 Tag cloud resources by team      ◐ In Review   ▮▮▯ Medium            │"
+"│  DES-12 Motion guidelines for list reord ◐ In Review   ··· None    3         │"
+"│○ Unstarted (10)                                                              │"
+"│  DES-40 Color-blind safe workflow marker ○ Todo        ▮▮▮ High    1 Cycle 7 │"
+"│  ENG-57 Throttle sensor writes during bu ○ Todo        ▮▮▯ Medium  2 Cycle 7 │"
+"│  OPS-38 Add synthetic checks for login   ○ Todo        ▮▮▯ Medium    Cycle 7 │"
+"│  DES-31 Review copy for permission promp ○ Todo   ┌ y ──────────────────────┐│"
+"│  ENG-65 Rotate refresh tokens on every u ○ Todo   │ i  Copy the identifier  ││"
+"│  DES-16 Accessible focus rings across wh ○ Todo   │ u  Copy the URL         ││"
+"│  ENG-56 Notification settings reset afte ○ Todo   │ b  Copy the branch name ││"
+"│  ENG-6  Migrate burrow storage to the ne ○ Todo   │ m  Copy a Markdown link ││"
+"│  OPS-26 Archive the old marketing site   ○ Todo   └ Esc close ──────────────┘│"
+"└──────────────────────────────────────────────────────────────────────────────┘"
+" j down  k up  gg top  G bottom  Enter open  Esc close  ? keys  q quit          "

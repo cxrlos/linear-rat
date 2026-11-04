@@ -1,7 +1,8 @@
 use crossterm::event::KeyCode;
 
 use super::{Context, Key};
-use crate::app::{Action, Pane, Screen, State};
+use crate::app::{Action, Copyable, Modal, Pane, Screen, State};
+use crate::ui;
 
 /// One action as the viewer sees it: what it is called, where it applies,
 /// when it can run and which keys run it by default (the vim preset).
@@ -23,6 +24,7 @@ pub struct ActionSpec {
 const LIST: &[Context] = &[Context::List];
 const PANES: &[Context] = &[Context::List, Context::Detail];
 const GLOBAL: &[Context] = &[Context::Global];
+const OVERLAY: &[Context] = &[Context::Overlay];
 
 /// Every action lrat has, in the order hints and the cheatsheet list them.
 /// This is the only place a key binding is written down.
@@ -109,6 +111,27 @@ pub static ACTIONS: &[ActionSpec] = &[
         available: always,
     },
     ActionSpec {
+        action: Action::ScrollDown,
+        id: "scroll-down",
+        description: "Scroll down",
+        hint: Some("down"),
+        contexts: OVERLAY,
+        default_keys: &[&[Key::char('j')]],
+        available: |state| {
+            cheatsheet_scroll(state)
+                .is_some_and(|scroll| scroll < ui::cheatsheet_max_scroll(state, state.viewport))
+        },
+    },
+    ActionSpec {
+        action: Action::ScrollUp,
+        id: "scroll-up",
+        description: "Scroll up",
+        hint: Some("up"),
+        contexts: OVERLAY,
+        default_keys: &[&[Key::char('k')]],
+        available: |state| cheatsheet_scroll(state).is_some_and(|scroll| scroll > 0),
+    },
+    ActionSpec {
         action: Action::Close,
         id: "close",
         description: "Close the top overlay or step back",
@@ -116,6 +139,51 @@ pub static ACTIONS: &[ActionSpec] = &[
         contexts: &[Context::List, Context::Detail, Context::Overlay],
         default_keys: &[&[Key::named(KeyCode::Esc)]],
         available: |state| state.modals.top().is_some() || in_detail(state),
+    },
+    ActionSpec {
+        action: Action::Copy(Copyable::Identifier),
+        id: "copy-identifier",
+        description: "Copy the identifier",
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('y'), Key::char('i')]],
+        available: has_focused_issue,
+    },
+    ActionSpec {
+        action: Action::Copy(Copyable::Url),
+        id: "copy-url",
+        description: "Copy the URL",
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('y'), Key::char('u')]],
+        available: has_focused_issue,
+    },
+    ActionSpec {
+        action: Action::Copy(Copyable::BranchName),
+        id: "copy-branch-name",
+        description: "Copy the branch name",
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('y'), Key::char('b')]],
+        available: has_focused_issue,
+    },
+    ActionSpec {
+        action: Action::Copy(Copyable::MarkdownLink),
+        id: "copy-markdown-link",
+        description: "Copy a Markdown link",
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('y'), Key::char('m')]],
+        available: has_focused_issue,
+    },
+    ActionSpec {
+        action: Action::OpenInBrowser,
+        id: "open-in-browser",
+        description: "Open in the browser",
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('o')]],
+        available: has_focused_issue,
     },
     ActionSpec {
         action: Action::ShowScreen(Screen::MyIssues),
@@ -166,6 +234,17 @@ pub static ACTIONS: &[ActionSpec] = &[
 
 fn always(_: &State) -> bool {
     true
+}
+
+fn cheatsheet_scroll(state: &State) -> Option<u16> {
+    match state.modals.top() {
+        Some(Modal::Cheatsheet { scroll }) => Some(*scroll),
+        _ => None,
+    }
+}
+
+fn has_focused_issue(state: &State) -> bool {
+    state.focused_issue().is_some()
 }
 
 // The detail does not scroll yet, so moves do nothing there.

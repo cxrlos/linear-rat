@@ -6,4 +6,8 @@ pub enum Effect {
     /// Load the viewer's open assigned issues; the result comes back as
     /// [`Event::MyIssuesLoaded`](super::Event::MyIssuesLoaded).
     LoadMyIssues,
+    /// Put this text on the system clipboard.
+    Copy(String),
+    /// Open this URL in the viewer's browser.
+    OpenUrl(String),
 }

@@ -8,8 +8,9 @@ pub struct ModalStack(Vec<Modal>);
 /// One overlay, such as a picker, the palette or the cheatsheet.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Modal {
-    /// Every action and its keys for the context below.
-    Cheatsheet,
+    /// Every action and its keys for the context below, scrolled down by
+    /// `scroll` rows when it is taller than the screen.
+    Cheatsheet { scroll: u16 },
     /// The keys that can follow `prefix`, the start of a chord.
     WhichKey { prefix: Vec<Key> },
 }
@@ -17,6 +18,10 @@ pub enum Modal {
 impl ModalStack {
     pub fn top(&self) -> Option<&Modal> {
         self.0.last()
+    }
+
+    pub fn top_mut(&mut self) -> Option<&mut Modal> {
+        self.0.last_mut()
     }
 
     pub fn push(&mut self, modal: Modal) {

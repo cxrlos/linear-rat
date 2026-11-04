@@ -2,6 +2,7 @@
 
 use ratatui::Frame;
 use ratatui::layout::{Margin, Rect};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph};
 
@@ -19,9 +20,14 @@ pub fn render(state: &State, prefix: &[Key], frame: &mut Frame, area: Rect) {
         .into_iter()
         .filter_map(|(rest, action)| {
             let spec = keys::spec(action)?;
+            let (key_style, text_style) = if (spec.available)(state) {
+                (style::accent(), Style::new())
+            } else {
+                (style::muted(), style::muted())
+            };
             Some(Line::from(vec![
-                Span::styled(format!(" {rest}  "), style::accent()),
-                Span::raw(format!("{} ", spec.description)),
+                Span::styled(format!(" {rest}  "), key_style),
+                Span::styled(format!("{} ", spec.description), text_style),
             ]))
         })
         .collect();

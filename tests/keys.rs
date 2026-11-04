@@ -152,8 +152,55 @@ fn the_cheatsheet_shows_overridden_keys() {
     let mut app = app_with(OVERRIDES);
 
     press(&mut app, "?");
-
     assert_snapshot!(app.backend());
+
+    press(&mut app, "jjjjjjjjjj");
+    assert_snapshot!(
+        "the_cheatsheet_shows_overridden_keys_scrolled",
+        app.backend()
+    );
+}
+
+fn screen(app: &App<TestBackend>) -> String {
+    (0..24).map(|y| row(app, y) + "\n").collect()
+}
+
+#[test]
+fn the_cheatsheet_fits_inside_the_frame_and_scrolls_to_the_rest() {
+    let mut app = app();
+
+    press(&mut app, "?");
+    assert!(
+        row(&app, 1).starts_with("┌My Issues───"),
+        "{}",
+        screen(&app)
+    );
+    assert!(!screen(&app).contains("Quit lrat"));
+
+    press(&mut app, "jjjjjjjjjj");
+    assert!(
+        screen(&app).contains("q      Quit lrat"),
+        "{}",
+        screen(&app)
+    );
+    assert!(!screen(&app).contains("Issue list"));
+    assert!(row(&app, 21).contains("└ Esc close"), "{}", screen(&app));
+
+    press(&mut app, "kkkkkkkkkk");
+    assert!(row(&app, 3).contains("Issue list"), "{}", screen(&app));
+}
+
+#[test]
+fn the_bottom_bar_of_the_cheatsheet_accents_only_the_ways_it_can_scroll() {
+    let mut app = app();
+
+    press(&mut app, "?");
+    assert_eq!(fg_of(&app, 23, "j"), Some(Color::Cyan));
+    assert_eq!(fg_of(&app, 23, "k"), Some(Color::DarkGray));
+
+    press(&mut app, "jjjjjjjjjj");
+    assert_eq!(fg_of(&app, 23, "j"), Some(Color::DarkGray));
+    assert_eq!(fg_of(&app, 23, "k"), Some(Color::Cyan));
 }
 
 #[test]

@@ -7,6 +7,7 @@ use crate::auth::KeySource;
 use crate::config::Loaded;
 use crate::keys::Keymap;
 use crate::linear::AssignedIssues;
+use crate::linear::model::Issue;
 
 /// Everything the screen shows. Rendering reads only this.
 #[derive(Debug, Default)]
@@ -70,6 +71,15 @@ impl State {
             loaded.as_of,
         );
         self.load = Load::Loaded;
+    }
+
+    /// The issue the current screen has focused, if it shows issues and has
+    /// any.
+    pub fn focused_issue(&self) -> Option<&Issue> {
+        match self.screen {
+            Screen::MyIssues => self.my_issues.focused_issue(),
+            Screen::TeamIssues | Screen::Analytics => None,
+        }
     }
 
     /// This state with the keymap from `loaded`, and its first error, if

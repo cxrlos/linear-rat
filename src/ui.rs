@@ -44,7 +44,7 @@ pub fn render(state: &State, frame: &mut Frame) {
 
     for modal in state.modals.iter() {
         match modal {
-            Modal::Cheatsheet => cheatsheet::render(state, frame, body_area),
+            Modal::Cheatsheet { scroll } => cheatsheet::render(state, *scroll, frame, body_area),
             Modal::WhichKey { prefix } => which_key::render(state, prefix, frame, body_area),
         }
     }
@@ -99,6 +99,14 @@ pub fn list_rows(state: &State, viewport: Size) -> usize {
     let area = Rect::from((ratatui::layout::Position::ORIGIN, viewport));
     let [_, body_area, _, _] = areas(area, notice_rows(state, viewport.width).len());
     usize::from(body_area.height.saturating_sub(2))
+}
+
+/// How far the cheatsheet can scroll in a `viewport`-sized terminal: how
+/// many of its rows do not fit.
+pub fn cheatsheet_max_scroll(state: &State, viewport: Size) -> u16 {
+    let area = Rect::from((ratatui::layout::Position::ORIGIN, viewport));
+    let [_, body_area, _, _] = areas(area, notice_rows(state, viewport.width).len());
+    cheatsheet::max_scroll(state, body_area)
 }
 
 /// The tab row, the body, the notice and the bottom bar, top to bottom.

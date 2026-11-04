@@ -1,0 +1,28 @@
+---
+source: tests/keys.rs
+expression: app.backend()
+---
+" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+"┌My Issues─────────────────────────────────────────────────────────────────────┐"
+"│No open issues ┌ Keys ───────────────────────────────────────┐                │"
+"│               │  C-d    Move down half a page               │                │"
+"│               │  C-u    Move up half a page                 │                │"
+"│               │  h      Focus the pane on the left          │                │"
+"│               │  l      Focus the pane on the right         │                │"
+"│               │  Enter  Open the focused issue              │                │"
+"│               │  Esc    Close the top overlay or step back  │                │"
+"│               │  yi     Copy the identifier                 │                │"
+"│               │  yu     Copy the URL                        │                │"
+"│               │  yb     Copy the branch name                │                │"
+"│               │  ym     Copy a Markdown link                │                │"
+"│               │  o      Open in the browser                 │                │"
+"│               │                                             │                │"
+"│               │Everywhere                                   │                │"
+"│               │  1      Show My Issues                      │                │"
+"│               │  2      Show Team Issues                    │                │"
+"│               │  3      Show Analytics                      │                │"
+"│               │  ?, F1  Show every key for this context     │                │"
+"│               │  Q      Quit lrat                           │                │"
+"│               └ Esc close ──────────────────────────────────┘                │"
+"└──────────────────────────────────────────────────────────────────────────────┘"
+" j down  k up  Esc close                                                        "
