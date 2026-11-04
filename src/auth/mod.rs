@@ -35,6 +35,16 @@ pub enum KeySource {
     Keyring { account: String },
 }
 
+impl KeySource {
+    /// Which kind of source, without the keyring account, for the log.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::Env => KEY_VAR,
+            Self::Keyring { .. } => "OS keyring",
+        }
+    }
+}
+
 impl fmt::Display for KeySource {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

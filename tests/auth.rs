@@ -614,3 +614,14 @@ impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for SharedBuffer {
         self.clone()
     }
 }
+
+#[test]
+fn a_key_source_kind_names_where_the_key_came_from_without_the_account() {
+    let keyring = linear_rat::auth::KeySource::Keyring {
+        account: URL_KEY.to_owned(),
+    };
+
+    assert_eq!(linear_rat::auth::KeySource::Env.kind(), "LINEAR_API_KEY");
+    assert_eq!(keyring.kind(), "OS keyring");
+    assert!(!keyring.kind().contains(URL_KEY));
+}

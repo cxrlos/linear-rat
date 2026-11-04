@@ -74,7 +74,7 @@ fn connect() -> (State, Option<HttpClient>) {
         });
     match resolved {
         Ok((client, source)) => {
-            tracing::info!(%source, "using the API key");
+            tracing::info!(source = source.kind(), "using the API key");
             (State::loading(Some(source)), Some(client))
         }
         Err(error) => {
