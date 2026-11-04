@@ -4,7 +4,7 @@ use ratatui::Frame;
 use ratatui::layout::{Margin, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Clear, Paragraph};
+use ratatui::widgets::{Clear, Paragraph};
 
 use super::style;
 use crate::app::State;
@@ -16,7 +16,7 @@ pub fn render(state: &State, scroll: u16, frame: &mut Frame, area: Rect) {
     let lines = lines(state);
     let popup = popup(area, &lines);
     let scroll = scroll.min(hidden_rows(popup, &lines));
-    let block = Block::bordered()
+    let block = super::popup_block(state)
         .title(" Keys ")
         .title_bottom(super::close_hint(state));
     frame.render_widget(Clear, popup);
@@ -51,6 +51,7 @@ fn popup(area: Rect, lines: &[Line]) -> Rect {
 
 /// One heading per context, then its actions with their keys.
 fn lines(state: &State) -> Vec<Line<'static>> {
+    let theme = &state.theme;
     let contexts = keys::screen_contexts(state);
     let mut sections: Vec<(&str, Vec<(String, &ActionSpec)>)> = Vec::new();
     let mut listed = Vec::new();
@@ -84,12 +85,12 @@ fn lines(state: &State) -> Vec<Line<'static>> {
         if !lines.is_empty() {
             lines.push(Line::default());
         }
-        lines.push(Line::styled(title, style::accent()));
+        lines.push(Line::styled(title, style::accent(theme)));
         for (keys, spec) in entries {
             let (key_style, text_style) = if (spec.available)(state) {
-                (style::accent(), Style::new())
+                (style::accent(theme), Style::new())
             } else {
-                (style::muted(), style::muted())
+                (style::muted(theme), style::muted(theme))
             };
             lines.push(Line::from(vec![
                 Span::styled(format!("  {keys:<key_width$}  "), key_style),

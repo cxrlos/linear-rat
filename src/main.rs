@@ -33,6 +33,11 @@ async fn main() -> anyhow::Result<()> {
     for error in &loaded.errors {
         tracing::warn!(%error, "config problem");
     }
+    tracing::info!(
+        theme = loaded.config.theme,
+        icons = loaded.config.ui.icons.name(),
+        "config loaded"
+    );
     let shutdown =
         terminal::shutdown_signal().context("listening for SIGINT, SIGTERM and SIGHUP")?;
     let result = if cli.demo {

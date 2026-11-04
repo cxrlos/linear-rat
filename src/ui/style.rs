@@ -1,24 +1,30 @@
-//! The few colors lrat uses, in one place until themes replace them.
+//! The styles lrat draws with, each from a role of the [`Theme`].
 
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 
-/// Marks what is active: keys the viewer can use, the focused pane, the
-/// active cycle.
-pub const ACCENT: Color = Color::Cyan;
-/// Marks what is inactive: unavailable keys, the pane without focus.
-pub const MUTED: Color = Color::DarkGray;
+use super::theme::Theme;
+
+/// The theme's text on its background, painted under everything.
+pub fn base(theme: &Theme) -> Style {
+    Style::new().fg(theme.text).bg(theme.background)
+}
 
 /// Keys and other things the viewer can act on now.
-pub fn accent() -> Style {
-    Style::new().fg(ACCENT).add_modifier(Modifier::BOLD)
+pub fn accent(theme: &Theme) -> Style {
+    Style::new().fg(theme.accent).add_modifier(Modifier::BOLD)
 }
 
 /// Things that exist but cannot be used right now.
-pub fn muted() -> Style {
-    Style::new().fg(MUTED)
+pub fn muted(theme: &Theme) -> Style {
+    Style::new().fg(theme.muted)
 }
 
 /// Messages about something that went wrong.
-pub fn error() -> Style {
-    Style::new().fg(Color::Red)
+pub fn error(theme: &Theme) -> Style {
+    Style::new().fg(theme.error)
+}
+
+/// The border of a pane alone on screen or of a popup.
+pub fn border(theme: &Theme) -> Style {
+    Style::new().fg(theme.border)
 }

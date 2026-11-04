@@ -6,19 +6,23 @@ use ratatui::style::{Modifier, Style, Stylize};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Paragraph, Wrap};
 
+use super::theme::Theme;
 use super::{icons, style};
-use crate::app::{Group, MyIssues, Pane};
+use crate::app::{Group, MyIssues, Pane, State};
 use crate::linear::model::{Issue, Priority, StateType, WorkflowState};
-
-/// From this many columns on, the detail shows beside the list; below it the
-/// focused pane fills the body.
-pub const WIDE_MIN_COLUMNS: u16 = 120;
 
 const FIELD_WIDTH: usize = 10;
 
-pub fn render(my_issues: &MyIssues, frame: &mut Frame, area: Rect) {
-    let pane = my_issues.pane();
-    if area.width >= WIDE_MIN_COLUMNS {
+/// From `ui.wide-layout-columns` columns on, the detail shows beside the
+/// list; below it the focused pane fills the body.
+pub fn render(state: &State, frame: &mut Frame, area: Rect) {
+    let view = View {
+        my_issues: &state.my_issues,
+        theme: &state.theme,
+        icons: state.ui.icons,
+    };
+    let pane = view.my_issues.pane();
+    if area.width >= state.ui.wide_layout_columns {
         let [list_area, detail_area] =
             Layout::horizontal([Constraint::Fill(3), Constraint::Fill(2)]).areas(area);
         let focus = |of| {
@@ -28,13 +32,20 @@ pub fn render(my_issues: &MyIssues, frame: &mut Frame, area: Rect) {
                 Focus::Unfocused
             }
         };
-        render_list(my_issues, frame, list_area, focus(Pane::List));
-        render_detail(my_issues, frame, detail_area, focus(Pane::Detail));
+        render_list(&view, frame, list_area, focus(Pane::List));
+        render_detail(&view, frame, detail_area, focus(Pane::Detail));
     } else if pane == Pane::Detail {
-        render_detail(my_issues, frame, area, Focus::Alone);
+        render_detail(&view, frame, area, Focus::Alone);
     } else {
-        render_list(my_issues, frame, area, Focus::Alone);
+        render_list(&view, frame, area, Focus::Alone);
     }
+}
+
+/// What every part of the screen draws from.
+struct View<'a> {
+    my_issues: &'a MyIssues,
+    theme: &'a Theme,
+    icons: icons::IconSet,
 }
 
 /// How a pane shows focus: a thick accented border beside an unfocused pane,
@@ -46,14 +57,14 @@ enum Focus {
     Unfocused,
 }
 
-fn pane_block(title: impl Into<Line<'static>>, focus: Focus) -> Block<'static> {
+fn pane_block(title: impl Into<Line<'static>>, focus: Focus, theme: &Theme) -> Block<'static> {
     let block = Block::bordered().title(title);
     match focus {
-        Focus::Alone => block,
+        Focus::Alone => block.border_style(style::border(theme)),
         Focus::Focused => block
             .border_type(BorderType::Thick)
-            .border_style(style::ACCENT),
-        Focus::Unfocused => block.border_style(style::MUTED),
+            .border_style(theme.accent),
+        Focus::Unfocused => block.border_style(theme.muted),
     }
 }
 
@@ -62,12 +73,15 @@ enum Row<'a> {
     Issue(usize, &'a Issue),
 }
 
-fn render_list(my_issues: &MyIssues, frame: &mut Frame, area: Rect, focus: Focus) {
-    let block = pane_block("My Issues", focus);
+fn render_list(view: &View, frame: &mut Frame, area: Rect, focus: Focus) {
+    let View {
+        my_issues, theme, ..
+    } = view;
+    let block = pane_block("My Issues", focus, theme);
     let inner = block.inner(area);
     frame.render_widget(block, area);
     if my_issues.groups().is_empty() {
-        let empty = Paragraph::new("No open issues are assigned to you.").fg(style::MUTED);
+        let empty = Paragraph::new("No open issues are assigned to you.").fg(theme.muted);
         frame.render_widget(empty, inner);
         return;
     }
@@ -112,7 +126,7 @@ fn render_list(my_issues: &MyIssues, frame: &mut Frame, area: Rect, focus: Focus
         match row {
             Row::Header(group) => {
                 let header = Line::from(vec![
-                    state_glyph(group.state_type),
+                    state_glyph(view, group.state_type),
                     Span::raw(" "),
                     Span::raw(icons::state_type_name(group.state_type)).bold(),
                     Span::raw(format!(" ({})", group.issues.len())),
@@ -126,10 +140,10 @@ fn render_list(my_issues: &MyIssues, frame: &mut Frame, area: Rect, focus: Focus
                 if is_focused {
                     frame.render_widget("▸", marker);
                 }
-                frame.render_widget(Span::raw(&issue.identifier).fg(style::MUTED), identifier);
+                frame.render_widget(Span::raw(&issue.identifier).fg(theme.muted), identifier);
                 frame.render_widget(issue.title.as_str(), title);
-                frame.render_widget(state_line(&issue.state), state);
-                frame.render_widget(priority_line(issue.priority), priority);
+                frame.render_widget(state_line(view, &issue.state), state);
+                frame.render_widget(priority_line(view, issue.priority), priority);
                 frame.render_widget(
                     Line::from(
                         issue
@@ -141,12 +155,12 @@ fn render_list(my_issues: &MyIssues, frame: &mut Frame, area: Rect, focus: Focus
                     .alignment(Alignment::Right),
                     estimate,
                 );
-                frame.render_widget(cycle_span(my_issues, issue), cycle);
+                frame.render_widget(cycle_span(view, issue), cycle);
                 if is_focused {
                     let highlight = if focus == Focus::Unfocused {
                         Style::new().add_modifier(Modifier::BOLD)
                     } else {
-                        Style::new().add_modifier(Modifier::REVERSED)
+                        theme.selection
                     };
                     frame.buffer_mut().set_style(line_area, highlight);
                 }
@@ -155,12 +169,15 @@ fn render_list(my_issues: &MyIssues, frame: &mut Frame, area: Rect, focus: Focus
     }
 }
 
-fn render_detail(my_issues: &MyIssues, frame: &mut Frame, area: Rect, focus: Focus) {
+fn render_detail(view: &View, frame: &mut Frame, area: Rect, focus: Focus) {
+    let View {
+        my_issues, theme, ..
+    } = view;
     let Some(issue) = my_issues.focused_issue() else {
-        frame.render_widget(pane_block("Detail", focus), area);
+        frame.render_widget(pane_block("Detail", focus, theme), area);
         return;
     };
-    let block = pane_block(issue.identifier.clone(), focus);
+    let block = pane_block(issue.identifier.clone(), focus, theme);
 
     let cycle = match &issue.cycle_id {
         Some(id) => {
@@ -187,18 +204,19 @@ fn render_detail(my_issues: &MyIssues, frame: &mut Frame, area: Rect, focus: Foc
     let mut lines = vec![
         Line::from(issue.title.as_str()).bold(),
         Line::default(),
-        field("State", state_line(&issue.state)),
-        field("Priority", priority_line(issue.priority)),
+        field(theme, "State", state_line(view, &issue.state)),
+        field(theme, "Priority", priority_line(view, issue.priority)),
     ];
     if my_issues.uses_estimates(issue) {
         let estimate = issue
             .estimate
             .map_or("None".to_owned(), |points| points.to_string());
-        lines.push(field("Estimate", Line::from(estimate)));
+        lines.push(field(theme, "Estimate", Line::from(estimate)));
     }
     lines.extend([
-        field("Cycle", Line::from(cycle)),
+        field(theme, "Cycle", Line::from(cycle)),
         field(
+            theme,
             "Labels",
             Line::from(if labels.is_empty() {
                 "None".to_owned()
@@ -206,12 +224,12 @@ fn render_detail(my_issues: &MyIssues, frame: &mut Frame, area: Rect, focus: Foc
                 labels.join(", ")
             }),
         ),
-        field("Assignee", Line::from(assignee)),
+        field(theme, "Assignee", Line::from(assignee)),
         Line::default(),
     ]);
     match &issue.description {
         Some(description) => lines.extend(description.lines().map(Line::from)),
-        None => lines.push(Line::from("No description.").fg(style::MUTED)),
+        None => lines.push(Line::from("No description.").fg(theme.muted)),
     }
     let detail = Paragraph::new(lines)
         .wrap(Wrap { trim: false })
@@ -219,39 +237,40 @@ fn render_detail(my_issues: &MyIssues, frame: &mut Frame, area: Rect, focus: Foc
     frame.render_widget(detail, area);
 }
 
-fn field<'a>(name: &'a str, value: Line<'a>) -> Line<'a> {
-    let mut spans = vec![Span::raw(format!("{name:FIELD_WIDTH$}")).fg(style::MUTED)];
+fn field<'a>(theme: &Theme, name: &'a str, value: Line<'a>) -> Line<'a> {
+    let mut spans = vec![Span::raw(format!("{name:FIELD_WIDTH$}")).fg(theme.muted)];
     spans.extend(value.spans);
     Line::from(spans)
 }
 
-fn state_glyph(state_type: StateType) -> Span<'static> {
-    Span::raw(icons::state_glyph(state_type)).fg(icons::state_color(state_type))
+fn state_glyph(view: &View, state_type: StateType) -> Span<'static> {
+    Span::raw(view.icons.state(state_type)).fg(view.theme.state(state_type))
 }
 
-fn state_line(state: &WorkflowState) -> Line<'_> {
+fn state_line<'a>(view: &View, state: &'a WorkflowState) -> Line<'a> {
     Line::from(vec![
-        state_glyph(state.state_type),
+        state_glyph(view, state.state_type),
         Span::raw(" "),
         Span::raw(state.name.as_str()),
     ])
 }
 
-fn priority_line(priority: Priority) -> Line<'static> {
+fn priority_line(view: &View, priority: Priority) -> Line<'static> {
     Line::from(vec![
-        Span::raw(icons::priority_glyph(priority)).fg(icons::priority_color(priority)),
+        Span::raw(view.icons.priority(priority)).fg(view.theme.priority(priority)),
         Span::raw(" "),
         Span::raw(icons::priority_name(priority)),
     ])
 }
 
-fn cycle_span<'a>(my_issues: &'a MyIssues, issue: &'a Issue) -> Span<'a> {
+fn cycle_span<'a>(view: &View<'a>, issue: &'a Issue) -> Span<'a> {
+    let my_issues = view.my_issues;
     let Some(id) = &issue.cycle_id else {
         return Span::default();
     };
     let name = Span::raw(my_issues.cycle_name(id).unwrap_or(id));
     if my_issues.is_in_active_cycle(issue) {
-        name.fg(style::ACCENT).bold()
+        name.fg(view.theme.accent).bold()
     } else {
         name
     }

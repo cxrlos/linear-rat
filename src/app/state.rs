@@ -4,10 +4,11 @@ use ratatui::layout::Size;
 
 use super::{Load, LoadError, ModalStack, MyIssues};
 use crate::auth::KeySource;
-use crate::config::Loaded;
+use crate::config::{AnalyticsSettings, Loaded, SyncSettings, UiSettings};
 use crate::keys::Keymap;
 use crate::linear::AssignedIssues;
 use crate::linear::model::Issue;
+use crate::ui::theme::Theme;
 
 /// Everything the screen shows. Rendering reads only this.
 #[derive(Debug, Default)]
@@ -26,6 +27,15 @@ pub struct State {
     pub key_source: Option<KeySource>,
     /// The terminal size, for actions that move by a page.
     pub viewport: Size,
+    /// The colors every screen draws with.
+    pub theme: Theme,
+    /// `[ui]`: the icon set and the wide-layout breakpoint.
+    pub ui: UiSettings,
+    /// `[sync]`, kept for polling, which does not read it yet.
+    pub sync: SyncSettings,
+    /// `[analytics]`, kept for the Analytics screen, which does not read it
+    /// yet.
+    pub analytics: AnalyticsSettings,
 }
 
 impl State {
@@ -82,12 +92,16 @@ impl State {
         }
     }
 
-    /// This state with the keymap from `loaded`, and its first error, if
-    /// any, as the notice.
+    /// This state with the keymap, theme and settings from `loaded`, and its
+    /// first error, if any, as the notice.
     pub fn with_config(self, loaded: &Loaded) -> Self {
         Self {
             keymap: Keymap::new(&loaded.config.keys),
             notice: summary(&loaded.errors),
+            theme: loaded.theme.clone(),
+            ui: loaded.config.ui,
+            sync: loaded.config.sync,
+            analytics: loaded.config.analytics,
             ..self
         }
     }

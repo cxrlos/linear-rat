@@ -29,9 +29,9 @@ pub fn render(state: &State, frame: &mut Frame, area: Rect) {
             };
             shown.push(spec.action);
             let (key_style, hint_style) = if (spec.available)(state) {
-                (style::accent(), Style::new())
+                (style::accent(&state.theme), Style::new())
             } else {
-                (style::muted(), style::muted())
+                (style::muted(&state.theme), style::muted(&state.theme))
             };
             spans.push(Span::raw(" "));
             spans.push(Span::styled(key.to_string(), key_style));

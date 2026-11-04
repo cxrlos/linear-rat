@@ -7,30 +7,42 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Padding, Paragraph, Wrap};
 
 use super::style;
+use super::theme::Theme;
 use crate::app::LoadError;
 use crate::auth::{AuthError, KeySource};
 use crate::linear::ClientError;
 
 const TITLE: &str = "My Issues";
 
-pub fn render_loading(frame: &mut Frame, area: Rect) {
-    let block = Block::bordered().title(TITLE);
+pub fn render_loading(theme: &Theme, frame: &mut Frame, area: Rect) {
+    let block = Block::bordered()
+        .border_style(style::border(theme))
+        .title(TITLE);
     let loading = Paragraph::new("Loading your issues from Linear…")
-        .style(style::muted())
+        .style(style::muted(theme))
         .block(block);
     frame.render_widget(loading, area);
 }
 
 /// The error screen for `error`. A rejected key is explained with
 /// `key_source`, where it came from.
-pub fn render(error: &LoadError, key_source: Option<&KeySource>, frame: &mut Frame, area: Rect) {
+pub fn render(
+    error: &LoadError,
+    key_source: Option<&KeySource>,
+    theme: &Theme,
+    frame: &mut Frame,
+    area: Rect,
+) {
     let (heading, explanation) = explain(error, key_source);
     let lines = vec![
-        Line::from(Span::styled(heading, style::error())),
+        Line::from(Span::styled(heading, style::error(theme))),
         Line::default(),
         Line::from(explanation),
     ];
-    let block = Block::bordered().title(TITLE).padding(Padding::uniform(1));
+    let block = Block::bordered()
+        .border_style(style::border(theme))
+        .title(TITLE)
+        .padding(Padding::uniform(1));
     let screen = Paragraph::new(lines).wrap(Wrap { trim: true }).block(block);
     frame.render_widget(screen, area);
 }

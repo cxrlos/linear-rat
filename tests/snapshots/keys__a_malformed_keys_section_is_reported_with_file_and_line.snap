@@ -23,6 +23,6 @@ expression: app.backend()
 "│                                                                              │"
 "│                                                                              │"
 "└──────────────────────────────────────────────────────────────────────────────┘"
-"config.toml:3: missing comma between array elements, expected `,`; using the def"
-"ault config                                                                     "
+"config.toml:3: missing comma between array elements, expected `,`; [keys] uses t"
+"he default keys                                                                 "
 " j down  k up  gg top  G bottom  Enter open  Esc close  ? keys  q quit          "

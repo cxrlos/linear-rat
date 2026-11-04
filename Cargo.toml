@@ -36,6 +36,7 @@ serde_json = "1.0.154"
 thiserror = "2.0.21"
 tokio = { version = "1.53.3", features = ["macros", "rt", "signal", "time"] }
 toml = { version = "1.1.8", default-features = false, features = ["std", "parse"] }
+toml_parser = { version = "1.1.5", default-features = false, features = ["std"] }
 tracing = "0.1.44"
 tracing-appender = "0.2.5"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }

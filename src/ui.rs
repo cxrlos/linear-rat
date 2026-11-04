@@ -3,9 +3,10 @@
 mod cheatsheet;
 mod error;
 mod hints;
-mod icons;
+pub mod icons;
 mod my_issues;
 pub mod style;
+pub mod theme;
 mod which_key;
 
 use ratatui::Frame;
@@ -19,8 +20,11 @@ use crate::keys::{self, Context};
 const MAX_NOTICE_ROWS: usize = 3;
 
 pub fn render(state: &State, frame: &mut Frame) {
-    let notice = notice_rows(state, frame.area().width);
-    let [tabs_area, body_area, notice_area, bar_area] = areas(frame.area(), notice.len());
+    let theme = &state.theme;
+    let area = frame.area();
+    frame.buffer_mut().set_style(area, style::base(theme));
+    let notice = notice_rows(state, area.width);
+    let [tabs_area, body_area, notice_area, bar_area] = areas(area, notice.len());
 
     let selected = Screen::ALL
         .iter()
@@ -29,17 +33,29 @@ pub fn render(state: &State, frame: &mut Frame) {
     frame.render_widget(tabs, tabs_area);
     match state.screen {
         Screen::MyIssues => match &state.load {
-            Load::Loaded => my_issues::render(&state.my_issues, frame, body_area),
-            Load::Loading => error::render_loading(frame, body_area),
+            Load::Loaded => my_issues::render(state, frame, body_area),
+            Load::Loading => error::render_loading(&state.theme, frame, body_area),
             Load::Failed(error) => {
-                error::render(error, state.key_source.as_ref(), frame, body_area);
+                error::render(
+                    error,
+                    state.key_source.as_ref(),
+                    &state.theme,
+                    frame,
+                    body_area,
+                );
             }
         },
         Screen::TeamIssues | Screen::Analytics => {
-            frame.render_widget(Block::bordered().title(state.screen.title()), body_area);
+            let block = Block::bordered()
+                .border_style(style::border(theme))
+                .title(state.screen.title());
+            frame.render_widget(block, body_area);
         }
     }
-    frame.render_widget(Paragraph::new(notice).style(style::error()), notice_area);
+    frame.render_widget(
+        Paragraph::new(notice).style(style::error(theme)),
+        notice_area,
+    );
     hints::render(state, frame, bar_area);
 
     for modal in state.modals.iter() {
@@ -74,11 +90,19 @@ fn close_hint(state: &State) -> Line<'static> {
     {
         Some(key) => Line::from(vec![
             Span::raw(" "),
-            Span::styled(key.to_string(), style::accent()),
+            Span::styled(key.to_string(), style::accent(&state.theme)),
             Span::raw(" close "),
         ]),
         None => Line::default(),
     }
+}
+
+/// The block of a popup: its border in the theme's border color, and the
+/// theme's text and background under it, since `Clear` resets them.
+fn popup_block(state: &State) -> Block<'static> {
+    Block::bordered()
+        .border_style(style::border(&state.theme))
+        .style(style::base(&state.theme))
 }
 
 /// A `width` by `height` box centered in `area`, shrunk to fit.
