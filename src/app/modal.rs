@@ -1,4 +1,5 @@
 use super::edit::EditPicker;
+use super::{Palette, Phase, Search};
 use crate::keys::Key;
 
 /// Popups and overlays, drawn over the screen in order. The top one gets keys
@@ -16,14 +17,36 @@ pub enum Modal {
     WhichKey { prefix: Vec<Key> },
     /// A list to choose a new value for one field of an issue from.
     Picker(EditPicker),
+    /// Find an action or a loaded issue by typing.
+    Palette(Palette),
+    /// Search every issue in the workspace on Linear.
+    Search(Search),
+    /// The detail of one issue from the store, over the screen.
+    Issue { id: String },
 }
 
 impl Modal {
-    /// The text field typed keys go to, for an overlay that has one.
+    /// Whether typed keys go to a text field rather than the keymap now.
+    pub fn takes_text(&self) -> bool {
+        match self {
+            Modal::Picker(_) | Modal::Palette(_) => true,
+            Modal::Search(search) => matches!(search.phase, Phase::Typing { .. }),
+            Modal::Cheatsheet { .. } | Modal::WhichKey { .. } | Modal::Issue { .. } => false,
+        }
+    }
+
+    /// The text field typed keys go to, if this overlay has one taking text
+    /// now. Asking for the palette's resets its highlight to the best match,
+    /// since what matches changes with the text.
     pub fn text_field(&mut self) -> Option<&mut String> {
         match self {
             Modal::Picker(picker) => Some(picker.list.query_mut()),
-            Modal::Cheatsheet { .. } | Modal::WhichKey { .. } => None,
+            Modal::Palette(palette) => {
+                palette.selected = 0;
+                Some(&mut palette.query)
+            }
+            Modal::Search(search) => search.text_field(),
+            Modal::Cheatsheet { .. } | Modal::WhichKey { .. } | Modal::Issue { .. } => None,
         }
     }
 }

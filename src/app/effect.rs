@@ -18,6 +18,9 @@ pub enum Effect {
         issue_id: String,
         urgency: Urgency,
     },
+    /// Search the workspace for this term; the result comes back as
+    /// [`Event::SearchDone`](super::Event::SearchDone).
+    Search(String),
     /// Put this text on the system clipboard.
     Copy(String),
     /// Open this URL in the viewer's browser.

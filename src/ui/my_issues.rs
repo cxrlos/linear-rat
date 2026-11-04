@@ -33,9 +33,15 @@ pub fn render(state: &State, frame: &mut Frame, area: Rect) {
             }
         };
         render_list(&view, frame, list_area, focus(Pane::List));
-        render_detail(state, frame, detail_area, focus(Pane::Detail));
+        render_detail(
+            state,
+            detail::issue(state),
+            frame,
+            detail_area,
+            focus(Pane::Detail),
+        );
     } else if pane == Pane::Detail {
-        render_detail(state, frame, area, Focus::Alone);
+        render_detail(state, detail::issue(state), frame, area, Focus::Alone);
     } else {
         render_list(&view, frame, area, Focus::Alone);
     }
@@ -194,9 +200,20 @@ fn render_list(view: &View, frame: &mut Frame, area: Rect, focus: Focus) {
     }
 }
 
-fn render_detail(state: &State, frame: &mut Frame, area: Rect, focus: Focus) {
+/// The detail of `issue` alone in `area`, as an overlay shows it.
+pub fn render_issue(state: &State, issue: &Issue, frame: &mut Frame, area: Rect) {
+    render_detail(state, Some(issue), frame, area, Focus::Alone);
+}
+
+fn render_detail(
+    state: &State,
+    issue: Option<&Issue>,
+    frame: &mut Frame,
+    area: Rect,
+    focus: Focus,
+) {
     let theme = &state.theme;
-    let Some(issue) = detail::issue(state) else {
+    let Some(issue) = issue else {
         frame.render_widget(pane_block("Detail", focus, theme), area);
         return;
     };

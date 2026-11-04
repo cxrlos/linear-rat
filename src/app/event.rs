@@ -3,7 +3,7 @@ use jiff::Timestamp;
 
 use super::{LoadError, SyncFailure, Write};
 use crate::linear::model::{Issue, Member, WorkflowState};
-use crate::linear::{AssignedIssues, IssueDetail, TeamChanges};
+use crate::linear::{AssignedIssues, IssueDetail, SearchResults, TeamChanges};
 
 /// Something that happened, fed to [`update`](super::update).
 #[derive(Debug, Clone, PartialEq)]
@@ -23,6 +23,12 @@ pub enum Event {
     IssueDetailLoaded {
         issue_id: String,
         result: Result<IssueDetail, String>,
+    },
+    /// The result of [`Effect::Search`](super::Effect::Search) for `term`,
+    /// or why it failed.
+    SearchDone {
+        term: String,
+        result: Result<SearchResults, String>,
     },
     /// The runtime could not carry out an effect. The message, with its
     /// context, becomes the notice.

@@ -5,6 +5,7 @@ mod assigned;
 mod changes;
 mod detail;
 mod edit;
+mod search;
 
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -19,9 +20,10 @@ use serde_json::{Value, json};
 
 use super::governor::{Governor, SystemTimer, Timer, Urgency};
 use super::model::{Issue, Member, Viewer, WorkflowState, Workspace};
+use super::search_bucket::SearchBucket;
 use super::{
     AssignedIssues, ClientError, GraphQlError, IssueDetail, IssueUpdate, LinearClient, Response,
-    TeamChanges,
+    SearchResults, TeamChanges,
 };
 use crate::auth::ApiKey;
 
@@ -56,13 +58,15 @@ impl Default for ClientConfig {
 
 /// The [`LinearClient`] that talks to Linear over HTTPS. TLS is rustls with the
 /// aws-lc-rs provider and the platform verifier, so certificates are checked
-/// against the OS trust store. Clones share one budget governor.
+/// against the OS trust store. Clones share one budget governor and one
+/// search bucket.
 #[derive(Debug, Clone)]
 pub struct HttpClient {
     http: reqwest::Client,
     endpoint: String,
     authorization: HeaderValue,
     governor: Arc<Mutex<Governor>>,
+    search_bucket: Arc<Mutex<SearchBucket>>,
     timer: Arc<dyn Timer>,
 }
 
@@ -88,6 +92,7 @@ impl HttpClient {
             endpoint: config.endpoint,
             authorization,
             governor: Arc::default(),
+            search_bucket: Arc::default(),
             timer: Arc::new(SystemTimer),
         })
     }
@@ -250,6 +255,13 @@ impl HttpClient {
         // it half-updated in a way that matters.
         self.governor.lock().unwrap_or_else(PoisonError::into_inner)
     }
+
+    fn search_bucket(&self) -> MutexGuard<'_, SearchBucket> {
+        // One timestamp, which a panic cannot leave half-written.
+        self.search_bucket
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
 }
 
 impl LinearClient for HttpClient {
@@ -317,6 +329,10 @@ impl LinearClient for HttpClient {
         urgency: Urgency,
     ) -> Result<IssueDetail, ClientError> {
         detail::load(self, issue_id, urgency).await
+    }
+
+    async fn search_issues(&self, term: &str) -> Result<SearchResults, ClientError> {
+        search::search(self, term).await
     }
 }
 

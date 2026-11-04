@@ -234,6 +234,10 @@ where
             in_flight.push(Box::pin(load_issue_detail(reach.client, issue_id, urgency)));
             Ok(())
         }
+        Effect::Search(term) => {
+            in_flight.push(Box::pin(search(reach.client, term)));
+            Ok(())
+        }
         Effect::Copy(text) => outside.copy(&text),
         Effect::OpenUrl(url) => outside.open(&url),
     };
@@ -385,6 +389,21 @@ async fn load_issue_detail<C: LinearClient>(
     Event::IssueDetailLoaded { issue_id, result }
 }
 
+async fn search<C: LinearClient>(client: Option<&C>, term: String) -> Event {
+    let result = match client {
+        Some(client) => client
+            .search_issues(&term)
+            .await
+            .map_err(|error| format!("Search failed: {:#}", anyhow::Error::new(error))),
+        None => Err("Search needs an API key; run `lrat auth login`".to_owned()),
+    };
+    match &result {
+        Ok(found) => tracing::info!(issues = found.issues.len(), "searched Linear"),
+        Err(error) => tracing::warn!(%error, "searching Linear failed"),
+    }
+    Event::SearchDone { term, result }
+}
+
 fn from_terminal(event: TerminalEvent) -> Option<Event> {
     match event {
         TerminalEvent::Key(key) => Some(Event::Key(key)),
@@ -520,6 +539,49 @@ mod tests {
         }
 
         assert_eq!(in_flight.len(), 4);
+    }
+
+    #[tokio::test]
+    async fn a_search_joins_the_requests_in_flight_and_comes_back_as_an_event() {
+        let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+        let mut in_flight = FuturesUnordered::new();
+
+        let reach = Reach {
+            client: Some(&FakeClient),
+            snapshots: None,
+        };
+        let flow = execute(
+            &mut app,
+            Effect::Search("cheese cave".to_owned()),
+            &reach,
+            &mut in_flight,
+            &mut Fake::default(),
+        )
+        .unwrap();
+        let event = in_flight.next().await.unwrap();
+
+        assert_eq!(flow, ControlFlow::Continue(()));
+        let Event::SearchDone { term, result } = event else {
+            panic!("{event:?}");
+        };
+        assert_eq!(term, "cheese cave");
+        let found: Vec<String> = result
+            .unwrap()
+            .issues
+            .into_iter()
+            .map(|issue| issue.identifier)
+            .collect();
+        assert_eq!(found, ["OPS-36"]);
+    }
+
+    #[tokio::test]
+    async fn a_search_without_a_key_says_how_to_add_one() {
+        let event = search(None::<&FakeClient>, "cheese".to_owned()).await;
+
+        let Event::SearchDone { result, .. } = event else {
+            panic!("{event:?}");
+        };
+        assert!(result.unwrap_err().contains("lrat auth login"));
     }
 
     #[test]

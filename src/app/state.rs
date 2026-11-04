@@ -161,7 +161,7 @@ impl State {
 
 /// The first of `messages` and how many more there are, or `None` when there
 /// are none.
-fn summary(messages: &[impl Display]) -> Option<String> {
+pub(super) fn summary(messages: &[impl Display]) -> Option<String> {
     messages.first().map(|first| match messages.len() {
         1 => first.to_string(),
         n => format!("{first} (and {} more; see the log)", n - 1),

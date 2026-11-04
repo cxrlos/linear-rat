@@ -252,7 +252,7 @@ impl PersonNode {
     }
 }
 
-fn push_new<T>(list: &mut Vec<T>, item: T, is_same: impl Fn(&T) -> bool) {
+pub(super) fn push_new<T>(list: &mut Vec<T>, item: T, is_same: impl Fn(&T) -> bool) {
     if !list.iter().any(is_same) {
         list.push(item);
     }
@@ -374,10 +374,20 @@ struct IdNode {
 }
 
 #[derive(Deserialize)]
-struct LabelNode {
+pub(super) struct LabelNode {
     id: String,
     name: String,
     team: Option<IdNode>,
+}
+
+impl From<LabelNode> for Label {
+    fn from(node: LabelNode) -> Self {
+        Label {
+            id: node.id,
+            team_id: node.team.map(|team| team.id),
+            name: node.name,
+        }
+    }
 }
 
 pub(super) fn timestamp<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Timestamp, D::Error> {

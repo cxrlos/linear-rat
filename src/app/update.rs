@@ -2,7 +2,10 @@ use crossterm::event::{KeyCode, KeyEventKind};
 use ratatui::layout::Size;
 
 use super::edit::{self, Editable};
-use super::{Action, Copyable, Effect, Event, Load, Modal, Pane, Screen, State, detail, sync};
+use super::{
+    Action, Copyable, Effect, Event, Load, Modal, Palette, Pane, Screen, Search, State, detail,
+    palette, search, sync,
+};
 use crate::keys::{self, Key, Resolution};
 use crate::ui;
 
@@ -48,6 +51,10 @@ fn apply(state: &mut State, event: Event) -> Update {
         Event::Polled { changes, failure } => sync::polled(state, &changes, failure),
         Event::Reconciled { checked, result } => sync::reconciled(state, &checked, result),
         Event::Throttled => sync::throttled(state),
+        Event::SearchDone { term, result } => {
+            search::finish(state, &term, result);
+            Update::redraw()
+        }
         Event::Resize { columns, rows } => {
             state.viewport = Size::new(columns, rows);
             let rows = ui::list_rows(state, state.viewport);
@@ -109,17 +116,13 @@ fn type_text(state: &mut State, key: Key) -> Option<Update> {
         return None;
     }
     let field = state.modals.top_mut()?.text_field()?;
-    let changed = match typed {
-        Some(c) => {
-            field.push(c);
-            true
+    match typed {
+        Some(c) => field.push(c),
+        None => {
+            field.pop();
         }
-        None => field.pop().is_some(),
-    };
-    Some(Update {
-        redraw: changed,
-        effects: Vec::new(),
-    })
+    }
+    Some(Update::redraw())
 }
 
 /// Whether `key` runs a number pick that can run now.
@@ -174,6 +177,20 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             state.modals.push(Modal::Cheatsheet { scroll: 0 });
             Update::redraw()
         }
+        Action::ShowPalette => {
+            state.modals.push(Modal::Palette(Palette::default()));
+            Update::redraw()
+        }
+        Action::ShowSearch => {
+            state.modals.push(Modal::Search(Search::default()));
+            Update::redraw()
+        }
+        Action::Accept => match state.modals.top() {
+            Some(Modal::Picker(_)) => edit::choose(state, None),
+            Some(Modal::Palette(_)) => palette::accept(state),
+            Some(Modal::Search(_)) => search::accept(state),
+            _ => Update::default(),
+        },
         Action::Close if state.modals.pop().is_some() => Update::redraw(),
         Action::MoveDown
         | Action::MoveUp
@@ -208,7 +225,16 @@ pub fn perform(state: &mut State, action: Action) -> Update {
                 effects: Vec::new(),
             }
         }
-        Action::ScrollDown | Action::ScrollUp => scroll_cheatsheet(state, action),
+        Action::ScrollDown | Action::ScrollUp => match state.modals.top() {
+            Some(Modal::Picker(_)) => edit::select(state, step(action)),
+            Some(Modal::Issue { id }) => {
+                let id = id.clone();
+                detail::scroll_overlay(state, &id, action)
+            }
+            Some(Modal::Palette(_)) => palette::step(state, action),
+            Some(Modal::Search(_)) => search::step(state, action),
+            _ => scroll_cheatsheet(state, action),
+        },
         Action::Copy(copyable) => copy(state, copyable),
         Action::OpenInBrowser => match state.focused_issue() {
             Some(issue) => {
@@ -222,12 +248,14 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             None => Update::default(),
         },
         Action::Edit(field) => edit::open(state, field),
-        Action::SelectNext => edit::select(state, 1),
-        Action::SelectPrevious => edit::select(state, -1),
-        Action::Choose => edit::choose(state, None),
         Action::PickNumber(n) => edit::choose(state, Some(usize::from(n))),
         _ => Update::default(),
     }
+}
+
+/// One entry down for [`Action::ScrollDown`], one up for the rest.
+fn step(action: Action) -> isize {
+    if action == Action::ScrollDown { 1 } else { -1 }
 }
 
 /// Moves the open cheatsheet one row, no further than its last row.

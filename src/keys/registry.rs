@@ -1,7 +1,7 @@
 use crossterm::event::KeyCode;
 
 use super::{Context, Key};
-use crate::app::{Action, Copyable, EditPicker, Editable, Modal, Pane, Screen, State};
+use crate::app::{self, Action, Copyable, EditPicker, Editable, Modal, Pane, Phase, Screen, State};
 use crate::ui;
 
 /// One action as the viewer sees it: what it is called, where it applies,
@@ -224,33 +224,6 @@ pub static ACTIONS: &[ActionSpec] = &[
         available: has_focused_issue,
     },
     ActionSpec {
-        action: Action::SelectNext,
-        id: "select-next",
-        description: "Select the next entry",
-        hint: None,
-        contexts: OVERLAY,
-        default_keys: &[&[Key::named(KeyCode::Down)], &[Key::ctrl('n')]],
-        available: |state| picker_has(1, state),
-    },
-    ActionSpec {
-        action: Action::SelectPrevious,
-        id: "select-previous",
-        description: "Select the previous entry",
-        hint: None,
-        contexts: OVERLAY,
-        default_keys: &[&[Key::named(KeyCode::Up)], &[Key::ctrl('p')]],
-        available: |state| picker_has(1, state),
-    },
-    ActionSpec {
-        action: Action::Choose,
-        id: "choose",
-        description: "Choose the selected entry",
-        hint: None,
-        contexts: OVERLAY,
-        default_keys: &[&[Key::named(KeyCode::Enter)]],
-        available: |state| picker_has(1, state),
-    },
-    ActionSpec {
         action: Action::PickNumber(1),
         id: "pick-1",
         description: "Pick entry 1 of the list",
@@ -337,11 +310,12 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Scroll down",
         hint: moves("down"),
         contexts: OVERLAY,
-        default_keys: &[&[Key::char('j')]],
-        available: |state| {
-            cheatsheet_scroll(state)
-                .is_some_and(|scroll| scroll < ui::cheatsheet_max_scroll(state, state.viewport))
-        },
+        default_keys: &[
+            &[Key::char('j')],
+            &[Key::named(KeyCode::Down)],
+            &[Key::ctrl('n')],
+        ],
+        available: can_scroll_down,
     },
     ActionSpec {
         action: Action::ScrollUp,
@@ -349,8 +323,21 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Scroll up",
         hint: moves("up"),
         contexts: OVERLAY,
-        default_keys: &[&[Key::char('k')]],
-        available: |state| cheatsheet_scroll(state).is_some_and(|scroll| scroll > 0),
+        default_keys: &[
+            &[Key::char('k')],
+            &[Key::named(KeyCode::Up)],
+            &[Key::ctrl('p')],
+        ],
+        available: can_scroll_up,
+    },
+    ActionSpec {
+        action: Action::Accept,
+        id: "accept",
+        description: "Choose the highlighted entry",
+        hint: does("choose"),
+        contexts: OVERLAY,
+        default_keys: &[&[Key::named(KeyCode::Enter)]],
+        available: can_accept,
     },
     ActionSpec {
         action: Action::Close,
@@ -407,6 +394,24 @@ pub static ACTIONS: &[ActionSpec] = &[
         available: always,
     },
     ActionSpec {
+        action: Action::ShowPalette,
+        id: "show-palette",
+        description: "Find an action or loaded issue",
+        hint: None,
+        contexts: GLOBAL,
+        default_keys: &[&[Key::char(':')], &[Key::ctrl('k')]],
+        available: always,
+    },
+    ActionSpec {
+        action: Action::ShowSearch,
+        id: "show-search",
+        description: "Search all issues in Linear",
+        hint: None,
+        contexts: GLOBAL,
+        default_keys: &[&[Key::char('/')]],
+        available: always,
+    },
+    ActionSpec {
         action: Action::Quit,
         id: "quit",
         description: "Quit lrat",
@@ -421,10 +426,58 @@ fn always(_: &State) -> bool {
     true
 }
 
-fn cheatsheet_scroll(state: &State) -> Option<u16> {
+fn can_scroll_down(state: &State) -> bool {
     match state.modals.top() {
-        Some(Modal::Cheatsheet { scroll }) => Some(*scroll),
-        _ => None,
+        Some(Modal::Picker(picker)) => picker
+            .list
+            .selected_position()
+            .is_some_and(|position| position + 1 < picker.list.visible().len()),
+        Some(Modal::Issue { id }) => {
+            let (scroll, max) = overlay_issue_scroll(state, id);
+            scroll < max
+        }
+        Some(Modal::Cheatsheet { scroll }) => {
+            *scroll < ui::cheatsheet_max_scroll(state, state.viewport)
+        }
+        Some(Modal::Palette(palette)) => {
+            palette.selected + 1 < app::palette_matches(state, &palette.query).len()
+        }
+        Some(Modal::Search(search)) => match &search.phase {
+            Phase::Found { ids, selected, .. } => selected + 1 < ids.len(),
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
+fn can_scroll_up(state: &State) -> bool {
+    match state.modals.top() {
+        Some(Modal::Picker(picker)) => picker
+            .list
+            .selected_position()
+            .is_some_and(|position| position > 0),
+        Some(Modal::Issue { id }) => overlay_issue_scroll(state, id).0 > 0,
+        Some(Modal::Cheatsheet { scroll }) => *scroll > 0,
+        Some(Modal::Palette(palette)) => palette.selected > 0,
+        Some(Modal::Search(search)) => {
+            matches!(search.phase, Phase::Found { selected, .. } if selected > 0)
+        }
+        _ => false,
+    }
+}
+
+fn can_accept(state: &State) -> bool {
+    match state.modals.top() {
+        Some(Modal::Picker(picker)) => picker.list.selected().is_some(),
+        Some(Modal::Palette(palette)) => {
+            palette.selected < app::palette_matches(state, &palette.query).len()
+        }
+        Some(Modal::Search(search)) => match &search.phase {
+            Phase::Typing { .. } => !search.query.trim().is_empty(),
+            Phase::Searching { .. } => false,
+            Phase::Found { ids, .. } => !ids.is_empty(),
+        },
+        _ => false,
     }
 }
 
@@ -456,6 +509,14 @@ fn can_move_down(state: &State) -> bool {
 
 fn can_move_up(state: &State) -> bool {
     !in_detail(state) || detail_scroll(state).0 > 0
+}
+
+/// How far the issue overlay showing `issue_id` is scrolled and how far it
+/// can scroll.
+fn overlay_issue_scroll(state: &State, issue_id: &str) -> (usize, usize) {
+    let (rows, lines) = ui::issue_overlay_rows(state, state.viewport, issue_id);
+    let max = lines.saturating_sub(rows);
+    (state.detail.scroll(issue_id).min(max), max)
 }
 
 /// How far the detail is scrolled and how far it can scroll.

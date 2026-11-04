@@ -161,6 +161,15 @@ impl MyIssues {
         self.focused + headers
     }
 
+    /// Moves the focus to the issue `id`. Returns whether the list holds it.
+    pub fn focus_id(&mut self, id: &str) -> bool {
+        let found = self.issues().position(|issue| issue.id == id);
+        if let Some(index) = found {
+            self.focused = index;
+        }
+        found.is_some()
+    }
+
     /// The first list line on screen, counting group headers.
     pub fn scroll(&self) -> usize {
         self.scroll

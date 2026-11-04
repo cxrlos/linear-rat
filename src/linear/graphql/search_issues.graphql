@@ -1,0 +1,69 @@
+# budget: 750
+# The best 25 issues anywhere in the workspace that match a term, closed ones
+# included, with what the detail shows about each and the names of their
+# labels. Linear rate-limits this query to 30 a minute on top of the hourly
+# budgets; the client keeps to that with its own bucket. Only the first page
+# is asked for.
+query SearchIssues($term: String!) {
+  searchIssues(term: $term, first: 25) {
+    nodes {
+      id
+      identifier
+      title
+      description
+      url
+      branchName
+      priority
+      estimate
+      labelIds
+      createdAt
+      updatedAt
+      startedAt
+      completedAt
+      canceledAt
+      triagedAt
+      team {
+        id
+        key
+        name
+        issueEstimationType
+      }
+      state {
+        id
+        name
+        type
+        position
+      }
+      assignee {
+        id
+        name
+        displayName
+      }
+      creator {
+        id
+        name
+        displayName
+      }
+      cycle {
+        id
+        number
+        name
+        startsAt
+        endsAt
+        completedAt
+      }
+      project {
+        id
+      }
+      labels(first: 10) {
+        nodes {
+          id
+          name
+          team {
+            id
+          }
+        }
+      }
+    }
+  }
+}

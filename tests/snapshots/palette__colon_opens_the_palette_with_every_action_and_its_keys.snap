@@ -1,0 +1,28 @@
+---
+source: tests/palette.rs
+expression: app.backend()
+---
+" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+"┌My Issues─────────────────────────────────────────────────────────────────────┐"
+"│◐┌ Palette ─────────────────────────────────────────────────────────────────┐ │"
+"│▸│ :                                                                        │ │"
+"│ │──────────────────────────────────────────────────────────────────────────│ │"
+"│ │ Move down                                                              j │ │"
+"│ │ Move up                                                                k │ │"
+"│ │ Move to the top                                                       gg │ │"
+"│ │ Move to the bottom                                                     G │ │"
+"│ │ Move down half a page                                                C-d │ │"
+"│ │ Move up half a page                                                  C-u │ │"
+"│ │ Focus the pane on the left                                             h │ │"
+"│○│ Focus the pane on the right                                            l │ │"
+"│ │ Open the focused issue                                             Enter │ │"
+"│ │ Copy the identifier                                                   yi │ │"
+"│ │ Copy the URL                                                          yu │ │"
+"│ │ Copy the branch name                                                  yb │ │"
+"│ └ Esc close ───────────────────────────────────────────────────────────────┘ │"
+"│  DES-16 Accessible focus rings across wh ○ Todo        ▮▮▮ High    5         │"
+"│  ENG-56 Notification settings reset afte ○ Todo        ▮▮▮ High    2         │"
+"│  ENG-6  Migrate burrow storage to the ne ○ Todo        ▮▮▯ Medium  3         │"
+"└──────────────────────────────────────────────────────────────────────────────┘"
+" Move │ Down down    │ Up up                                                    "
+" Do   │ Enter choose │ Esc close                                                "

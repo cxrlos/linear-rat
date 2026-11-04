@@ -8,7 +8,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 use super::style;
-use crate::app::State;
+use crate::app::{Modal, State};
 use crate::keys::{self, ACTIONS, HintRow, KeySequence};
 
 /// How many rows the bar takes.
@@ -51,9 +51,11 @@ pub fn render(state: &State, frame: &mut Frame, area: Rect) {
 }
 
 /// The items of `row` for the active contexts, merged by word in registry
-/// order. Actions without a live key are left out.
+/// order. Actions without a live key are left out, and so are keys a text
+/// field takes while it has focus.
 fn items(state: &State, row: HintRow) -> Vec<Item> {
     let contexts = keys::active_contexts(state);
+    let typing = state.modals.top().is_some_and(Modal::takes_text);
     let mut groups: Vec<(&'static str, Vec<KeySequence>, bool)> = Vec::new();
     let mut shown = Vec::new();
     for &context in &contexts {
@@ -68,7 +70,9 @@ fn items(state: &State, row: HintRow) -> Vec<Item> {
                 .keymap
                 .keys_for(spec.action, &contexts)
                 .into_iter()
-                .next()
+                .find(|keys| {
+                    !typing || keys.keys().first().is_none_or(|key| key.typed().is_none())
+                })
             else {
                 continue;
             };

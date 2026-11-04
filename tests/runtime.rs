@@ -10,8 +10,8 @@ use linear_rat::app::{App, State};
 use linear_rat::auth::KeySource;
 use linear_rat::linear::model::{Issue, Member, Viewer, WorkflowState, Workspace};
 use linear_rat::linear::{
-    AssignedIssues, ClientError, FakeClient, IssueDetail, IssueUpdate, LinearClient, TeamChanges,
-    Urgency, demo,
+    AssignedIssues, ClientError, FakeClient, IssueDetail, IssueUpdate, LinearClient, SearchResults,
+    TeamChanges, Urgency, demo,
 };
 use linear_rat::runtime;
 use linear_rat::snapshot::SnapshotCache;
@@ -113,6 +113,10 @@ impl LinearClient for RejectingClient {
     async fn issue_detail(&self, _: &str, _: Urgency) -> Result<IssueDetail, ClientError> {
         Err(ClientError::InvalidKey)
     }
+
+    async fn search_issues(&self, _: &str) -> Result<SearchResults, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
 }
 
 #[tokio::test]
@@ -203,6 +207,9 @@ async fn q_quits_while_the_load_is_still_in_flight() {
         async fn issue_detail(&self, _: &str, _: Urgency) -> Result<IssueDetail, ClientError> {
             future::pending().await
         }
+        async fn search_issues(&self, _: &str) -> Result<SearchResults, ClientError> {
+            future::pending().await
+        }
     }
     let mut app = App::new(TestBackend::new(80, 24), State::loading(None)).unwrap();
 
@@ -261,6 +268,9 @@ impl LinearClient for CountingClient {
         urgency: Urgency,
     ) -> Result<IssueDetail, ClientError> {
         FakeClient.issue_detail(issue_id, urgency).await
+    }
+    async fn search_issues(&self, term: &str) -> Result<SearchResults, ClientError> {
+        FakeClient.search_issues(term).await
     }
 }
 

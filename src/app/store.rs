@@ -12,7 +12,7 @@ use crate::linear::model::{
     Comment, Cycle, Issue, Label, Member, Project, StateSpan, Team, Viewer, WorkflowState,
     Workspace,
 };
-use crate::linear::{AssignedIssues, IssueDetail, TeamChanges};
+use crate::linear::{AssignedIssues, IssueDetail, SearchResults, TeamChanges};
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Store {
@@ -146,6 +146,19 @@ impl Store {
 
     pub fn workspace(&self) -> Option<&Workspace> {
         self.workspace.as_ref()
+    }
+
+    /// Takes in what a search found. Issues go through
+    /// [`Store::upsert_issue`]; the rest replaces what is stored by id. The
+    /// viewer and [`Store::as_of`] stay as they are.
+    pub fn merge_search(&mut self, found: &SearchResults) {
+        for issue in &found.issues {
+            self.upsert_issue(issue.clone());
+        }
+        by_id(&mut self.cycles, &found.cycles, |cycle| &cycle.id);
+        by_id(&mut self.teams, &found.teams, |team| &team.id);
+        by_id(&mut self.labels, &found.labels, |label| &label.id);
+        by_id(&mut self.members, &found.members, |member| &member.id);
     }
 
     /// Replaces the comments of `issue_id`.

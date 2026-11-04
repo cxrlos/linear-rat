@@ -18,7 +18,13 @@ pub enum Action {
     /// Close the top overlay, or step back from a detail.
     Close,
     ShowCheatsheet,
-    /// Scroll the cheatsheet one row.
+    /// Open the palette, to find an action or a loaded issue.
+    ShowPalette,
+    /// Open the search across the workspace.
+    ShowSearch,
+    /// Run or open what an overlay has highlighted, or send its query.
+    Accept,
+    /// Scroll the cheatsheet one row, or move an overlay's highlight.
     ScrollDown,
     ScrollUp,
     /// Copy something about the focused issue to the clipboard.
@@ -29,11 +35,6 @@ pub enum Action {
     Refresh,
     /// Open the picker that changes a field of the focused issue.
     Edit(Editable),
-    /// Move a picker's selection one entry.
-    SelectNext,
-    SelectPrevious,
-    /// Close a picker on its selected entry.
-    Choose,
     /// Close a picker on the entry with this number, from 1 to 9, counted
     /// among the entries the filter leaves.
     PickNumber(u8),

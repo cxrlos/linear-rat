@@ -188,7 +188,7 @@ fn the_cheatsheet_shows_overridden_keys() {
     press(&mut app, "?");
     assert_snapshot!(app.backend());
 
-    press(&mut app, "jjjjjjjjjj");
+    press(&mut app, &"j".repeat(30));
     assert_snapshot!(
         "the_cheatsheet_shows_overridden_keys_scrolled",
         app.backend()
@@ -211,16 +211,16 @@ fn the_cheatsheet_fits_inside_the_frame_and_scrolls_to_the_rest() {
     );
     assert!(!screen(&app).contains("Quit lrat"));
 
-    press(&mut app, "jjjjjjjjjj");
+    press(&mut app, &"j".repeat(30));
     assert!(
-        screen(&app).contains("q      Quit lrat"),
+        screen(&app).contains("q       Quit lrat"),
         "{}",
         screen(&app)
     );
     assert!(!screen(&app).contains("Issue list"));
     assert!(row(&app, 20).contains("└ Esc close"), "{}", screen(&app));
 
-    press(&mut app, "kkkkkkkkkk");
+    press(&mut app, &"k".repeat(30));
     assert!(row(&app, 3).contains("Issue list"), "{}", screen(&app));
 }
 
@@ -232,7 +232,7 @@ fn the_bottom_bar_of_the_cheatsheet_accents_only_the_ways_it_can_scroll() {
     assert_eq!(fg_of(&app, 22, "j"), Some(Color::Cyan));
     assert_eq!(fg_of(&app, 22, "k"), Some(Color::DarkGray));
 
-    press(&mut app, "jjjjjjjjjj");
+    press(&mut app, &"j".repeat(30));
     assert_eq!(fg_of(&app, 22, "j"), Some(Color::DarkGray));
     assert_eq!(fg_of(&app, 22, "k"), Some(Color::Cyan));
 }

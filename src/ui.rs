@@ -7,7 +7,9 @@ mod hints;
 pub mod icons;
 mod markdown;
 mod my_issues;
+mod palette;
 mod picker;
+mod search;
 pub mod style;
 pub mod theme;
 mod which_key;
@@ -15,7 +17,7 @@ mod which_key;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect, Size};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Paragraph, Tabs};
+use ratatui::widgets::{Block, Clear, Paragraph, Tabs};
 
 use crate::app::{Action, Load, Modal, Screen, State};
 use crate::keys::{self, Context};
@@ -68,6 +70,14 @@ pub fn render(state: &State, frame: &mut Frame) {
             Modal::Cheatsheet { scroll } => cheatsheet::render(state, *scroll, frame, body_area),
             Modal::WhichKey { prefix } => which_key::render(state, prefix, frame, body_area),
             Modal::Picker(edit) => picker::render_edit(state, edit, frame, body_area),
+            Modal::Palette(palette) => palette::render(state, palette, frame, body_area),
+            Modal::Search(search) => search::render(state, search, frame, body_area),
+            Modal::Issue { id } => {
+                if let Some(issue) = state.store.issue(id) {
+                    frame.render_widget(Clear, body_area);
+                    my_issues::render_issue(state, issue, frame, body_area);
+                }
+            }
         }
     }
 }
@@ -176,6 +186,19 @@ pub fn detail_rows(state: &State, viewport: Size) -> (usize, usize) {
     let inner = Block::bordered().inner(pane);
     let lines =
         detail::issue(state).map_or(0, |issue| detail::lines(state, issue, inner.width).len());
+    (usize::from(inner.height), lines)
+}
+
+/// How many rows the issue overlay showing `issue_id` has inside its
+/// border in a `viewport`-sized terminal, and how many lines its detail is.
+pub fn issue_overlay_rows(state: &State, viewport: Size, issue_id: &str) -> (usize, usize) {
+    let area = Rect::from((ratatui::layout::Position::ORIGIN, viewport));
+    let [_, body_area, _, _] = areas(area, notice_rows(state, viewport.width).len());
+    let inner = Block::bordered().inner(body_area);
+    let lines = state
+        .store
+        .issue(issue_id)
+        .map_or(0, |issue| detail::lines(state, issue, inner.width).len());
     (usize::from(inner.height), lines)
 }
 

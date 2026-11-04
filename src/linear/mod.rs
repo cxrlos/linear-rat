@@ -6,6 +6,7 @@ mod error;
 mod governor;
 pub mod http;
 pub mod model;
+pub(crate) mod search_bucket;
 
 use std::cell::RefCell;
 use std::cmp::Reverse;
@@ -83,6 +84,14 @@ pub trait LinearClient {
         issue_id: &str,
         urgency: Urgency,
     ) -> impl Future<Output = Result<IssueDetail, ClientError>> + Send;
+
+    /// The issues anywhere in the workspace that match `term`, best match
+    /// first, closed ones included. Search has its own budget of 30 a
+    /// minute; a search beyond it waits its turn rather than failing.
+    fn search_issues(
+        &self,
+        term: &str,
+    ) -> impl Future<Output = Result<SearchResults, ClientError>> + Send;
 }
 
 /// What changed in one team: its issues updated after a watermark, and the
@@ -125,6 +134,19 @@ pub enum Patch<T> {
     Unchanged,
     Clear,
     Set(T),
+}
+
+/// What a search found: the issues, best match first, and the cycles,
+/// labels, members and teams they refer to.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct SearchResults {
+    pub issues: Vec<Issue>,
+    pub cycles: Vec<Cycle>,
+    pub labels: Vec<Label>,
+    pub members: Vec<Member>,
+    pub teams: Vec<Team>,
+    /// What Linear could not give, as in [`AssignedIssues::problems`].
+    pub problems: Vec<String>,
 }
 
 /// The viewer's open assigned issues, and the cycles, labels, members and
@@ -366,5 +388,34 @@ impl LinearClient for FakeClient {
 
     async fn issue_detail(&self, issue_id: &str, _: Urgency) -> Result<IssueDetail, ClientError> {
         Ok(IssueDetail::demo(issue_id))
+    }
+
+    /// Every demo issue whose identifier, title or description holds each
+    /// word of `term`, ignoring case, in the demo's order.
+    async fn search_issues(&self, term: &str) -> Result<SearchResults, ClientError> {
+        let words: Vec<String> = term.split_whitespace().map(str::to_lowercase).collect();
+        let data = demo::workspace();
+        let issues = data
+            .issues
+            .into_iter()
+            .filter(|issue| {
+                let text = format!(
+                    "{} {} {}",
+                    issue.identifier,
+                    issue.title,
+                    issue.description.as_deref().unwrap_or_default()
+                )
+                .to_lowercase();
+                words.iter().all(|word| text.contains(word.as_str()))
+            })
+            .collect();
+        Ok(SearchResults {
+            issues,
+            cycles: data.cycles,
+            labels: data.labels,
+            members: data.members,
+            teams: data.teams,
+            problems: Vec::new(),
+        })
     }
 }

@@ -222,6 +222,18 @@ fn backspace_widens_the_filter_again() {
 }
 
 #[test]
+fn letters_bound_to_moves_and_quit_type_into_the_filter() {
+    let mut app = app();
+    press(&mut app, "p");
+
+    let effects = press(&mut app, "jkq");
+
+    assert!(effects.is_empty(), "{effects:?}");
+    assert!(shows(&app, "> jkq"));
+    assert!(shows(&app, "No matches"));
+}
+
+#[test]
 fn a_number_past_the_last_entry_types_into_the_filter() {
     let mut app = app();
     press(&mut app, "p");

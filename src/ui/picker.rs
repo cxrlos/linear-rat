@@ -141,11 +141,12 @@ fn render<T>(
 }
 
 /// The keys that select, choose and close, as
-/// ` Down/Up select  Enter choose  Esc close `.
+/// ` Down/Up select  Enter choose  Esc close `. Keys the filter takes as
+/// text are left out.
 fn bottom_keys(state: &State) -> Line<'static> {
     let items: [(&[Action], &str); 3] = [
-        (&[Action::SelectNext, Action::SelectPrevious], "select"),
-        (&[Action::Choose], "choose"),
+        (&[Action::ScrollDown, Action::ScrollUp], "select"),
+        (&[Action::Accept], "choose"),
         (&[Action::Close], "close"),
     ];
     let mut spans = Vec::new();
@@ -156,8 +157,9 @@ fn bottom_keys(state: &State) -> Line<'static> {
                 state
                     .keymap
                     .keys_for(action, &[Context::Overlay])
-                    .first()
-                    .map(ToString::to_string)
+                    .into_iter()
+                    .find(|keys| keys.keys().first().is_none_or(|key| key.typed().is_none()))
+                    .map(|keys| keys.to_string())
             })
             .collect();
         if keys.is_empty() {
