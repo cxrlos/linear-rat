@@ -1,6 +1,7 @@
 //! The app driver: owns the state and the terminal, applies events and redraws.
 
 mod action;
+mod analytics_screen;
 mod detail;
 mod edit;
 mod effect;
@@ -22,6 +23,7 @@ use ratatui::Terminal;
 use ratatui::backend::Backend;
 
 pub use action::{Action, Copyable};
+pub use analytics_screen::AnalyticsScreen;
 pub use detail::{Detail, DetailLoad};
 pub use edit::{Edit, EditPicker, Editable, Write};
 pub use effect::Effect;

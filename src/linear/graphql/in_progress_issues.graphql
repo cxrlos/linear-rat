@@ -1,0 +1,78 @@
+# budget: 1250
+# One page of the viewer's in-progress issues (a started workflow state),
+# with the state history issue age is measured from. Each issue brings at
+# most 20 state spans; past that, issue age falls back to `startedAt`. Pages
+# hold 25 issues, since the history multiplies the cost. The client follows
+# `endCursor` until `hasNextPage` is false.
+query InProgressIssues($after: String) {
+  viewer {
+    id
+    name
+    assignedIssues(first: 25, after: $after, filter: { state: { type: { eq: "started" } } }) {
+      nodes {
+        id
+        identifier
+        title
+        description
+        url
+        branchName
+        priority
+        estimate
+        labelIds
+        createdAt
+        updatedAt
+        startedAt
+        completedAt
+        canceledAt
+        triagedAt
+        team {
+          id
+          key
+          name
+          issueEstimationType
+        }
+        state {
+          id
+          name
+          type
+          position
+        }
+        assignee {
+          id
+          name
+          displayName
+        }
+        creator {
+          id
+          name
+          displayName
+        }
+        cycle {
+          id
+          number
+          name
+          startsAt
+          endsAt
+          completedAt
+        }
+        project {
+          id
+        }
+        stateHistory(first: 20) {
+          nodes {
+            stateId
+            startedAt
+            endedAt
+            state {
+              type
+            }
+          }
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}

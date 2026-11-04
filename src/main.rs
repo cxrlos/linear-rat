@@ -4,6 +4,7 @@ use std::io;
 use anyhow::Context;
 use clap::Parser;
 use crossterm::event::EventStream;
+use jiff::tz::TimeZone;
 use linear_rat::app::{App, Load, LoadError, State};
 use linear_rat::auth::{self, Credentials, OsKeyring, WorkspaceFile};
 use linear_rat::cli::{AuthCommand, Cli, Command};
@@ -42,12 +43,17 @@ async fn main() -> anyhow::Result<()> {
     let shutdown =
         terminal::shutdown_signal().context("listening for SIGINT, SIGTERM and SIGHUP")?;
     let result = if cli.demo {
-        let state = State::loading(None).with_config(&loaded);
+        let state = State::loading(None)
+            .with_config(&loaded)
+            .with_time_zone(TimeZone::system());
         run_tui(state, Some(&FakeClient), None, shutdown).await
     } else {
         let (state, client) = connect();
         let snapshots = snapshot_cache();
-        let state = from_snapshot(state.with_config(&loaded), snapshots.as_ref());
+        let state = state
+            .with_config(&loaded)
+            .with_time_zone(TimeZone::system());
+        let state = from_snapshot(state, snapshots.as_ref());
         run_tui(state, client.as_ref(), snapshots.as_ref(), shutdown).await
     };
 

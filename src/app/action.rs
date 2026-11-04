@@ -24,7 +24,11 @@ pub enum Action {
     ShowSearch,
     /// Run or open what an overlay has highlighted, or send its query.
     Accept,
-    /// Scroll the cheatsheet one row, or move an overlay's highlight.
+    /// Show the next shorter or longer analytics range.
+    ShorterRange,
+    LongerRange,
+    /// Scroll the cheatsheet, an issue overlay or the Analytics screen one
+    /// row, or move an overlay's highlight.
     ScrollDown,
     ScrollUp,
     /// Copy something about the focused issue to the clipboard.

@@ -1,5 +1,6 @@
 //! Rendering: a pure function of [`State`].
 
+mod analytics;
 mod cheatsheet;
 mod choice;
 mod detail;
@@ -55,12 +56,7 @@ pub fn render(state: &State, frame: &mut Frame) {
             }
         },
         Screen::TeamIssues => team_issues::render(state, frame, body_area),
-        Screen::Analytics => {
-            let block = Block::bordered()
-                .border_style(style::border(theme))
-                .title(state.screen.title());
-            frame.render_widget(block, body_area);
-        }
+        Screen::Analytics => analytics::render(state, frame, body_area),
     }
     frame.render_widget(
         Paragraph::new(notice).style(style::error(theme)),
@@ -223,6 +219,14 @@ pub fn cheatsheet_max_scroll(state: &State, viewport: Size) -> u16 {
     let area = Rect::from((ratatui::layout::Position::ORIGIN, viewport));
     let [_, body_area, _, _] = areas(area, notice_rows(state, viewport.width).len());
     cheatsheet::max_scroll(state, body_area)
+}
+
+/// How far the Analytics screen can scroll in a `viewport`-sized terminal:
+/// how many of its rows do not fit.
+pub fn analytics_max_scroll(state: &State, viewport: Size) -> u16 {
+    let area = Rect::from((ratatui::layout::Position::ORIGIN, viewport));
+    let [_, body_area, _, _] = areas(area, notice_rows(state, viewport.width).len());
+    analytics::max_scroll(state, body_area)
 }
 
 /// The tab row, the body, the notice and the bottom bar, top to bottom.

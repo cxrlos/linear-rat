@@ -1,5 +1,5 @@
 use super::{TeamPoll, Write};
-use crate::linear::{TeamQuery, Urgency};
+use crate::linear::{AnalyticsWindow, TeamQuery, Urgency};
 
 /// A request to the outside world, returned by [`update`](super::update) and
 /// carried out by the runtime.
@@ -37,6 +37,9 @@ pub enum Effect {
     /// Count every issue of the query; the result comes back as
     /// [`Event::TeamIssuesCounted`](super::Event::TeamIssuesCounted).
     CountTeamIssues(TeamQuery),
+    /// Load what personal analytics needs for this window; the result comes
+    /// back as [`Event::AnalyticsLoaded`](super::Event::AnalyticsLoaded).
+    LoadAnalytics(AnalyticsWindow),
     /// Put this text on the system clipboard.
     Copy(String),
     /// Open this URL in the viewer's browser.

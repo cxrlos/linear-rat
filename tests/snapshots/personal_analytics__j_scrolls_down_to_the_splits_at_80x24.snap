@@ -1,0 +1,28 @@
+---
+source: tests/personal_analytics.rs
+expression: app.backend()
+---
+" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+"┌Analytics─────────────────────────────────────────────────────────────────────┐"
+"│Personal   Range  4 weeks [12 weeks] 26 weeks                                 │"
+"│                                                                              │"
+"│Shared pantries      1 issue     8 pts ██                                     │"
+"│                                                                              │"
+"│Completed by label                                                            │"
+"│No label             7 issues   14 pts ██████                                 │"
+"│improvement          6 issues   28 pts ████████████                           │"
+"│bug                  5 issues   20 pts █████████                              │"
+"│backend              4 issues   21 pts █████████                              │"
+"│feature              2 issues   13 pts ██████                                 │"
+"│brand                2 issues   10 pts ████                                   │"
+"│and 4 more                                                                    │"
+"│                                                                              │"
+"│Completed by priority                                                         │"
+"│!!! Urgent           4 issues   13 pts ██████                                 │"
+"│▮▮▮ High             6 issues   18 pts ████████                               │"
+"│▮▮▯ Medium           7 issues   26 pts ████████████                           │"
+"│▮▯▯ Low              5 issues   21 pts ██████████                             │"
+"│··· None             4 issues   11 pts █████                                  │"
+"└──────────────────────────────────────────────────────────────────────────────┘"
+" Move │ j down    │ k up                                                        "
+" Do   │ [/] range │ ? keys │ q quit                                             "

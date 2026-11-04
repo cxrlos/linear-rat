@@ -13,7 +13,8 @@ use crate::linear::model::{
     Workspace,
 };
 use crate::linear::{
-    AssignedIssues, IssueDetail, SearchResults, TeamChanges, TeamIssuesPage, TeamOptions,
+    AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, SearchResults, TeamChanges,
+    TeamIssuesPage, TeamOptions,
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
@@ -43,11 +44,18 @@ pub struct Store {
     state_histories: BTreeMap<String, Vec<StateSpan>>,
     /// When the newest data was loaded, which decides the active cycle.
     as_of: Option<Timestamp>,
-    /// The ids of the viewer's teams, in the order Linear lists them.
+    /// The ids of the teams the viewer is a member of, in the order Linear
+    /// lists them, from the last load that listed them: Team Issues' team
+    /// list or an analytics load.
     viewer_teams: Vec<String>,
     /// Project ids by team id, for the teams whose filter options have
     /// loaded.
     team_projects: BTreeMap<String, Vec<String>>,
+    /// The windows analytics loads have covered in this session. Left out
+    /// of the snapshot, so a new session loads analytics afresh rather than
+    /// trusting cycle histories from the last one.
+    #[serde(skip)]
+    analytics_windows: Vec<AnalyticsWindow>,
 }
 
 impl Store {
@@ -91,8 +99,9 @@ impl Store {
         self.loaded_at(page.as_of);
     }
 
-    /// Stores the viewer's teams and remembers them, in this order, as the
-    /// teams Team Issues offers.
+    /// Stores the teams the viewer is a member of and remembers them, in
+    /// this order. Team Issues offers them and analytics reads their
+    /// estimate settings.
     pub fn set_viewer_teams(&mut self, teams: &[Team]) {
         by_id(&mut self.teams, teams, |team| &team.id);
         self.viewer_teams = teams.iter().map(|team| team.id.clone()).collect();
@@ -213,6 +222,56 @@ impl Store {
         by_id(&mut self.teams, &found.teams, |team| &team.id);
         by_id(&mut self.labels, &found.labels, |label| &label.id);
         by_id(&mut self.members, &found.members, |member| &member.id);
+    }
+
+    /// Takes in an analytics load for `window`. Issues go through
+    /// [`Store::upsert_issue`], but a copy without state history keeps the
+    /// history of the stored copy of the same version, since only some loads
+    /// ask for it. The rest replaces what is stored by id.
+    pub fn merge_analytics(&mut self, window: AnalyticsWindow, loaded: &AnalyticsIssues) {
+        self.viewer = Some(loaded.viewer.clone());
+        for issue in &loaded.issues {
+            let mut issue = issue.clone();
+            if issue.state_history.is_empty()
+                && let Some(stored) = self.issues.get(&issue.id)
+                && stored.updated_at == issue.updated_at
+            {
+                issue.state_history.clone_from(&stored.state_history);
+            }
+            self.upsert_issue(issue);
+        }
+        by_id(&mut self.cycles, &loaded.cycles, |cycle| &cycle.id);
+        by_id(&mut self.teams, &loaded.teams, |team| &team.id);
+        by_id(&mut self.labels, &loaded.labels, |label| &label.id);
+        by_id(&mut self.projects, &loaded.projects, |project| &project.id);
+        by_id(&mut self.members, &loaded.members, |member| &member.id);
+        self.set_viewer_teams(&loaded.teams);
+        self.analytics_windows.push(window);
+        self.as_of = Some(
+            self.as_of
+                .map_or(loaded.as_of, |as_of| as_of.max(loaded.as_of)),
+        );
+    }
+
+    /// How far back analytics loads reach without a gap up to now, or `None`
+    /// before a load that reaches now has arrived.
+    pub fn analytics_since(&self) -> Option<Timestamp> {
+        let mut since = self
+            .analytics_windows
+            .iter()
+            .filter(|window| window.reaches_now())
+            .map(|window| window.since)
+            .min()?;
+        while let Some(earlier) = self
+            .analytics_windows
+            .iter()
+            .filter(|window| window.since < since && window.until.is_some_and(|u| u >= since))
+            .map(|window| window.since)
+            .min()
+        {
+            since = earlier;
+        }
+        Some(since)
     }
 
     /// Replaces the comments of `issue_id`.
@@ -356,8 +415,8 @@ impl Store {
         self.as_of
     }
 
-    /// The viewer's teams, in the order Linear lists them. Empty until they
-    /// have loaded.
+    /// The teams the viewer is a member of, in the order Linear lists them.
+    /// Empty until Team Issues or analytics has loaded them.
     pub fn viewer_teams(&self) -> impl Iterator<Item = &Team> {
         self.viewer_teams.iter().filter_map(|id| self.teams.get(id))
     }

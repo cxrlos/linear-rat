@@ -1,0 +1,68 @@
+# budget: 850
+# One page of the viewer's assigned issues matching `$filter`, which the
+# client builds for the analytics window: created or completed in it.
+# Archived issues count too, since Linear archives old completed ones. The
+# fields are those of AssignedIssues, so both decode the same way. Pages hold
+# 100 issues. The client follows `endCursor` until `hasNextPage` is false.
+query AnalyticsIssues($filter: IssueFilter, $after: String) {
+  viewer {
+    id
+    name
+    assignedIssues(first: 100, after: $after, includeArchived: true, filter: $filter) {
+      nodes {
+        id
+        identifier
+        title
+        description
+        url
+        branchName
+        priority
+        estimate
+        labelIds
+        createdAt
+        updatedAt
+        startedAt
+        completedAt
+        canceledAt
+        triagedAt
+        team {
+          id
+          key
+          name
+          issueEstimationType
+        }
+        state {
+          id
+          name
+          type
+          position
+        }
+        assignee {
+          id
+          name
+          displayName
+        }
+        creator {
+          id
+          name
+          displayName
+        }
+        cycle {
+          id
+          number
+          name
+          startsAt
+          endsAt
+          completedAt
+        }
+        project {
+          id
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}

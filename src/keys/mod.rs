@@ -26,15 +26,18 @@ pub enum Context {
     Detail,
     /// An overlay such as the cheatsheet, which takes every key.
     Overlay,
+    /// The Analytics screen.
+    Analytics,
 }
 
 impl Context {
-    pub const ALL: [Context; 5] = [
+    pub const ALL: [Context; 6] = [
         Context::Global,
         Context::List,
         Context::TeamIssues,
         Context::Detail,
         Context::Overlay,
+        Context::Analytics,
     ];
 
     /// The name of its table in `config.toml`, as in `[keys.list]`.
@@ -45,6 +48,7 @@ impl Context {
             Context::TeamIssues => "team-issues",
             Context::Detail => "detail",
             Context::Overlay => "overlay",
+            Context::Analytics => "analytics",
         }
     }
 
@@ -60,6 +64,7 @@ impl Context {
             Context::TeamIssues => "Team Issues",
             Context::Detail => "Issue detail",
             Context::Overlay => "Overlays",
+            Context::Analytics => "Analytics",
         }
     }
 }
@@ -91,6 +96,6 @@ pub fn screen_contexts(state: &State) -> Vec<Context> {
         }
         Screen::TeamIssues => vec![Context::TeamIssues, Context::List, Context::Global],
         Screen::MyIssues => vec![Context::List, Context::Global],
-        Screen::Analytics => vec![Context::Global],
+        Screen::Analytics => vec![Context::Analytics, Context::Global],
     }
 }

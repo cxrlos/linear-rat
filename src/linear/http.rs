@@ -1,6 +1,7 @@
 //! The real client: hand-written GraphQL documents posted to Linear with
 //! reqwest (ADR 0002).
 
+mod analytics;
 mod assigned;
 mod changes;
 mod detail;
@@ -23,8 +24,9 @@ use super::governor::{Governor, SystemTimer, Timer, Urgency};
 use super::model::{Issue, Member, Team, Viewer, WorkflowState, Workspace};
 use super::search_bucket::SearchBucket;
 use super::{
-    AssignedIssues, ClientError, GraphQlError, IssueDetail, IssueUpdate, LinearClient, Response,
-    SearchResults, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
+    AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, GraphQlError, IssueDetail,
+    IssueUpdate, LinearClient, Response, SearchResults, TeamChanges, TeamIssuesPage, TeamOptions,
+    TeamQuery,
 };
 use crate::auth::ApiKey;
 
@@ -354,6 +356,13 @@ impl LinearClient for HttpClient {
 
     async fn count_team_issues(&self, query: &TeamQuery) -> Result<usize, ClientError> {
         team::count(self, query).await
+    }
+
+    async fn analytics_issues(
+        &self,
+        window: AnalyticsWindow,
+    ) -> Result<AnalyticsIssues, ClientError> {
+        analytics::load(self, window).await
     }
 }
 

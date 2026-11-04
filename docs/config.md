@@ -79,7 +79,7 @@ Every Base16 built-in theme keeps a contrast ratio of at least 4.5:1 for text an
 
 ## `[keys]`
 
-One table per context: `global`, `list`, `team-issues` (the Team Issues list, which also takes the `list` keys), `detail` and `overlay`. In each, an action's id maps to its keys in vim notation (`"j"`, `"gg"`, `"<C-d>"`, `"<S-Tab>"`, `"<F1>"`). The `?` cheatsheet lists every action.
+One table per context: `global`, `list`, `team-issues` (the Team Issues list, which also takes the `list` keys), `detail`, `overlay` and `analytics`. In each, an action's id maps to its keys in vim notation (`"j"`, `"gg"`, `"<C-d>"`, `"<S-Tab>"`, `"<F1>"`). The `?` cheatsheet lists every action.
 
 While an overlay has a text field, as the pickers, the palette and the search query do, a character typed without Ctrl or Alt goes into the field and Backspace deletes, whatever they are bound to. The one exception is a picker's number keys (`pick-1` to `pick-9`), which pick an entry while the filter leaves that many. Keys with Ctrl or Alt and named keys such as `<Enter>`, `<Down>` and `<Esc>` still run their `overlay` actions.
 
@@ -108,7 +108,7 @@ Between sessions, lrat keeps what it loaded in a snapshot under `$XDG_CACHE_HOME
 
 ## `[analytics]`
 
-Read and checked now; the Analytics screen uses it once it lands.
+The Analytics screen opens on `default-range-weeks`; `[` and `]` switch to a shorter or longer range from there. Weeks start on Monday in the system time zone.
 
 | Key | Values | Default | Effect |
 | --- | --- | --- | --- |

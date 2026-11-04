@@ -13,7 +13,7 @@ use crate::linear::model::{
 use crate::linear::{AssignedIssues, ClientError, GraphQlError, Response};
 
 const ASSIGNED_ISSUES: &str = include_str!("../graphql/assigned_issues.graphql");
-const LABELS: &str = include_str!("../graphql/labels.graphql");
+pub(super) const LABELS: &str = include_str!("../graphql/labels.graphql");
 
 pub(super) async fn load(client: &HttpClient) -> Result<AssignedIssues, ClientError> {
     let Response {
@@ -124,7 +124,7 @@ pub(super) async fn labels(
 impl AssignedIssues {
     /// Keeps the errors Linear sent alongside data, so the viewer learns
     /// that something is missing.
-    fn note(&mut self, errors: &[GraphQlError]) {
+    pub(super) fn note(&mut self, errors: &[GraphQlError]) {
         self.problems.extend(
             errors
                 .iter()
@@ -282,8 +282,8 @@ struct ViewerWithIssues {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct LabelsPage {
-    issue_labels: Connection<LabelNode>,
+pub(super) struct LabelsPage {
+    pub(super) issue_labels: Connection<LabelNode>,
 }
 
 #[derive(Deserialize)]
@@ -375,9 +375,9 @@ pub(super) struct IdNode {
 
 #[derive(Deserialize)]
 pub(super) struct LabelNode {
-    id: String,
-    name: String,
-    team: Option<IdNode>,
+    pub(super) id: String,
+    pub(super) name: String,
+    pub(super) team: Option<IdNode>,
 }
 
 impl From<LabelNode> for Label {
@@ -409,7 +409,7 @@ pub(super) fn optional_timestamp<'de, D: Deserializer<'de>>(
 }
 
 /// Linear sends whole numbers such as a cycle's number as floats.
-fn whole_number<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u32, D::Error> {
+pub(super) fn whole_number<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u32, D::Error> {
     let number = f64::deserialize(deserializer)?;
     if number.fract() == 0.0 && (0.0..=f64::from(u32::MAX)).contains(&number) {
         Ok(number as u32)

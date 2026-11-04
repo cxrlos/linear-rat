@@ -13,7 +13,7 @@ use crate::keys::{self, ACTIONS, ActionSpec};
 /// Draws inside `area`'s border, scrolled down by `scroll` rows (no further
 /// than its last row).
 pub fn render(state: &State, scroll: u16, frame: &mut Frame, area: Rect) {
-    let lines = lines(state);
+    let lines = lines(state, |spec| (spec.available)(state));
     let popup = popup(area, &lines);
     let scroll = scroll.min(hidden_rows(popup, &lines));
     let block = super::popup_block(state)
@@ -28,7 +28,9 @@ pub fn render(state: &State, scroll: u16, frame: &mut Frame, area: Rect) {
 
 /// How many rows of the cheatsheet do not fit in `area`.
 pub fn max_scroll(state: &State, area: Rect) -> u16 {
-    let lines = lines(state);
+    // Availability only styles the lines, and the scroll actions' own
+    // availability asks for this size, so it is left out here.
+    let lines = lines(state, |_| true);
     hidden_rows(popup(area, &lines), &lines)
 }
 
@@ -49,8 +51,9 @@ fn popup(area: Rect, lines: &[Line]) -> Rect {
     )
 }
 
-/// One heading per context, then its actions with their keys.
-fn lines(state: &State) -> Vec<Line<'static>> {
+/// One heading per context, then its actions with their keys, muted where
+/// `available` says they cannot run now.
+fn lines(state: &State, available: impl Fn(&ActionSpec) -> bool) -> Vec<Line<'static>> {
     let theme = &state.theme;
     let contexts = keys::screen_contexts(state);
     let mut sections: Vec<(&str, Vec<(String, &ActionSpec)>)> = Vec::new();
@@ -87,7 +90,7 @@ fn lines(state: &State) -> Vec<Line<'static>> {
         }
         lines.push(Line::styled(title, style::accent(theme)));
         for (keys, spec) in entries {
-            let (key_style, text_style) = if (spec.available)(state) {
+            let (key_style, text_style) = if available(spec) {
                 (style::accent(theme), Style::new())
             } else {
                 (style::muted(theme), style::muted(theme))

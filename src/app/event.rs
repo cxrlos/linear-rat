@@ -4,7 +4,8 @@ use jiff::Timestamp;
 use super::{LoadError, SyncFailure, Write};
 use crate::linear::model::{Issue, Member, Team, WorkflowState};
 use crate::linear::{
-    AssignedIssues, IssueDetail, SearchResults, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
+    AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, SearchResults, TeamChanges,
+    TeamIssuesPage, TeamOptions, TeamQuery,
 };
 
 /// Something that happened, fed to [`update`](super::update).
@@ -52,6 +53,12 @@ pub enum Event {
     TeamIssuesCounted {
         query: TeamQuery,
         result: Result<usize, String>,
+    },
+    /// The result of [`Effect::LoadAnalytics`](super::Effect::LoadAnalytics)
+    /// for `window`; the error says why it failed, with its context.
+    AnalyticsLoaded {
+        window: AnalyticsWindow,
+        result: Result<AnalyticsIssues, String>,
     },
     /// The runtime could not carry out an effect. The message, with its
     /// context, becomes the notice.

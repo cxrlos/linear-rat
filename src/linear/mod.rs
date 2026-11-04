@@ -19,7 +19,7 @@ pub use error::{ClientError, GraphQlError, Response};
 pub use governor::{SystemTimer, Timer, Urgency};
 pub use http::{ClientConfig, HttpClient};
 use model::{
-    Comment, Cycle, Issue, Label, Member, Priority, Project, StateSpan, Team, Viewer,
+    Comment, Cycle, Issue, Label, Member, Priority, Project, StateSpan, StateType, Team, Viewer,
     WorkflowState, Workspace,
 };
 
@@ -117,6 +117,15 @@ pub trait LinearClient {
         &self,
         query: &TeamQuery,
     ) -> impl Future<Output = Result<usize, ClientError>> + Send;
+
+    /// What personal analytics needs for `window`: the issues assigned to
+    /// the viewer that were created or completed in it, the viewer's teams
+    /// and their cycles that overlap it. A window that reaches now also
+    /// brings every in-progress issue with its state history.
+    fn analytics_issues(
+        &self,
+        window: AnalyticsWindow,
+    ) -> impl Future<Output = Result<AnalyticsIssues, ClientError>> + Send;
 }
 
 /// What changed in one team: its issues updated after a watermark, and the
@@ -244,6 +253,91 @@ pub struct TeamIssuesPage {
     pub as_of: Timestamp,
     /// What Linear could not give: errors that came back with the data.
     pub problems: Vec<String>,
+}
+
+/// The stretch of time an analytics load covers, from `since` up to `until`
+/// (excluded), or up to now when `until` is `None`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AnalyticsWindow {
+    pub since: Timestamp,
+    pub until: Option<Timestamp>,
+}
+
+impl AnalyticsWindow {
+    pub fn contains(&self, at: Timestamp) -> bool {
+        self.since <= at && self.until.is_none_or(|until| at < until)
+    }
+
+    /// Whether the window reaches now, so its load brings in-progress issues.
+    pub fn reaches_now(&self) -> bool {
+        self.until.is_none()
+    }
+}
+
+/// The result of [`LinearClient::analytics_issues`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct AnalyticsIssues {
+    pub viewer: Viewer,
+    pub issues: Vec<Issue>,
+    /// The viewer's teams, which decide whether scope is in points.
+    pub teams: Vec<Team>,
+    /// The cycles of the viewer's teams that overlap the window, with their
+    /// history arrays.
+    pub cycles: Vec<Cycle>,
+    pub labels: Vec<Label>,
+    pub projects: Vec<Project>,
+    pub members: Vec<Member>,
+    /// When the data was loaded.
+    pub as_of: Timestamp,
+    /// What Linear could not give, as in [`AssignedIssues::problems`].
+    pub problems: Vec<String>,
+}
+
+impl AnalyticsIssues {
+    /// The demo workspace's answer for `window`, as of [`demo::NOW`]. The
+    /// state history is kept only on in-progress issues, as Linear's is.
+    pub fn demo(window: AnalyticsWindow) -> Self {
+        let data = demo::workspace();
+        let viewer_id = data.viewer.id.clone();
+        let assigned = |issue: &Issue| issue.assignee_id.as_ref() == Some(&viewer_id);
+        let in_window = |issue: &Issue| {
+            window.contains(issue.created_at)
+                || issue.completed_at.is_some_and(|at| window.contains(at))
+        };
+        let in_progress =
+            |issue: &Issue| window.reaches_now() && issue.state.state_type == StateType::Started;
+        let issues = data
+            .issues
+            .into_iter()
+            .filter(|issue| assigned(issue) && (in_window(issue) || in_progress(issue)))
+            .map(|mut issue| {
+                if issue.state.state_type != StateType::Started {
+                    issue.state_history.clear();
+                }
+                issue
+            })
+            .collect();
+        let cycles = data
+            .cycles
+            .into_iter()
+            .filter(|cycle| {
+                cycle.ends_at > window.since
+                    && window.until.is_none_or(|until| cycle.starts_at < until)
+            })
+            .collect();
+        Self {
+            viewer: data.viewer,
+            issues,
+            // The viewer is a member of every demo team.
+            teams: data.teams,
+            cycles,
+            labels: data.labels,
+            projects: data.projects,
+            members: data.members,
+            as_of: demo::NOW,
+            problems: Vec::new(),
+        }
+    }
 }
 
 /// The viewer's open assigned issues, and the cycles, labels, members and
@@ -565,6 +659,13 @@ impl LinearClient for FakeClient {
 
     async fn count_team_issues(&self, query: &TeamQuery) -> Result<usize, ClientError> {
         Ok(demo::team_issues(&demo::workspace(), query).len())
+    }
+
+    async fn analytics_issues(
+        &self,
+        window: AnalyticsWindow,
+    ) -> Result<AnalyticsIssues, ClientError> {
+        Ok(AnalyticsIssues::demo(window))
     }
 }
 

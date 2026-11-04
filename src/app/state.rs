@@ -5,7 +5,9 @@ use ratatui::layout::Size;
 
 use jiff::Timestamp;
 
-use super::{Detail, Load, LoadError, ModalStack, MyIssues, Store, SyncStatus, TeamIssues};
+use super::{
+    AnalyticsScreen, Detail, Load, LoadError, ModalStack, MyIssues, Store, SyncStatus, TeamIssues,
+};
 use crate::auth::KeySource;
 use crate::config::{AnalyticsSettings, Loaded, SyncSettings, UiSettings};
 use crate::keys::Keymap;
@@ -47,9 +49,9 @@ pub struct State {
     pub sync: SyncSettings,
     /// How fresh the store is and what sync is doing.
     pub sync_status: SyncStatus,
-    /// `[analytics]`, kept for the Analytics screen, which does not read it
-    /// yet.
+    /// `[analytics]`: the range the Analytics screen opens on.
     pub analytics: AnalyticsSettings,
+    pub analytics_screen: AnalyticsScreen,
 }
 
 impl State {

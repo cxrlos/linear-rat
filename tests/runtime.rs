@@ -10,8 +10,9 @@ use linear_rat::app::{App, State};
 use linear_rat::auth::KeySource;
 use linear_rat::linear::model::{Issue, Member, Team, Viewer, WorkflowState, Workspace};
 use linear_rat::linear::{
-    AssignedIssues, ClientError, FakeClient, IssueDetail, IssueUpdate, LinearClient, SearchResults,
-    TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery, Urgency, demo,
+    AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, FakeClient, IssueDetail,
+    IssueUpdate, LinearClient, SearchResults, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
+    Urgency, demo,
 };
 use linear_rat::runtime;
 use linear_rat::snapshot::SnapshotCache;
@@ -137,6 +138,10 @@ impl LinearClient for RejectingClient {
     async fn count_team_issues(&self, _: &TeamQuery) -> Result<usize, ClientError> {
         Err(ClientError::InvalidKey)
     }
+
+    async fn analytics_issues(&self, _: AnalyticsWindow) -> Result<AnalyticsIssues, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
 }
 
 #[tokio::test]
@@ -246,6 +251,12 @@ async fn q_quits_while_the_load_is_still_in_flight() {
         async fn count_team_issues(&self, _: &TeamQuery) -> Result<usize, ClientError> {
             future::pending().await
         }
+        async fn analytics_issues(
+            &self,
+            _: AnalyticsWindow,
+        ) -> Result<AnalyticsIssues, ClientError> {
+            future::pending().await
+        }
     }
     let mut app = App::new(TestBackend::new(80, 24), State::loading(None)).unwrap();
 
@@ -323,6 +334,12 @@ impl LinearClient for CountingClient {
     }
     async fn count_team_issues(&self, query: &TeamQuery) -> Result<usize, ClientError> {
         FakeClient.count_team_issues(query).await
+    }
+    async fn analytics_issues(
+        &self,
+        window: AnalyticsWindow,
+    ) -> Result<AnalyticsIssues, ClientError> {
+        FakeClient.analytics_issues(window).await
     }
 }
 

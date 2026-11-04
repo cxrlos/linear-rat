@@ -1,7 +1,9 @@
 use jiff::Timestamp;
 use linear_rat::app::{State, Store};
 use linear_rat::linear::model::Issue;
-use linear_rat::linear::{AssignedIssues, TeamChanges, TeamIssuesPage};
+use linear_rat::linear::{
+    AnalyticsIssues, AnalyticsWindow, AssignedIssues, TeamChanges, TeamIssuesPage,
+};
 
 /// Midnight UTC on day `day` of October 2026.
 fn october(day: i64) -> Timestamp {
@@ -216,4 +218,91 @@ fn a_page_of_team_issues_never_overwrites_a_newer_stored_issue() {
 
     assert_eq!(store.issues().next().unwrap().title, "edited");
     assert_eq!(store.as_of(), Some(october(3)));
+}
+
+fn window(since: Timestamp, until: Option<Timestamp>) -> AnalyticsWindow {
+    AnalyticsWindow { since, until }
+}
+
+/// An analytics load holding only `issues`.
+fn analytics(issues: Vec<Issue>) -> AnalyticsIssues {
+    AnalyticsIssues {
+        issues,
+        ..AnalyticsIssues::demo(window(october(31), None))
+    }
+}
+
+#[test]
+fn analytics_coverage_reaches_back_only_without_a_gap() {
+    let mut store = Store::default();
+    assert_eq!(store.analytics_since(), None);
+
+    store.merge_analytics(
+        window(october(1), Some(october(15))),
+        &analytics(Vec::new()),
+    );
+    assert_eq!(store.analytics_since(), None, "nothing reaches now yet");
+
+    store.merge_analytics(window(october(20), None), &analytics(Vec::new()));
+    assert_eq!(
+        store.analytics_since(),
+        Some(october(20)),
+        "a gap from the 15th"
+    );
+
+    store.merge_analytics(
+        window(october(15), Some(october(20))),
+        &analytics(Vec::new()),
+    );
+    assert_eq!(store.analytics_since(), Some(october(1)));
+}
+
+#[test]
+fn an_analytics_copy_without_history_keeps_the_stored_history_of_its_version() {
+    let mut store = Store::default();
+    let with_history = issue(october(2), "same");
+    assert!(!with_history.state_history.is_empty());
+    store.upsert_issue(with_history.clone());
+    let mut bare = with_history.clone();
+    bare.state_history.clear();
+
+    store.merge_analytics(window(october(1), None), &analytics(vec![bare.clone()]));
+    assert_eq!(store.issues().next().unwrap(), &with_history);
+
+    bare.updated_at = october(3);
+    store.merge_analytics(window(october(1), None), &analytics(vec![bare.clone()]));
+    assert_eq!(store.issues().next().unwrap(), &bare, "a newer copy wins");
+}
+
+#[test]
+fn analytics_brings_the_viewers_teams_and_project_names() {
+    let mut store = Store::default();
+    let loaded = analytics(Vec::new());
+
+    store.merge_analytics(window(october(1), None), &loaded);
+
+    assert_eq!(store.viewer_teams().count(), loaded.teams.len());
+    assert_eq!(
+        store
+            .project("project-1")
+            .map(|project| project.name.as_str()),
+        Some("Nibble 3.0")
+    );
+}
+
+#[test]
+fn the_viewers_teams_come_from_whichever_load_listed_them_last() {
+    let mut store = Store::default();
+    let loaded = analytics(Vec::new());
+    let ids = |store: &Store| -> Vec<String> {
+        store.viewer_teams().map(|team| team.id.clone()).collect()
+    };
+
+    store.merge_analytics(window(october(1), None), &loaded);
+    let from_analytics = ids(&store);
+    store.set_viewer_teams(&loaded.teams[..1]);
+
+    let all: Vec<String> = loaded.teams.iter().map(|team| team.id.clone()).collect();
+    assert_eq!(from_analytics, all);
+    assert_eq!(ids(&store), all[..1]);
 }

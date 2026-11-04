@@ -3,8 +3,8 @@ use ratatui::layout::Size;
 
 use super::edit::{self, Editable};
 use super::{
-    Action, Copyable, Effect, Event, Load, Modal, Palette, Pane, Screen, Search, State, detail,
-    palette, search, sync, team_issues,
+    Action, Copyable, Effect, Event, Load, Modal, Palette, Pane, Screen, Search, State,
+    analytics_screen, detail, palette, search, sync, team_issues,
 };
 use crate::keys::{self, Key, Resolution};
 use crate::ui;
@@ -43,7 +43,17 @@ fn apply(state: &mut State, event: Event) -> Update {
             }
         }
         Event::Start => Update::default(),
-        Event::MyIssuesLoaded(Ok(loaded)) => sync::loaded(state, &loaded),
+        Event::MyIssuesLoaded(Ok(loaded)) => {
+            let mut update = sync::loaded(state, &loaded);
+            clamp_analytics_scroll(state);
+            if state.screen == Screen::Analytics {
+                update.redraw = true;
+                update
+                    .effects
+                    .extend(analytics_screen::request_missing(state));
+            }
+            update
+        }
         Event::MyIssuesLoaded(Err(error)) => sync::load_failed(state, error),
         Event::Tick(now) => sync::tick(state, now),
         Event::FocusGained => sync::focus(state, true),
@@ -61,6 +71,7 @@ fn apply(state: &mut State, event: Event) -> Update {
             state.my_issues.scroll_into_view(rows);
             let rows = ui::team_list_rows(state, state.viewport);
             state.team_issues.scroll_into_view(rows);
+            clamp_analytics_scroll(state);
             Update::redraw()
         }
         Event::TeamsLoaded(result) => Update {
@@ -94,6 +105,11 @@ fn apply(state: &mut State, event: Event) -> Update {
         }
         Event::IssueDetailLoaded { issue_id, result } => {
             detail::loaded(state, issue_id, result);
+            Update::redraw()
+        }
+        Event::AnalyticsLoaded { window, result } => {
+            analytics_screen::loaded(state, window, result);
+            clamp_analytics_scroll(state);
             Update::redraw()
         }
         Event::EffectFailed(error) => {
@@ -194,7 +210,8 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             state.screen = screen;
             let effects = match screen {
                 Screen::TeamIssues => team_issues::open(state),
-                Screen::MyIssues | Screen::Analytics => Vec::new(),
+                Screen::Analytics => analytics_screen::request_missing(state),
+                Screen::MyIssues => Vec::new(),
             };
             Update {
                 redraw: true,
@@ -258,6 +275,11 @@ pub fn perform(state: &mut State, action: Action) -> Update {
                 effects: Vec::new(),
             }
         }
+        Action::ShorterRange | Action::LongerRange if state.screen == Screen::Analytics => {
+            let update = analytics_screen::change_range(state, action == Action::LongerRange);
+            clamp_analytics_scroll(state);
+            update
+        }
         Action::MoveDown
         | Action::MoveUp
         | Action::MoveToTop
@@ -290,6 +312,10 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             Some(Modal::Choice(_)) => move_choice(state, action),
             Some(Modal::Palette(_)) => palette::step(state, action),
             Some(Modal::Search(_)) => search::step(state, action),
+            None if state.screen == Screen::Analytics => {
+                let max = ui::analytics_max_scroll(state, state.viewport);
+                analytics_screen::scroll(state, action == Action::ScrollDown, max)
+            }
             _ => scroll_cheatsheet(state, action),
         },
         Action::SwitchTeam if state.screen == Screen::TeamIssues => {
@@ -360,6 +386,12 @@ fn move_choice(state: &mut State, action: Action) -> Update {
 }
 
 /// Moves the open cheatsheet one row, no further than its last row.
+/// Keeps the Analytics view on its content after its size or content changed.
+fn clamp_analytics_scroll(state: &mut State) {
+    let max = ui::analytics_max_scroll(state, state.viewport);
+    analytics_screen::clamp_scroll(state, max);
+}
+
 fn scroll_cheatsheet(state: &mut State, action: Action) -> Update {
     let max = ui::cheatsheet_max_scroll(state, state.viewport);
     let Some(Modal::Cheatsheet { scroll }) = state.modals.top_mut() else {

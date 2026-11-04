@@ -1,6 +1,7 @@
 use crossterm::event::KeyCode;
 
 use super::{Context, Key};
+use crate::analytics::WeekRange;
 use crate::app::{
     self, Action, Copyable, EditPicker, Editable, FilterField, Modal, Pane, Phase, Screen, State,
     can_load_more,
@@ -70,6 +71,9 @@ const TEAM_ISSUES: &[Context] = &[Context::TeamIssues];
 const PANES: &[Context] = &[Context::List, Context::Detail];
 const GLOBAL: &[Context] = &[Context::Global];
 const OVERLAY: &[Context] = &[Context::Overlay];
+const ANALYTICS: &[Context] = &[Context::Analytics];
+/// The overlays and the Analytics screen both scroll by row.
+const SCROLLS: &[Context] = &[Context::Overlay, Context::Analytics];
 
 /// Every action lrat has, in the order hints and the cheatsheet list them.
 /// This is the only place a key binding is written down.
@@ -376,7 +380,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         id: "scroll-down",
         description: "Scroll down",
         hint: moves("down"),
-        contexts: OVERLAY,
+        contexts: SCROLLS,
         default_keys: &[
             &[Key::char('j')],
             &[Key::named(KeyCode::Down)],
@@ -389,7 +393,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         id: "scroll-up",
         description: "Scroll up",
         hint: moves("up"),
-        contexts: OVERLAY,
+        contexts: SCROLLS,
         default_keys: &[
             &[Key::char('k')],
             &[Key::named(KeyCode::Up)],
@@ -405,6 +409,24 @@ pub static ACTIONS: &[ActionSpec] = &[
         contexts: OVERLAY,
         default_keys: &[&[Key::named(KeyCode::Enter)]],
         available: can_accept,
+    },
+    ActionSpec {
+        action: Action::ShorterRange,
+        id: "shorter-range",
+        description: "Show a shorter range",
+        hint: does("range"),
+        contexts: ANALYTICS,
+        default_keys: &[&[Key::char('[')]],
+        available: |state| state.analytics_range() != WeekRange::Four,
+    },
+    ActionSpec {
+        action: Action::LongerRange,
+        id: "longer-range",
+        description: "Show a longer range",
+        hint: does("range"),
+        contexts: ANALYTICS,
+        default_keys: &[&[Key::char(']')]],
+        available: |state| state.analytics_range() != WeekRange::TwentySix,
     },
     ActionSpec {
         action: Action::Close,
@@ -514,6 +536,9 @@ fn can_scroll_down(state: &State) -> bool {
             Phase::Found { ids, selected, .. } => selected + 1 < ids.len(),
             _ => false,
         },
+        None if in_analytics(state) => {
+            state.analytics_screen.scroll() < ui::analytics_max_scroll(state, state.viewport)
+        }
         _ => false,
     }
 }
@@ -531,6 +556,7 @@ fn can_scroll_up(state: &State) -> bool {
         Some(Modal::Search(search)) => {
             matches!(search.phase, Phase::Found { selected, .. } if selected > 0)
         }
+        None if in_analytics(state) => state.analytics_screen.scroll() > 0,
         _ => false,
     }
 }
@@ -601,6 +627,10 @@ fn detail_scroll(state: &State) -> (usize, usize) {
         .focused_issue()
         .map_or(0, |issue| state.detail.scroll(&issue.id));
     (scroll.min(max), max)
+}
+
+fn in_analytics(state: &State) -> bool {
+    state.screen == Screen::Analytics && state.modals.top().is_none()
 }
 
 fn in_detail(state: &State) -> bool {

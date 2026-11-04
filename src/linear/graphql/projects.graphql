@@ -1,0 +1,21 @@
+# budget: 210
+# One page of the projects with the given ids, archived ones included because
+# a completed issue can belong to an archived project. Pages hold 100
+# projects. The client follows `endCursor` until `hasNextPage` is false.
+query Projects($ids: [ID!], $after: String) {
+  projects(
+    first: 100
+    after: $after
+    includeArchived: true
+    filter: { id: { in: $ids } }
+  ) {
+    nodes {
+      id
+      name
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}

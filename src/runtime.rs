@@ -16,7 +16,7 @@ use ratatui::backend::Backend;
 use tokio::time::{Instant, MissedTickBehavior};
 
 use crate::app::{App, Effect, Event, LoadError, SyncFailure, TeamPoll, Write};
-use crate::linear::{ClientError, LinearClient, Urgency};
+use crate::linear::{AnalyticsWindow, ClientError, LinearClient, Urgency};
 use crate::snapshot::SnapshotCache;
 use crate::{browser, clipboard};
 
@@ -275,6 +275,10 @@ where
             }));
             Ok(())
         }
+        Effect::LoadAnalytics(window) => {
+            in_flight.push(Box::pin(load_analytics(reach.client, window)));
+            Ok(())
+        }
         Effect::Copy(text) => outside.copy(&text),
         Effect::OpenUrl(url) => outside.open(&url),
     };
@@ -462,6 +466,21 @@ where
         tracing::warn!(%message, "a request failed");
     }
     result
+}
+
+async fn load_analytics<C: LinearClient>(client: Option<&C>, window: AnalyticsWindow) -> Event {
+    let result = match client {
+        Some(client) => client
+            .analytics_issues(window)
+            .await
+            .map_err(|error| format!("{:#}", anyhow::Error::new(error))),
+        None => Err("there is no API key to load analytics with".to_owned()),
+    };
+    match &result {
+        Ok(loaded) => tracing::info!(issues = loaded.issues.len(), "loaded analytics"),
+        Err(error) => tracing::warn!(%error, "loading analytics failed"),
+    }
+    Event::AnalyticsLoaded { window, result }
 }
 
 fn from_terminal(event: TerminalEvent) -> Option<Event> {
