@@ -20,8 +20,12 @@ fn app() -> App<TestBackend> {
     App::new(TestBackend::new(80, 24), State::demo()).unwrap()
 }
 
+/// A terminal wide enough for the detail beside the list. It starts as the
+/// runtime starts it, so the detail's background load is already asked for.
 fn wide() -> App<TestBackend> {
-    App::new(TestBackend::new(200, 60), State::demo()).unwrap()
+    let mut app = App::new(TestBackend::new(200, 60), State::demo()).unwrap();
+    app.handle(Event::Start).unwrap();
+    app
 }
 
 fn key(code: KeyCode) -> Event {

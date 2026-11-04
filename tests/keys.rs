@@ -110,7 +110,7 @@ fn the_bottom_bar_mutes_unavailable_actions_and_accents_the_rest() {
 }
 
 #[test]
-fn the_bottom_bar_accents_esc_and_mutes_moves_while_the_detail_is_open() {
+fn the_bottom_bar_accents_esc_and_the_moves_that_scroll_while_the_detail_is_open() {
     let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
 
     app.handle(Event::Key(KeyEvent::new(
@@ -120,7 +120,8 @@ fn the_bottom_bar_accents_esc_and_mutes_moves_while_the_detail_is_open() {
     .unwrap();
 
     assert_eq!(fg_of(&app, 23, "Esc"), Some(Color::Cyan));
-    assert_eq!(fg_of(&app, 22, "j"), Some(Color::DarkGray));
+    assert_eq!(fg_of(&app, 22, "j"), Some(Color::Cyan), "more below");
+    assert_eq!(fg_of(&app, 22, "k"), Some(Color::DarkGray), "at the top");
 }
 
 #[test]

@@ -1,9 +1,11 @@
 //! Rendering: a pure function of [`State`].
 
 mod cheatsheet;
+mod detail;
 mod error;
 mod hints;
 pub mod icons;
+mod markdown;
 mod my_issues;
 mod picker;
 pub mod style;
@@ -160,6 +162,21 @@ pub fn list_rows(state: &State, viewport: Size) -> usize {
     let area = Rect::from((ratatui::layout::Position::ORIGIN, viewport));
     let [_, body_area, _, _] = areas(area, notice_rows(state, viewport.width).len());
     usize::from(body_area.height.saturating_sub(2))
+}
+
+/// How many rows the focused issue's detail shows in a `viewport`-sized
+/// terminal, inside its border, and how many lines it has. Both are 0 when
+/// no detail is on screen.
+pub fn detail_rows(state: &State, viewport: Size) -> (usize, usize) {
+    let area = Rect::from((ratatui::layout::Position::ORIGIN, viewport));
+    let [_, body_area, _, _] = areas(area, notice_rows(state, viewport.width).len());
+    let Some(pane) = my_issues::detail_area(state, body_area) else {
+        return (0, 0);
+    };
+    let inner = Block::bordered().inner(pane);
+    let lines =
+        detail::issue(state).map_or(0, |issue| detail::lines(state, issue, inner.width).len());
+    (usize::from(inner.height), lines)
 }
 
 /// How far the cheatsheet can scroll in a `viewport`-sized terminal: how

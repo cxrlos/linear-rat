@@ -143,7 +143,7 @@ fn state_entries(store: &Store, team_id: &str) -> (Vec<Entry<Edit>>, bool) {
     let Some(states) = store.workflow_states(team_id) else {
         return (Vec::new(), true);
     };
-    let mut states = states.to_vec();
+    let mut states: Vec<WorkflowState> = states.into_iter().cloned().collect();
     states.sort_by(|a, b| {
         (a.state_type, a.position)
             .partial_cmp(&(b.state_type, b.position))

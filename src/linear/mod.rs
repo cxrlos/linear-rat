@@ -15,9 +15,12 @@ use std::future::Future;
 use jiff::{SignedDuration, Timestamp};
 
 pub use error::{ClientError, GraphQlError, Response};
-pub use governor::{SystemTimer, Timer};
+pub use governor::{SystemTimer, Timer, Urgency};
 pub use http::{ClientConfig, HttpClient};
-use model::{Cycle, Issue, Label, Member, Priority, Team, Viewer, WorkflowState, Workspace};
+use model::{
+    Comment, Cycle, Issue, Label, Member, Priority, Project, StateSpan, Team, Viewer,
+    WorkflowState, Workspace,
+};
 
 /// Queries, mutations and live events.
 pub trait LinearClient {
@@ -71,6 +74,15 @@ pub trait LinearClient {
         issue_id: &str,
         update: &IssueUpdate,
     ) -> impl Future<Output = Result<Issue, ClientError>> + Send;
+
+    /// What the detail of the issue with id `issue_id` shows beyond what a
+    /// list loads: its comments and its workflow state history. `urgency`
+    /// says whether the viewer opened the detail and waits on it.
+    fn issue_detail(
+        &self,
+        issue_id: &str,
+        urgency: Urgency,
+    ) -> impl Future<Output = Result<IssueDetail, ClientError>> + Send;
 }
 
 /// What changed in one team: its issues updated after a watermark, and the
@@ -154,6 +166,55 @@ impl AssignedIssues {
             members: data.members,
             teams: data.teams,
             as_of: demo::NOW,
+            problems: Vec::new(),
+        }
+    }
+}
+
+/// One issue's comments and workflow state history, and the people, states
+/// and project they refer to.
+#[derive(Debug, Clone, PartialEq)]
+pub struct IssueDetail {
+    /// Oldest first.
+    pub comments: Vec<Comment>,
+    /// Oldest first.
+    pub state_history: Vec<StateSpan>,
+    /// The workflow states the history passes through.
+    pub workflow_states: Vec<WorkflowState>,
+    /// The comment authors.
+    pub members: Vec<Member>,
+    pub project: Option<Project>,
+    /// What Linear could not give, as in [`AssignedIssues::problems`].
+    pub problems: Vec<String>,
+}
+
+impl IssueDetail {
+    /// The detail of the demo issue with id `issue_id`; empty for an id the
+    /// demo workspace does not have.
+    pub fn demo(issue_id: &str) -> Self {
+        let data = demo::workspace();
+        let issue = data.issues.iter().find(|issue| issue.id == issue_id);
+        let team_id = issue.map(|issue| issue.team_id.as_str());
+        let project_id = issue.and_then(|issue| issue.project_id.as_deref());
+        Self {
+            comments: data
+                .comments
+                .into_iter()
+                .filter(|comment| comment.issue_id == issue_id)
+                .collect(),
+            state_history: issue
+                .map(|issue| issue.state_history.clone())
+                .unwrap_or_default(),
+            workflow_states: data
+                .workflow_states
+                .into_iter()
+                .filter(|state| Some(state.team_id.as_str()) == team_id)
+                .collect(),
+            members: data.members,
+            project: data
+                .projects
+                .into_iter()
+                .find(|project| Some(project.id.as_str()) == project_id),
             problems: Vec::new(),
         }
     }
@@ -301,5 +362,9 @@ impl LinearClient for FakeClient {
         let updated = demo_update(&data, stored, update)?;
         DEMO_EDITS.with_borrow_mut(|edits| edits.insert(issue_id.to_owned(), updated.clone()));
         Ok(updated)
+    }
+
+    async fn issue_detail(&self, issue_id: &str, _: Urgency) -> Result<IssueDetail, ClientError> {
+        Ok(IssueDetail::demo(issue_id))
     }
 }

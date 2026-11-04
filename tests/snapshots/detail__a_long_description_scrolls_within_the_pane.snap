@@ -1,0 +1,28 @@
+---
+source: tests/detail.rs
+expression: app.backend()
+---
+" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+"┌DES-34────────────────────────────────────────────────────────────────────────┐"
+"│                                                                              │"
+"│Paragraph 3 of a long description.                                            │"
+"│                                                                              │"
+"│Paragraph 4 of a long description.                                            │"
+"│                                                                              │"
+"│Paragraph 5 of a long description.                                            │"
+"│                                                                              │"
+"│Paragraph 6 of a long description.                                            │"
+"│                                                                              │"
+"│Paragraph 7 of a long description.                                            │"
+"│                                                                              │"
+"│Paragraph 8 of a long description.                                            │"
+"│                                                                              │"
+"│Paragraph 9 of a long description.                                            │"
+"│                                                                              │"
+"│Paragraph 10 of a long description.                                           │"
+"│                                                                              │"
+"│Paragraph 11 of a long description.                                           │"
+"│                                                                              │"
+"└──────────────────────────────────────────────────────────────────────────────┘"
+" Move │ j down │ k up      │ gg top    │ G bottom │ C-d/C-u page │ h/l pane     "
+" Do   │ y yank │ o browser │ Esc close │ ? keys   │ q quit                      "

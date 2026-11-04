@@ -1,0 +1,28 @@
+---
+source: tests/detail.rs
+expression: app.backend()
+---
+" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+"┌OPS-37────────────────────────────────────────────────────────────────────────┐"
+"│Comments (1)                                                                  │"
+"│Omar Stilton · 4 days ago                                                     │"
+"│  Blocked on the sensor firmware update.                                      │"
+"│                                                                              │"
+"│History                                                                       │"
+"│◇ Triage       23h 49m                                                        │"
+"│○ Todo         1d 13h                                                         │"
+"│◐ In Progress  1d 10h                                                         │"
+"│◐ In Review    1d 4h so far                                                   │"
+"│                                                                              │"
+"│Details                                                                       │"
+"│Team      Operations                                                          │"
+"│Project   Shared pantries                                                     │"
+"│Cycle     Cycle 7 (active)                                                    │"
+"│Labels    on-call, improvement                                                │"
+"│Assignee  Mira Gouda                                                          │"
+"│Creator   Basil Burrow                                                        │"
+"│Created   2026-10-28 10:25 UTC (5 days ago)                                   │"
+"│Updated   2026-11-01 10:14 UTC (1 day ago)                                    │"
+"└──────────────────────────────────────────────────────────────────────────────┘"
+" Move │ j down │ k up      │ gg top    │ G bottom │ C-d/C-u page │ h/l pane     "
+" Do   │ y yank │ o browser │ Esc close │ ? keys   │ q quit                      "

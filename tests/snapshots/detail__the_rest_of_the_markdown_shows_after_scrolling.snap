@@ -1,0 +1,28 @@
+---
+source: tests/detail.rs
+expression: app.backend()
+---
+" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+"┌DES-34────────────────────────────────────────────────────────────────────────┐"
+"│[x] Reproduce on staging                                                      │"
+"│[ ] Write the fix                                                             │"
+"│                                                                              │"
+"│  fn upload(photo: &Photo) {                                                  │"
+"│      retry(photo);                                                           │"
+"│  }                                                                           │"
+"│                                                                              │"
+"││ Customers noticed this first.                                               │"
+"│                                                                              │"
+"│See the runbook (https://wiki.squeakworks.example/runbook) and                │"
+"│https://linear.app/squeakworks.                                               │"
+"│                                                                              │"
+"│[image: Rind photo] https://uploads.squeakworks.example/rind.png              │"
+"│                                                                              │"
+"│熟成チーズの写真が二回アップロードされます。棚の一覧も確認してください。熟成庫│" Hidden by multi-width symbols: [(2, " "), (4, " "), (6, " "), (8, " "), (10, " "), (12, " "), (14, " "), (16, " "), (18, " "), (20, " "), (22, " "), (24, " "), (26, " "), (28, " "), (30, " "), (32, " "), (34, " "), (36, " "), (38, " "), (40, " "), (42, " "), (44, " "), (46, " "), (48, " "), (50, " "), (52, " "), (54, " "), (56, " "), (58, " "), (60, " "), (62, " "), (64, " "), (66, " "), (68, " "), (70, " "), (72, " "), (74, " "), (76, " "), (78, " ")]
+"│の温度も記録します。                                                          │" Hidden by multi-width symbols: [(2, " "), (4, " "), (6, " "), (8, " "), (10, " "), (12, " "), (14, " "), (16, " "), (18, " "), (20, " ")]
+"│                                                                              │"
+"│──────────────────────────────────────────────────────────────────────────────│"
+"│                                                                              │"
+"└──────────────────────────────────────────────────────────────────────────────┘"
+" Move │ j down │ k up      │ gg top    │ G bottom │ C-d/C-u page │ h/l pane     "
+" Do   │ y yank │ o browser │ Esc close │ ? keys   │ q quit                      "

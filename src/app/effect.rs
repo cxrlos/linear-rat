@@ -1,4 +1,5 @@
 use super::{TeamPoll, Write};
+use crate::linear::Urgency;
 
 /// A request to the outside world, returned by [`update`](super::update) and
 /// carried out by the runtime.
@@ -8,6 +9,15 @@ pub enum Effect {
     /// Load the viewer's open assigned issues; the result comes back as
     /// [`Event::MyIssuesLoaded`](super::Event::MyIssuesLoaded).
     LoadMyIssues,
+    /// Load the comments and state history of the issue with this id; the
+    /// result comes back as
+    /// [`Event::IssueDetailLoaded`](super::Event::IssueDetailLoaded). Urgent
+    /// when the viewer opened the detail, background when it only follows
+    /// the list's focus.
+    LoadIssueDetail {
+        issue_id: String,
+        urgency: Urgency,
+    },
     /// Put this text on the system clipboard.
     Copy(String),
     /// Open this URL in the viewer's browser.

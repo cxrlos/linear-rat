@@ -380,13 +380,13 @@ struct LabelNode {
     team: Option<IdNode>,
 }
 
-fn timestamp<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Timestamp, D::Error> {
+pub(super) fn timestamp<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Timestamp, D::Error> {
     let text = String::deserialize(deserializer)?;
     text.parse()
         .map_err(|error| serde::de::Error::custom(format!("bad timestamp `{text}`: {error}")))
 }
 
-fn optional_timestamp<'de, D: Deserializer<'de>>(
+pub(super) fn optional_timestamp<'de, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Option<Timestamp>, D::Error> {
     match Option::<String>::deserialize(deserializer)? {
@@ -425,7 +425,9 @@ fn priority<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Priority, D::E
 }
 
 /// Linear's `duplicate` state type is a kind of canceled.
-fn state_type<'de, D: Deserializer<'de>>(deserializer: D) -> Result<StateType, D::Error> {
+pub(super) fn state_type<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<StateType, D::Error> {
     let name = String::deserialize(deserializer)?;
     match name.as_str() {
         "triage" => Ok(StateType::Triage),

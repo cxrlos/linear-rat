@@ -5,7 +5,7 @@ use ratatui::layout::Size;
 
 use jiff::Timestamp;
 
-use super::{Load, LoadError, ModalStack, MyIssues, Store, SyncStatus};
+use super::{Detail, Load, LoadError, ModalStack, MyIssues, Store, SyncStatus};
 use crate::auth::KeySource;
 use crate::config::{AnalyticsSettings, Loaded, SyncSettings, UiSettings};
 use crate::keys::Keymap;
@@ -29,6 +29,8 @@ pub struct State {
     /// its row until the next edit of that issue.
     pub row_errors: BTreeMap<String, String>,
     pub my_issues: MyIssues,
+    /// The focused issue's detail: its scroll and which details have loaded.
+    pub detail: Detail,
     /// Whether My Issues is still loading, and why it failed.
     pub load: Load,
     /// Where the API key in use came from, so a rejected key's error screen

@@ -1,7 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
 use linear_rat::app::{Action, App, Effect, Event, MyIssues, State, perform};
-use linear_rat::linear::demo;
+use linear_rat::linear::{Urgency, demo};
 use ratatui::backend::TestBackend;
 
 fn app() -> App<TestBackend> {
@@ -68,7 +68,14 @@ fn redraws_at_the_new_size_after_a_resize() {
         })
         .unwrap();
 
-    assert!(effects.is_empty());
+    assert_eq!(
+        effects,
+        [Effect::LoadIssueDetail {
+            issue_id: "issue-des-34".to_owned(),
+            urgency: Urgency::Background,
+        }],
+        "the detail now shows beside the list, and the viewer is still in the list"
+    );
     assert_eq!(app.frames_drawn(), frames + 1);
     assert_snapshot!(app.backend());
 }

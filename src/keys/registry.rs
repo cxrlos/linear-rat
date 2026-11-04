@@ -77,7 +77,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         hint: moves("down"),
         contexts: PANES,
         default_keys: &[&[Key::char('j')]],
-        available: not_in_detail,
+        available: can_move_down,
     },
     ActionSpec {
         action: Action::MoveUp,
@@ -86,7 +86,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         hint: moves("up"),
         contexts: PANES,
         default_keys: &[&[Key::char('k')]],
-        available: not_in_detail,
+        available: can_move_up,
     },
     ActionSpec {
         action: Action::MoveToTop,
@@ -95,7 +95,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         hint: moves("top"),
         contexts: PANES,
         default_keys: &[&[Key::char('g'), Key::char('g')]],
-        available: not_in_detail,
+        available: can_move_up,
     },
     ActionSpec {
         action: Action::MoveToBottom,
@@ -104,7 +104,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         hint: moves("bottom"),
         contexts: PANES,
         default_keys: &[&[Key::char('G')]],
-        available: not_in_detail,
+        available: can_move_down,
     },
     ActionSpec {
         action: Action::HalfPageDown,
@@ -113,7 +113,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         hint: moves("page"),
         contexts: PANES,
         default_keys: &[&[Key::ctrl('d')]],
-        available: not_in_detail,
+        available: can_move_down,
     },
     ActionSpec {
         action: Action::HalfPageUp,
@@ -122,7 +122,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         hint: moves("page"),
         contexts: PANES,
         default_keys: &[&[Key::ctrl('u')]],
-        available: not_in_detail,
+        available: can_move_up,
     },
     ActionSpec {
         action: Action::FocusLeft,
@@ -445,9 +445,27 @@ fn has_focused_issue(state: &State) -> bool {
     state.focused_issue().is_some()
 }
 
-// The detail does not scroll yet, so moves do nothing there.
-fn not_in_detail(state: &State) -> bool {
-    !in_detail(state)
+// In the detail, moves scroll it, so they are available while it has more
+// to show that way.
+fn can_move_down(state: &State) -> bool {
+    !in_detail(state) || {
+        let (scroll, max) = detail_scroll(state);
+        scroll < max
+    }
+}
+
+fn can_move_up(state: &State) -> bool {
+    !in_detail(state) || detail_scroll(state).0 > 0
+}
+
+/// How far the detail is scrolled and how far it can scroll.
+fn detail_scroll(state: &State) -> (usize, usize) {
+    let (rows, lines) = ui::detail_rows(state, state.viewport);
+    let max = lines.saturating_sub(rows);
+    let scroll = state
+        .focused_issue()
+        .map_or(0, |issue| state.detail.scroll(&issue.id));
+    (scroll.min(max), max)
 }
 
 fn in_detail(state: &State) -> bool {

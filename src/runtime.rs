@@ -16,7 +16,7 @@ use ratatui::backend::Backend;
 use tokio::time::{Instant, MissedTickBehavior};
 
 use crate::app::{App, Effect, Event, LoadError, SyncFailure, TeamPoll, Write};
-use crate::linear::{ClientError, LinearClient};
+use crate::linear::{ClientError, LinearClient, Urgency};
 use crate::snapshot::SnapshotCache;
 use crate::{browser, clipboard};
 
@@ -230,6 +230,10 @@ where
             in_flight.push(Box::pin(update_issue(reach.client, write)));
             Ok(())
         }
+        Effect::LoadIssueDetail { issue_id, urgency } => {
+            in_flight.push(Box::pin(load_issue_detail(reach.client, issue_id, urgency)));
+            Ok(())
+        }
         Effect::Copy(text) => outside.copy(&text),
         Effect::OpenUrl(url) => outside.open(&url),
     };
@@ -356,6 +360,29 @@ async fn update_issue<C: LinearClient>(client: Option<&C>, write: Write) -> Even
         Err(error) => tracing::warn!(issue = %write.identifier, %error, "Linear rejected an edit"),
     }
     Event::IssueUpdated { write, result }
+}
+
+async fn load_issue_detail<C: LinearClient>(
+    client: Option<&C>,
+    issue_id: String,
+    urgency: Urgency,
+) -> Event {
+    let result = match client {
+        Some(client) => client
+            .issue_detail(&issue_id, urgency)
+            .await
+            .map_err(|error| format!("{:#}", anyhow::Error::new(error))),
+        None => Err("there is no API key to load it with".to_owned()),
+    };
+    match &result {
+        Ok(detail) => tracing::info!(
+            comments = detail.comments.len(),
+            spans = detail.state_history.len(),
+            "loaded an issue's detail"
+        ),
+        Err(error) => tracing::warn!(%error, "loading an issue's detail failed"),
+    }
+    Event::IssueDetailLoaded { issue_id, result }
 }
 
 fn from_terminal(event: TerminalEvent) -> Option<Event> {

@@ -15,7 +15,8 @@ use linear_rat::auth::{
 };
 use linear_rat::linear::model::{Issue, Member, Viewer, WorkflowState, Workspace};
 use linear_rat::linear::{
-    AssignedIssues, ClientError, FakeClient, IssueUpdate, LinearClient, TeamChanges,
+    AssignedIssues, ClientError, FakeClient, IssueDetail, IssueUpdate, LinearClient, TeamChanges,
+    Urgency,
 };
 
 const SECRET: &str = "lin_api_fictional0000000000000000000000000000";
@@ -145,6 +146,10 @@ impl LinearClient for RejectingClient {
         _issue_id: &str,
         _update: &IssueUpdate,
     ) -> Result<Issue, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn issue_detail(&self, _: &str, _: Urgency) -> Result<IssueDetail, ClientError> {
         Err(ClientError::InvalidKey)
     }
 }

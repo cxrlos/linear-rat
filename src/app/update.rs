@@ -2,7 +2,7 @@ use crossterm::event::{KeyCode, KeyEventKind};
 use ratatui::layout::Size;
 
 use super::edit::{self, Editable};
-use super::{Action, Copyable, Effect, Event, Load, Modal, Screen, State, sync};
+use super::{Action, Copyable, Effect, Event, Load, Modal, Pane, Screen, State, detail, sync};
 use crate::keys::{self, Key, Resolution};
 use crate::ui;
 
@@ -23,7 +23,15 @@ impl Update {
     }
 }
 
+/// Applies `event`, then asks for the comments and history of the issue
+/// whose detail is on screen if they have not been asked for yet.
 pub fn update(state: &mut State, event: Event) -> Update {
+    let mut update = apply(state, event);
+    update.effects.extend(detail::request(state));
+    update
+}
+
+fn apply(state: &mut State, event: Event) -> Update {
     match event {
         Event::Start if state.load == Load::Loading || state.sync_status.is_refreshing() => {
             Update {
@@ -55,6 +63,10 @@ pub fn update(state: &mut State, event: Event) -> Update {
             update.redraw |= cleared_notice;
             update
         }
+        Event::IssueDetailLoaded { issue_id, result } => {
+            detail::loaded(state, issue_id, result);
+            Update::redraw()
+        }
         Event::EffectFailed(error) => {
             state.notice = Some(error);
             Update::redraw()
@@ -62,7 +74,7 @@ pub fn update(state: &mut State, event: Event) -> Update {
         Event::WorkflowStatesLoaded { team_id, result } => {
             let failure = match result {
                 Ok(states) => {
-                    state.store.set_workflow_states(&team_id, states);
+                    state.store.set_workflow_states(&team_id, &states);
                     None
                 }
                 Err(error) => Some(error),
@@ -169,6 +181,16 @@ pub fn perform(state: &mut State, action: Action) -> Update {
         | Action::MoveToBottom
         | Action::HalfPageDown
         | Action::HalfPageUp
+            if detail::has_focus(state) =>
+        {
+            detail::scroll(state, action)
+        }
+        Action::MoveDown
+        | Action::MoveUp
+        | Action::MoveToTop
+        | Action::MoveToBottom
+        | Action::HalfPageDown
+        | Action::HalfPageUp
         | Action::FocusLeft
         | Action::FocusRight
         | Action::Open
@@ -176,8 +198,13 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             if state.screen == Screen::MyIssues =>
         {
             let rows = ui::list_rows(state, state.viewport);
+            let pane = state.my_issues.pane();
+            let redraw = state.my_issues.perform(action, rows);
+            if pane == Pane::List && state.my_issues.pane() == Pane::Detail {
+                detail::reopen(state);
+            }
             Update {
-                redraw: state.my_issues.perform(action, rows),
+                redraw,
                 effects: Vec::new(),
             }
         }

@@ -6,14 +6,12 @@ use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style, Stylize};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Paragraph, Wrap};
+use ratatui::widgets::{Block, BorderType, Paragraph};
 
 use super::theme::Theme;
-use super::{icons, style};
+use super::{detail, icons, style};
 use crate::app::{Group, MyIssues, Pane, State};
 use crate::linear::model::{Issue, Priority, StateType, WorkflowState};
-
-const FIELD_WIDTH: usize = 10;
 
 /// From `ui.wide-layout-columns` columns on, the detail shows beside the
 /// list; below it the focused pane fills the body.
@@ -26,8 +24,7 @@ pub fn render(state: &State, frame: &mut Frame, area: Rect) {
     };
     let pane = view.my_issues.pane();
     if area.width >= state.ui.wide_layout_columns {
-        let [list_area, detail_area] =
-            Layout::horizontal([Constraint::Fill(3), Constraint::Fill(2)]).areas(area);
+        let [list_area, detail_area] = split(area);
         let focus = |of| {
             if pane == of {
                 Focus::Focused
@@ -36,12 +33,27 @@ pub fn render(state: &State, frame: &mut Frame, area: Rect) {
             }
         };
         render_list(&view, frame, list_area, focus(Pane::List));
-        render_detail(&view, frame, detail_area, focus(Pane::Detail));
+        render_detail(state, frame, detail_area, focus(Pane::Detail));
     } else if pane == Pane::Detail {
-        render_detail(&view, frame, area, Focus::Alone);
+        render_detail(state, frame, area, Focus::Alone);
     } else {
         render_list(&view, frame, area, Focus::Alone);
     }
+}
+
+/// Where the detail pane is in a body of `area`, or `None` when only the
+/// list shows.
+pub(super) fn detail_area(state: &State, area: Rect) -> Option<Rect> {
+    if area.width >= state.ui.wide_layout_columns {
+        Some(split(area)[1])
+    } else {
+        (state.my_issues.pane() == Pane::Detail).then_some(area)
+    }
+}
+
+/// The list and the detail side by side.
+fn split(area: Rect) -> [Rect; 2] {
+    Layout::horizontal([Constraint::Fill(3), Constraint::Fill(2)]).areas(area)
 }
 
 /// What every part of the screen draws from.
@@ -182,84 +194,20 @@ fn render_list(view: &View, frame: &mut Frame, area: Rect, focus: Focus) {
     }
 }
 
-fn render_detail(view: &View, frame: &mut Frame, area: Rect, focus: Focus) {
-    let View {
-        my_issues, theme, ..
-    } = view;
-    let Some(issue) = my_issues.focused_issue() else {
+fn render_detail(state: &State, frame: &mut Frame, area: Rect, focus: Focus) {
+    let theme = &state.theme;
+    let Some(issue) = detail::issue(state) else {
         frame.render_widget(pane_block("Detail", focus, theme), area);
         return;
     };
     let block = pane_block(issue.identifier.clone(), focus, theme);
-
-    let cycle = match &issue.cycle_id {
-        Some(id) => {
-            let name = my_issues.cycle_name(id).unwrap_or(id).to_owned();
-            if my_issues.is_in_active_cycle(issue) {
-                format!("{name} (active)")
-            } else {
-                name
-            }
-        }
-        None => "None".to_owned(),
-    };
-    let labels: Vec<&str> = issue
-        .label_ids
-        .iter()
-        .map(|id| my_issues.label_name(id).unwrap_or(id))
-        .collect();
-    let assignee = issue
-        .assignee_id
-        .as_deref()
-        .map(|id| my_issues.member_name(id).unwrap_or(id))
-        .unwrap_or("Unassigned");
-
-    let mut lines = vec![Line::from(issue.title.as_str()).bold()];
-    if let Some(error) = view.row_errors.get(&issue.id) {
-        lines.push(Line::styled(
-            format!("✘ Not saved: {error}"),
-            style::error(theme),
-        ));
-    }
-    lines.extend([
-        Line::default(),
-        field(theme, "State", state_line(view, &issue.state)),
-        field(theme, "Priority", priority_line(view, issue.priority)),
-    ]);
-    if my_issues.uses_estimates(issue) {
-        let estimate = issue
-            .estimate
-            .map_or("None".to_owned(), |points| points.to_string());
-        lines.push(field(theme, "Estimate", Line::from(estimate)));
-    }
-    lines.extend([
-        field(theme, "Cycle", Line::from(cycle)),
-        field(
-            theme,
-            "Labels",
-            Line::from(if labels.is_empty() {
-                "None".to_owned()
-            } else {
-                labels.join(", ")
-            }),
-        ),
-        field(theme, "Assignee", Line::from(assignee)),
-        Line::default(),
-    ]);
-    match &issue.description {
-        Some(description) => lines.extend(description.lines().map(Line::from)),
-        None => lines.push(Line::from("No description.").fg(theme.muted)),
-    }
-    let detail = Paragraph::new(lines)
-        .wrap(Wrap { trim: false })
-        .block(block);
-    frame.render_widget(detail, area);
-}
-
-fn field<'a>(theme: &Theme, name: &'a str, value: Line<'a>) -> Line<'a> {
-    let mut spans = vec![Span::raw(format!("{name:FIELD_WIDTH$}")).fg(theme.muted)];
-    spans.extend(value.spans);
-    Line::from(spans)
+    let inner = block.inner(area);
+    let lines = detail::lines(state, issue, inner.width);
+    // The kept scroll may be past the end after the detail got shorter.
+    let max = lines.len().saturating_sub(usize::from(inner.height));
+    let scroll = state.detail.scroll(&issue.id).min(max);
+    let shown: Vec<Line> = lines.into_iter().skip(scroll).collect();
+    frame.render_widget(Paragraph::new(shown).block(block), area);
 }
 
 fn state_glyph(view: &View, state_type: StateType) -> Span<'static> {

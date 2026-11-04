@@ -3,6 +3,7 @@
 
 mod assigned;
 mod changes;
+mod detail;
 mod edit;
 
 use std::collections::HashSet;
@@ -19,7 +20,8 @@ use serde_json::{Value, json};
 use super::governor::{Governor, SystemTimer, Timer, Urgency};
 use super::model::{Issue, Member, Viewer, WorkflowState, Workspace};
 use super::{
-    AssignedIssues, ClientError, GraphQlError, IssueUpdate, LinearClient, Response, TeamChanges,
+    AssignedIssues, ClientError, GraphQlError, IssueDetail, IssueUpdate, LinearClient, Response,
+    TeamChanges,
 };
 use crate::auth::ApiKey;
 
@@ -307,6 +309,14 @@ impl LinearClient for HttpClient {
         update: &IssueUpdate,
     ) -> Result<Issue, ClientError> {
         edit::update_issue(self, issue_id, update).await
+    }
+
+    async fn issue_detail(
+        &self,
+        issue_id: &str,
+        urgency: Urgency,
+    ) -> Result<IssueDetail, ClientError> {
+        detail::load(self, issue_id, urgency).await
     }
 }
 

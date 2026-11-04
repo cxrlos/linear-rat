@@ -53,7 +53,8 @@ pub enum Urgency {
     /// The viewer is waiting: the first page of a load, and writes. Never
     /// slowed for budget, and may spend the reserve.
     Urgent,
-    /// Every later page and follow-up lookup. Slowed when the budget runs low.
+    /// Every later page and follow-up lookup, and a detail that only follows
+    /// the list's focus. Slowed when the budget runs low.
     Background,
 }
 

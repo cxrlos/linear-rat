@@ -3,7 +3,7 @@ use jiff::Timestamp;
 
 use super::{LoadError, SyncFailure, Write};
 use crate::linear::model::{Issue, Member, WorkflowState};
-use crate::linear::{AssignedIssues, TeamChanges};
+use crate::linear::{AssignedIssues, IssueDetail, TeamChanges};
 
 /// Something that happened, fed to [`update`](super::update).
 #[derive(Debug, Clone, PartialEq)]
@@ -17,6 +17,13 @@ pub enum Event {
     },
     /// The result of [`Effect::LoadMyIssues`](super::Effect::LoadMyIssues).
     MyIssuesLoaded(Result<AssignedIssues, LoadError>),
+    /// The result of
+    /// [`Effect::LoadIssueDetail`](super::Effect::LoadIssueDetail): the
+    /// detail, or why it did not load, with its context.
+    IssueDetailLoaded {
+        issue_id: String,
+        result: Result<IssueDetail, String>,
+    },
     /// The runtime could not carry out an effect. The message, with its
     /// context, becomes the notice.
     EffectFailed(String),

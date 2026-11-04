@@ -27,6 +27,7 @@ crossterm = { version = "0.29.0", features = ["event-stream"] }
 etcetera = "0.11.0"
 futures-util = { version = "0.3.34", default-features = false, features = ["alloc"] }
 jiff = { version = "0.2.38", features = ["serde"] }
+pulldown-cmark = { version = "0.13.4", default-features = false }
 keyring-core = "1.0.1"
 ratatui = "0.30.2"
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls"] }
@@ -40,6 +41,7 @@ toml_parser = { version = "1.1.5", default-features = false, features = ["std"] 
 tracing = "0.1.44"
 tracing-appender = "0.2.5"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+unicode-width = "0.2.2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 apple-native-keyring-store = { version = "1.0.2", features = ["keychain"] }

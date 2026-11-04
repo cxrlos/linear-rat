@@ -9,9 +9,10 @@ use serde::{Deserialize, Serialize};
 
 use super::edit::{Edit, Write};
 use crate::linear::model::{
-    Comment, Cycle, Issue, Label, Member, Team, Viewer, WorkflowState, Workspace,
+    Comment, Cycle, Issue, Label, Member, Project, StateSpan, Team, Viewer, WorkflowState,
+    Workspace,
 };
-use crate::linear::{AssignedIssues, TeamChanges};
+use crate::linear::{AssignedIssues, IssueDetail, TeamChanges};
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Store {
@@ -27,10 +28,16 @@ pub struct Store {
     members: BTreeMap<String, Member>,
     /// Comments by issue id, oldest first.
     comments: BTreeMap<String, Vec<Comment>>,
-    /// Every workflow state of a team, by team id, once loaded.
-    workflow_states: BTreeMap<String, Vec<WorkflowState>>,
+    projects: BTreeMap<String, Project>,
+    workflow_states: BTreeMap<String, WorkflowState>,
+    /// The ids of every workflow state of a team, by team id, once loaded.
+    team_states: BTreeMap<String, Vec<String>>,
     /// The ids of a team's members, by team id, once loaded.
     team_members: BTreeMap<String, Vec<String>>,
+    /// Workflow state history by issue id, oldest first, as the detail
+    /// loaded it. Kept apart from the issues so an upsert from a list,
+    /// which carries no history, does not drop it.
+    state_histories: BTreeMap<String, Vec<StateSpan>>,
     /// When the newest data was loaded, which decides the active cycle.
     as_of: Option<Timestamp>,
 }
@@ -128,6 +135,7 @@ impl Store {
 
     fn remove_issue(&mut self, id: &str) -> bool {
         self.comments.remove(id);
+        self.state_histories.remove(id);
         self.issues.remove(id).is_some()
     }
 
@@ -145,9 +153,12 @@ impl Store {
         self.comments.insert(issue_id.to_owned(), comments);
     }
 
-    /// Replaces the workflow states of team `team_id`.
-    pub fn set_workflow_states(&mut self, team_id: &str, states: Vec<WorkflowState>) {
-        self.workflow_states.insert(team_id.to_owned(), states);
+    /// Replaces the workflow states of team `team_id`, and stores each
+    /// state by id.
+    pub fn set_workflow_states(&mut self, team_id: &str, states: &[WorkflowState]) {
+        by_id(&mut self.workflow_states, states, |state| &state.id);
+        let ids = states.iter().map(|state| state.id.clone()).collect();
+        self.team_states.insert(team_id.to_owned(), ids);
     }
 
     /// Replaces the members of team `team_id`, and stores each member by id.
@@ -177,6 +188,23 @@ impl Store {
         }
         write.previous.apply_to(issue);
         true
+    }
+
+    /// Takes in the detail loaded for `issue_id`: its comments and state
+    /// history replace what is stored, and the rest is stored by id.
+    pub fn merge_detail(&mut self, issue_id: &str, detail: &IssueDetail) {
+        self.set_comments(issue_id, detail.comments.clone());
+        self.state_histories
+            .insert(issue_id.to_owned(), detail.state_history.clone());
+        by_id(&mut self.members, &detail.members, |member| &member.id);
+        by_id(
+            &mut self.workflow_states,
+            &detail.workflow_states,
+            |state| &state.id,
+        );
+        if let Some(project) = &detail.project {
+            self.projects.insert(project.id.clone(), project.clone());
+        }
     }
 
     pub fn viewer(&self) -> Option<&Viewer> {
@@ -213,14 +241,48 @@ impl Store {
     }
 
     /// The workflow states of team `team_id`, if they have been loaded.
-    pub fn workflow_states(&self, team_id: &str) -> Option<&[WorkflowState]> {
-        self.workflow_states.get(team_id).map(Vec::as_slice)
+    pub fn workflow_states(&self, team_id: &str) -> Option<Vec<&WorkflowState>> {
+        let ids = self.team_states.get(team_id)?;
+        Some(
+            ids.iter()
+                .filter_map(|id| self.workflow_states.get(id))
+                .collect(),
+        )
     }
 
     /// The members of team `team_id`, if they have been loaded.
     pub fn team_members(&self, team_id: &str) -> Option<Vec<&Member>> {
         let ids = self.team_members.get(team_id)?;
         Some(ids.iter().filter_map(|id| self.members.get(id)).collect())
+    }
+
+    /// The workflow states `issue_id` has been in, if the detail loaded them.
+    pub fn state_history(&self, issue_id: &str) -> Option<&[StateSpan]> {
+        self.state_histories.get(issue_id).map(Vec::as_slice)
+    }
+
+    pub fn team(&self, id: &str) -> Option<&Team> {
+        self.teams.get(id)
+    }
+
+    pub fn cycle(&self, id: &str) -> Option<&Cycle> {
+        self.cycles.get(id)
+    }
+
+    pub fn label(&self, id: &str) -> Option<&Label> {
+        self.labels.get(id)
+    }
+
+    pub fn member(&self, id: &str) -> Option<&Member> {
+        self.members.get(id)
+    }
+
+    pub fn project(&self, id: &str) -> Option<&Project> {
+        self.projects.get(id)
+    }
+
+    pub fn workflow_state(&self, id: &str) -> Option<&WorkflowState> {
+        self.workflow_states.get(id)
     }
 
     pub fn as_of(&self) -> Option<Timestamp> {

@@ -10,7 +10,8 @@ use linear_rat::app::{App, State};
 use linear_rat::auth::KeySource;
 use linear_rat::linear::model::{Issue, Member, Viewer, WorkflowState, Workspace};
 use linear_rat::linear::{
-    AssignedIssues, ClientError, FakeClient, IssueUpdate, LinearClient, TeamChanges, demo,
+    AssignedIssues, ClientError, FakeClient, IssueDetail, IssueUpdate, LinearClient, TeamChanges,
+    Urgency, demo,
 };
 use linear_rat::runtime;
 use linear_rat::snapshot::SnapshotCache;
@@ -108,6 +109,10 @@ impl LinearClient for RejectingClient {
     ) -> Result<Issue, ClientError> {
         Err(ClientError::InvalidKey)
     }
+
+    async fn issue_detail(&self, _: &str, _: Urgency) -> Result<IssueDetail, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
 }
 
 #[tokio::test]
@@ -195,6 +200,9 @@ async fn q_quits_while_the_load_is_still_in_flight() {
         async fn update_issue(&self, _: &str, _: &IssueUpdate) -> Result<Issue, ClientError> {
             future::pending().await
         }
+        async fn issue_detail(&self, _: &str, _: Urgency) -> Result<IssueDetail, ClientError> {
+            future::pending().await
+        }
     }
     let mut app = App::new(TestBackend::new(80, 24), State::loading(None)).unwrap();
 
@@ -246,6 +254,13 @@ impl LinearClient for CountingClient {
         update: &IssueUpdate,
     ) -> Result<Issue, ClientError> {
         FakeClient.update_issue(issue_id, update).await
+    }
+    async fn issue_detail(
+        &self,
+        issue_id: &str,
+        urgency: Urgency,
+    ) -> Result<IssueDetail, ClientError> {
+        FakeClient.issue_detail(issue_id, urgency).await
     }
 }
 
@@ -327,4 +342,28 @@ async fn an_edit_linear_rejects_is_rolled_back_with_the_reason() {
         shown.contains("Could not change the priority of DES-34: Linear rejected the API key"),
         "{shown}"
     );
+}
+
+#[tokio::test]
+async fn opening_the_detail_loads_its_comments_and_history_through_the_client() {
+    let mut app = App::new(TestBackend::new(80, 60), State::demo()).unwrap();
+
+    let running = runtime::run(
+        &mut app,
+        Some(&FakeClient),
+        None,
+        input(vec![Ok(TerminalEvent::Key(KeyEvent::new(
+            KeyCode::Enter,
+            KeyModifiers::NONE,
+        )))]),
+        future::pending(),
+    );
+    let stopped = tokio::time::timeout(Duration::from_millis(200), running).await;
+
+    assert!(stopped.is_err(), "the runtime stopped: {stopped:?}");
+    let buffer = app.backend().buffer();
+    let shown: String = buffer.content().iter().map(|cell| cell.symbol()).collect();
+    assert!(shown.contains("Comments ("), "{shown}");
+    assert!(shown.contains("so far"), "{shown}");
+    assert!(!shown.contains("Loading"), "{shown}");
 }
