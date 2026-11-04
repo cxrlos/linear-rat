@@ -3,8 +3,8 @@ use crossterm::event::KeyCode;
 use super::{Context, Key};
 use crate::analytics::WeekRange;
 use crate::app::{
-    self, Action, Copyable, EditPicker, Editable, FilterField, Modal, Pane, Phase, Screen, State,
-    can_load_more,
+    self, Action, Copyable, EditPicker, Editable, FilterField, LinkSet, Modal, Pane, Phase, Screen,
+    State, can_load_more,
 };
 use crate::ui;
 
@@ -196,12 +196,21 @@ pub static ACTIONS: &[ActionSpec] = &[
         available: has_focused_issue,
     },
     ActionSpec {
-        action: Action::OpenInBrowser,
+        action: Action::OpenLinks(LinkSet::Issue),
         id: "open-in-browser",
-        description: "Open in the browser",
+        description: "Open the issue or a pull request",
         hint: does("browser"),
         contexts: PANES,
         default_keys: &[&[Key::char('o')]],
+        available: has_focused_issue,
+    },
+    ActionSpec {
+        action: Action::OpenLinks(LinkSet::Other),
+        id: "open-link",
+        description: "Open another link of the issue",
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('O')]],
         available: has_focused_issue,
     },
     ActionSpec {
@@ -552,6 +561,10 @@ fn can_scroll_down(state: &State) -> bool {
             .list
             .selected_position()
             .is_some_and(|position| position + 1 < picker.list.visible().len()),
+        Some(Modal::Links(links)) => links
+            .list
+            .selected_position()
+            .is_some_and(|position| position + 1 < links.list.visible().len()),
         Some(Modal::Issue { id }) => {
             let (scroll, max) = overlay_issue_scroll(state, id);
             scroll < max
@@ -580,6 +593,10 @@ fn can_scroll_up(state: &State) -> bool {
             .list
             .selected_position()
             .is_some_and(|position| position > 0),
+        Some(Modal::Links(links)) => links
+            .list
+            .selected_position()
+            .is_some_and(|position| position > 0),
         Some(Modal::Issue { id }) => overlay_issue_scroll(state, id).0 > 0,
         Some(Modal::Cheatsheet { scroll }) => *scroll > 0,
         Some(Modal::Palette(palette)) => palette.selected > 0,
@@ -595,6 +612,7 @@ fn can_accept(state: &State) -> bool {
     match state.modals.top() {
         Some(Modal::Choice(choice)) => choice.cursor < choice.entries.len(),
         Some(Modal::Picker(picker)) => picker.list.is_multi() || picker.list.selected().is_some(),
+        Some(Modal::Links(links)) => links.list.selected().is_some(),
         Some(Modal::Palette(palette)) => {
             palette.selected < app::palette_matches(state, &palette.query).len()
         }
@@ -617,7 +635,13 @@ fn picker(state: &State) -> Option<&EditPicker> {
 /// Whether a picker is open with at least `count` entries left by its
 /// filter.
 fn picker_has(count: usize, state: &State) -> bool {
-    picker(state).is_some_and(|picker| picker.list.visible().len() >= count)
+    if let Some(picker) = picker(state) {
+        return picker.list.visible().len() >= count;
+    }
+    match state.modals.top() {
+        Some(Modal::Links(links)) => links.list.visible().len() >= count,
+        _ => false,
+    }
 }
 
 fn has_team(state: &State) -> bool {

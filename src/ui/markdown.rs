@@ -11,17 +11,117 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 use super::theme::Theme;
 use crate::linear::model::StateType;
 
+// Never wikilinks: pulldown-cmark before 0.13.6 parses them in exponential
+// time (RUSTSEC-2026-0414, RUSTSEC-2026-0433).
+const OPTIONS: Options = Options::ENABLE_TASKLISTS.union(Options::ENABLE_STRIKETHROUGH);
+
 /// `markdown` as lines no wider than `width` columns.
 pub fn render(markdown: &str, width: u16, theme: &Theme) -> Vec<Line<'static>> {
-    // Never wikilinks: pulldown-cmark before 0.13.6 parses them in
-    // exponential time (RUSTSEC-2026-0414, RUSTSEC-2026-0433).
-    let options = Options::ENABLE_TASKLISTS | Options::ENABLE_STRIKETHROUGH;
     let mut renderer = Renderer::new(usize::from(width), theme);
-    for event in Parser::new_ext(markdown, options) {
+    for event in Parser::new_ext(markdown, OPTIONS) {
         renderer.event(event);
     }
     renderer.flush();
     renderer.lines
+}
+
+/// A web link found in Markdown: where it goes, and the text it shows when
+/// that is something other than the URL.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FoundLink {
+    pub url: String,
+    pub text: Option<String>,
+}
+
+/// Every `http` and `https` link in `markdown`, in order and with repeats:
+/// Markdown links, autolinks and bare URLs in the text. Code, images and
+/// other schemes such as `mailto:` are left out.
+pub fn links(markdown: &str) -> Vec<FoundLink> {
+    let mut found = Vec::new();
+    let mut link: Option<(String, String)> = None;
+    // Text is scanned for bare URLs in runs, since the parser can split one
+    // URL over several text events.
+    let mut run = String::new();
+    let mut skipping = 0usize;
+    for event in Parser::new_ext(markdown, OPTIONS) {
+        match event {
+            Event::Text(text) | Event::Code(text) if link.is_some() => {
+                if let Some((_, shown)) = &mut link {
+                    shown.push_str(&text);
+                }
+                continue;
+            }
+            Event::Text(text) if skipping == 0 => {
+                run.push_str(&text);
+                continue;
+            }
+            _ => {}
+        }
+        found.extend(bare_urls(&std::mem::take(&mut run)));
+        match event {
+            Event::Start(Tag::Link { dest_url, .. }) => {
+                link = Some((dest_url.into_string(), String::new()));
+            }
+            Event::End(TagEnd::Link) => {
+                if let Some((url, shown)) = link.take()
+                    && is_web(&url)
+                {
+                    let shown = shown.trim();
+                    let text = (!shown.is_empty() && shown != url).then(|| shown.to_owned());
+                    found.push(FoundLink { url, text });
+                }
+            }
+            Event::Start(Tag::Image { .. } | Tag::CodeBlock(_)) => skipping += 1,
+            Event::End(TagEnd::Image | TagEnd::CodeBlock) => {
+                skipping = skipping.saturating_sub(1);
+            }
+            _ => {}
+        }
+    }
+    found.extend(bare_urls(&run));
+    found
+}
+
+fn is_web(url: &str) -> bool {
+    url.starts_with("https://") || url.starts_with("http://")
+}
+
+/// The URLs in plain `text`, each ending at whitespace and without the
+/// punctuation that closes a sentence or an unmatched bracket around it.
+fn bare_urls(text: &str) -> Vec<FoundLink> {
+    let mut found = Vec::new();
+    let mut rest = text;
+    while let Some(start) = rest.find("http") {
+        let tail = &rest[start..];
+        let end = tail
+            .find(|c: char| c.is_whitespace() || matches!(c, '<' | '>' | '"' | '`'))
+            .unwrap_or(tail.len());
+        let url = trim_url(&tail[..end]);
+        if is_web(url) && !url.ends_with("//") {
+            found.push(FoundLink {
+                url: url.to_owned(),
+                text: None,
+            });
+        }
+        rest = &tail[end.max(4)..];
+    }
+    found
+}
+
+fn trim_url(mut url: &str) -> &str {
+    loop {
+        let unmatched = |open: char, close: char| {
+            url.ends_with(close) && url.matches(open).count() < url.matches(close).count()
+        };
+        if url.ends_with(['.', ',', ';', ':', '!', '?', '\'', '*', '_'])
+            || unmatched('(', ')')
+            || unmatched('[', ']')
+        {
+            url = &url[..url.len() - 1];
+        } else {
+            return url;
+        }
+    }
 }
 
 /// `pieces` word-wrapped to `width` columns. The first line starts with
@@ -648,6 +748,50 @@ mod tests {
         assert_eq!(
             lines,
             ["runbook (https://wiki.example/runbook) and https://example.com"]
+        );
+    }
+
+    fn found(markdown: &str) -> Vec<(String, Option<String>)> {
+        links(markdown)
+            .into_iter()
+            .map(|link| (link.url, link.text))
+            .collect()
+    }
+
+    #[test]
+    fn links_are_markdown_links_autolinks_and_bare_urls_in_order() {
+        let links = found(
+            "See [the runbook](https://wiki.example/runbook), <https://example.com> and \
+             https://status.example/page_one.\n\nAlso (https://paren.example/a) and \
+             [https://same.example](https://same.example).",
+        );
+
+        assert_eq!(
+            links,
+            [
+                (
+                    "https://wiki.example/runbook".to_owned(),
+                    Some("the runbook".to_owned())
+                ),
+                ("https://example.com".to_owned(), None),
+                ("https://status.example/page_one".to_owned(), None),
+                ("https://paren.example/a".to_owned(), None),
+                ("https://same.example".to_owned(), None),
+            ]
+        );
+    }
+
+    #[test]
+    fn links_skip_code_images_and_what_is_not_the_web() {
+        let links = found(
+            "`https://code.example` ![photo](https://uploads.example/a.png) \
+             [mail](mailto:a@example.com)\n\n```\nhttps://block.example\n```\n\n\
+             https://wiki.example/Cheese_(aged)",
+        );
+
+        assert_eq!(
+            links,
+            [("https://wiki.example/Cheese_(aged)".to_owned(), None)]
         );
     }
 

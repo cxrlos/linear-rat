@@ -176,3 +176,31 @@ pub struct Comment {
     pub body: String,
     pub created_at: Timestamp,
 }
+
+/// A link Linear keeps on an issue, such as a GitHub pull request, a Slack
+/// thread or a Figma file, as Linear's `Attachment`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Attachment {
+    pub id: String,
+    pub issue_id: String,
+    /// The linked resource. Unique among one issue's attachments.
+    pub url: String,
+    pub title: String,
+    pub subtitle: Option<String>,
+    /// The integration that made it, as Linear's `sourceType`: `github`,
+    /// `slack`, `figma` and so on, or `None` when Linear does not say.
+    pub source_type: Option<String>,
+    /// A pull request's state, such as `open` or `merged`, when the
+    /// attachment's metadata carries one as `status`.
+    pub status: Option<String>,
+}
+
+impl Attachment {
+    /// Whether it links a GitHub pull request.
+    pub fn is_pull_request(&self) -> bool {
+        self.source_type
+            .as_deref()
+            .is_some_and(|source| source.eq_ignore_ascii_case("github"))
+            && self.url.contains("/pull/")
+    }
+}

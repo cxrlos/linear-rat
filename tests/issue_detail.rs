@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use jiff::Timestamp;
 use linear_rat::auth::ApiKey;
-use linear_rat::linear::model::{Project, StateType};
+use linear_rat::linear::model::{Attachment, Project, StateType};
 use linear_rat::linear::{ClientConfig, ClientError, HttpClient, LinearClient, Timer, Urgency};
 use serde_json::{Value, json};
 use wiremock::matchers::{body_partial_json, body_string_contains, method};
@@ -96,11 +96,16 @@ fn state(id: &str, name: &str, kind: &str) -> Value {
 }
 
 fn history_page(nodes: Vec<Value>) -> Value {
+    history_page_with(nodes, Vec::new())
+}
+
+fn history_page_with(nodes: Vec<Value>, attachments: Vec<Value>) -> Value {
     json!({
         "data": {
             "issue": {
                 "id": "issue-1",
                 "project": { "id": "project-rind", "name": "Rind photos" },
+                "attachments": { "nodes": attachments },
                 "stateHistory": {
                     "nodes": nodes,
                     "pageInfo": { "hasNextPage": false, "endCursor": null }
@@ -258,6 +263,71 @@ async fn bounds_both_connections_with_first() {
     assert_eq!(queries.len(), 2);
     assert!(queries.iter().any(|q| q.contains("comments(first: 100")));
     assert!(queries.iter().any(|q| q.contains("stateHistory(first: 50")));
+    assert!(queries.iter().any(|q| q.contains("attachments(first: 50")));
+}
+
+#[tokio::test]
+async fn loads_the_attachments_with_a_pull_requests_status() {
+    let server = MockServer::start().await;
+    mount(
+        &server,
+        "IssueComments",
+        None,
+        comments_page(Vec::new(), None),
+    )
+    .await;
+    mount(
+        &server,
+        "IssueStateHistory",
+        None,
+        history_page_with(
+            Vec::new(),
+            vec![
+                json!({
+                    "id": "attachment-pr", "url": "https://github.com/acme/rind/pull/7",
+                    "title": "Rotate rind photos", "subtitle": "#7", "sourceType": "github",
+                    "metadata": { "status": "merged", "number": 7 }
+                }),
+                json!({
+                    "id": "attachment-slack", "url": "https://acme.slack.com/archives/C1/p1",
+                    "title": "Thread in #cellar", "subtitle": null, "sourceType": null,
+                    "metadata": {}
+                }),
+            ],
+        ),
+    )
+    .await;
+
+    let detail = client_for(&server)
+        .issue_detail("issue-1", Urgency::Urgent)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        detail.attachments,
+        [
+            Attachment {
+                id: "attachment-pr".to_owned(),
+                issue_id: "issue-1".to_owned(),
+                url: "https://github.com/acme/rind/pull/7".to_owned(),
+                title: "Rotate rind photos".to_owned(),
+                subtitle: Some("#7".to_owned()),
+                source_type: Some("github".to_owned()),
+                status: Some("merged".to_owned()),
+            },
+            Attachment {
+                id: "attachment-slack".to_owned(),
+                issue_id: "issue-1".to_owned(),
+                url: "https://acme.slack.com/archives/C1/p1".to_owned(),
+                title: "Thread in #cellar".to_owned(),
+                subtitle: None,
+                source_type: None,
+                status: None,
+            },
+        ]
+    );
+    assert!(detail.attachments[0].is_pull_request());
+    assert!(!detail.attachments[1].is_pull_request());
 }
 
 #[tokio::test]

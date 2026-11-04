@@ -7,7 +7,7 @@ mod detail;
 mod error;
 mod hints;
 pub mod icons;
-mod markdown;
+pub(crate) mod markdown;
 mod my_issues;
 mod palette;
 mod picker;
@@ -69,6 +69,7 @@ pub fn render(state: &State, frame: &mut Frame) {
             Modal::Cheatsheet { scroll } => cheatsheet::render(state, *scroll, frame, body_area),
             Modal::WhichKey { prefix } => which_key::render(state, prefix, frame, body_area),
             Modal::Picker(edit) => picker::render_edit(state, edit, frame, body_area),
+            Modal::Links(links) => picker::render_links(state, links, frame, body_area),
             Modal::Palette(palette) => palette::render(state, palette, frame, body_area),
             Modal::Search(search) => search::render(state, search, frame, body_area),
             Modal::Issue { id } => {

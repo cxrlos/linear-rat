@@ -1,13 +1,24 @@
-# budget: 210
+# budget: 270
 # One page of an issue's workflow state history, each span with its state,
-# and the issue's project. Pages hold 50 spans. The client follows
-# `endCursor` until `hasNextPage` is false and sorts them oldest first.
+# and the issue's project and first 50 attachments. Pages hold 50 spans. The
+# client follows `endCursor` until `hasNextPage` is false, sorts them oldest
+# first and takes the attachments from the first page.
 query IssueStateHistory($id: String!, $after: String) {
   issue(id: $id) {
     id
     project {
       id
       name
+    }
+    attachments(first: 50) {
+      nodes {
+        id
+        url
+        title
+        subtitle
+        sourceType
+        metadata
+      }
     }
     stateHistory(first: 50, after: $after) {
       nodes {

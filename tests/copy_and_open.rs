@@ -140,10 +140,11 @@ fn ym_escapes_brackets_and_backslashes_in_the_title() {
 }
 
 #[test]
-fn o_asks_to_open_the_focused_issue_in_the_browser() {
+fn o_then_1_asks_to_open_the_focused_issue_in_the_browser() {
     let mut app = app();
+    press(&mut app, "o");
 
-    let effects = press(&mut app, "o");
+    let effects = press(&mut app, "1");
 
     assert_eq!(
         effects,
@@ -163,7 +164,7 @@ fn copy_and_open_work_from_the_detail_too() {
     )))
     .unwrap();
 
-    let effects = press(&mut app, "yio");
+    let effects = press(&mut app, "yio1");
 
     assert_eq!(
         effects,

@@ -1,4 +1,4 @@
-use super::{Editable, FilterField, Screen};
+use super::{Editable, FilterField, LinkSet, Screen};
 
 /// Something the viewer can ask lrat to do. Keys, the palette and the
 /// cheatsheet all name actions; [`perform`](super::perform) carries them out.
@@ -33,8 +33,9 @@ pub enum Action {
     ScrollUp,
     /// Copy something about the focused issue to the clipboard.
     Copy(Copyable),
-    /// Open the focused issue's page in the browser.
-    OpenInBrowser,
+    /// Open the picker of these links of the focused issue, to open one in
+    /// the browser.
+    OpenLinks(LinkSet),
     /// Poll Linear for changes now.
     Refresh,
     /// Open the picker that changes a field of the focused issue.

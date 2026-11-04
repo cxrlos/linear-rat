@@ -4,7 +4,7 @@ use ratatui::layout::Size;
 use super::edit::{self, Editable};
 use super::{
     Action, Copyable, Effect, Event, Load, Modal, Palette, Pane, Screen, Search, State,
-    analytics_screen, detail, palette, search, sync, team_issues,
+    analytics_screen, detail, links, palette, search, sync, team_issues,
 };
 use crate::keys::{self, Key, Resolution};
 use crate::ui;
@@ -104,7 +104,8 @@ fn apply(state: &mut State, event: Event) -> Update {
             update
         }
         Event::IssueDetailLoaded { issue_id, result } => {
-            detail::loaded(state, issue_id, result);
+            detail::loaded(state, issue_id.clone(), result);
+            links::loaded(state, &issue_id);
             Update::redraw()
         }
         Event::AnalyticsLoaded { window, result } => {
@@ -243,6 +244,7 @@ pub fn perform(state: &mut State, action: Action) -> Update {
         }
         Action::Accept => match state.modals.top() {
             Some(Modal::Picker(_)) => edit::choose(state, None),
+            Some(Modal::Links(_)) => links::choose(state, None),
             Some(Modal::Palette(_)) => palette::accept(state),
             Some(Modal::Search(_)) => search::accept(state),
             Some(Modal::Choice(_)) => Update {
@@ -315,6 +317,7 @@ pub fn perform(state: &mut State, action: Action) -> Update {
         }
         Action::ScrollDown | Action::ScrollUp => match state.modals.top() {
             Some(Modal::Picker(_)) => edit::select(state, step(action)),
+            Some(Modal::Links(_)) => links::select(state, step(action)),
             Some(Modal::Issue { id }) => {
                 let id = id.clone();
                 detail::scroll_overlay(state, &id, action)
@@ -346,19 +349,12 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             }
         }
         Action::Copy(copyable) => copy(state, copyable),
-        Action::OpenInBrowser => match state.focused_issue() {
-            Some(issue) => {
-                let effects = vec![Effect::OpenUrl(issue.url.clone())];
-                state.notice = Some(format!("Opening {} in the browser", issue.identifier));
-                Update {
-                    redraw: true,
-                    effects,
-                }
-            }
-            None => Update::default(),
-        },
+        Action::OpenLinks(set) => links::open(state, set),
         Action::Edit(field) => edit::open(state, field),
-        Action::PickNumber(n) => edit::choose(state, Some(usize::from(n))),
+        Action::PickNumber(n) => match state.modals.top() {
+            Some(Modal::Links(_)) => links::choose(state, Some(usize::from(n))),
+            _ => edit::choose(state, Some(usize::from(n))),
+        },
         Action::ToggleEntry => edit::toggle(state, None),
         _ => Update::default(),
     }

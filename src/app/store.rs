@@ -9,8 +9,8 @@ use serde::{Deserialize, Serialize};
 
 use super::edit::{Edit, Write};
 use crate::linear::model::{
-    Comment, Cycle, Issue, Label, Member, Project, StateSpan, Team, Viewer, WorkflowState,
-    Workspace,
+    Attachment, Comment, Cycle, Issue, Label, Member, Project, StateSpan, Team, Viewer,
+    WorkflowState, Workspace,
 };
 use crate::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, SearchResults, TeamChanges,
@@ -46,6 +46,10 @@ pub struct Store {
     /// loaded it. Kept apart from the issues so an upsert from a list,
     /// which carries no history, does not drop it.
     state_histories: BTreeMap<String, Vec<StateSpan>>,
+    /// Attachments by issue id, as the detail loaded them. Defaults when
+    /// missing, so a snapshot written before they were kept still loads.
+    #[serde(default)]
+    attachments: BTreeMap<String, Vec<Attachment>>,
     /// When the newest data was loaded, which decides the active cycle.
     as_of: Option<Timestamp>,
     /// The ids of the teams the viewer is a member of, in the order Linear
@@ -203,6 +207,7 @@ impl Store {
     fn remove_issue(&mut self, id: &str) -> bool {
         self.comments.remove(id);
         self.state_histories.remove(id);
+        self.attachments.remove(id);
         self.issues.remove(id).is_some()
     }
 
@@ -335,10 +340,13 @@ impl Store {
         true
     }
 
-    /// Takes in the detail loaded for `issue_id`: its comments and state
-    /// history replace what is stored, and the rest is stored by id.
+    /// Takes in the detail loaded for `issue_id`: its comments, state
+    /// history and attachments replace what is stored, and the rest is
+    /// stored by id.
     pub fn merge_detail(&mut self, issue_id: &str, detail: &IssueDetail) {
         self.set_comments(issue_id, detail.comments.clone());
+        self.attachments
+            .insert(issue_id.to_owned(), detail.attachments.clone());
         self.state_histories
             .insert(issue_id.to_owned(), detail.state_history.clone());
         by_id(&mut self.members, &detail.members, |member| &member.id);
@@ -399,6 +407,11 @@ impl Store {
     pub fn team_members(&self, team_id: &str) -> Option<Vec<&Member>> {
         let ids = self.team_members.get(team_id)?;
         Some(ids.iter().filter_map(|id| self.members.get(id)).collect())
+    }
+
+    /// The attachments of `issue_id`, if the detail loaded them.
+    pub fn attachments(&self, issue_id: &str) -> Option<&[Attachment]> {
+        self.attachments.get(issue_id).map(Vec::as_slice)
     }
 
     /// The workflow states `issue_id` has been in, if the detail loaded them.

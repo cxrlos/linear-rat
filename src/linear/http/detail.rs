@@ -1,13 +1,16 @@
 //! Loading what an issue's detail shows beyond the list: every page of its
-//! comments and of its workflow state history, both at once.
+//! comments and of its workflow state history, both at once, and its first
+//! attachments.
 
 use jiff::Timestamp;
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{Value, json};
 
 use super::assigned::{optional_timestamp, state_type, timestamp};
 use super::{HttpClient, PageInfo, Urgency};
-use crate::linear::model::{Comment, Member, Project, StateSpan, StateType, WorkflowState};
+use crate::linear::model::{
+    Attachment, Comment, Member, Project, StateSpan, StateType, WorkflowState,
+};
 use crate::linear::{ClientError, IssueDetail, Response};
 
 const COMMENTS: &str = include_str!("../graphql/issue_comments.graphql");
@@ -46,6 +49,7 @@ pub(super) async fn load(
         workflow_states: Vec::new(),
         members: Vec::new(),
         project: None,
+        attachments: Vec::new(),
         problems: comment_errors
             .iter()
             .chain(&history_errors)
@@ -73,7 +77,16 @@ pub(super) async fn load(
             created_at: node.created_at,
         });
     }
-    for page in history_pages {
+    for (index, page) in history_pages.into_iter().enumerate() {
+        if index == 0 {
+            detail.attachments = page
+                .issue
+                .attachments
+                .nodes
+                .into_iter()
+                .map(|node| node.into_attachment(issue_id))
+                .collect();
+        }
         if let Some(project) = page.issue.project {
             detail.project = Some(Project {
                 id: project.id,
@@ -132,6 +145,42 @@ struct HistoryPage {
 struct IssueHistory {
     project: Option<ProjectNode>,
     state_history: Connection<SpanNode>,
+    attachments: Nodes<AttachmentNode>,
+}
+
+#[derive(Deserialize)]
+struct Nodes<N> {
+    nodes: Vec<N>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AttachmentNode {
+    id: String,
+    url: String,
+    title: String,
+    subtitle: Option<String>,
+    source_type: Option<String>,
+    #[serde(default)]
+    metadata: Value,
+}
+
+impl AttachmentNode {
+    /// The attachment, with a pull request's state when the metadata holds
+    /// a `status` string. Linear does not document the metadata's shape per
+    /// source, so anything else there is ignored.
+    fn into_attachment(self, issue_id: &str) -> Attachment {
+        let status = self.metadata.get("status").and_then(Value::as_str);
+        Attachment {
+            id: self.id,
+            issue_id: issue_id.to_owned(),
+            status: status.map(str::to_owned),
+            url: self.url,
+            title: self.title,
+            subtitle: self.subtitle,
+            source_type: self.source_type,
+        }
+    }
 }
 
 #[derive(Deserialize)]

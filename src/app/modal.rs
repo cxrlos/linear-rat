@@ -1,4 +1,5 @@
 use super::edit::EditPicker;
+use super::links::Links;
 use super::{FilterField, Palette, Phase, Search};
 use crate::keys::Key;
 
@@ -25,13 +26,15 @@ pub enum Modal {
     Issue { id: String },
     /// A list to pick one entry from.
     Choice(Choice),
+    /// A list of an issue's links to open one of.
+    Links(Links),
 }
 
 impl Modal {
     /// Whether typed keys go to a text field rather than the keymap now.
     pub fn takes_text(&self) -> bool {
         match self {
-            Modal::Picker(_) | Modal::Palette(_) => true,
+            Modal::Picker(_) | Modal::Palette(_) | Modal::Links(_) => true,
             Modal::Search(search) => matches!(search.phase, Phase::Typing { .. }),
             Modal::Cheatsheet { .. }
             | Modal::WhichKey { .. }
@@ -46,6 +49,7 @@ impl Modal {
     pub fn text_field(&mut self) -> Option<&mut String> {
         match self {
             Modal::Picker(picker) => Some(picker.list.query_mut()),
+            Modal::Links(links) => Some(links.list.query_mut()),
             Modal::Palette(palette) => {
                 palette.selected = 0;
                 Some(&mut palette.query)

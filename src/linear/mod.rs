@@ -19,8 +19,8 @@ pub use error::{ClientError, GraphQlError, Response};
 pub use governor::{SystemTimer, Timer, Urgency};
 pub use http::{ClientConfig, HttpClient};
 use model::{
-    Comment, Cycle, Issue, Label, Member, Priority, Project, StateSpan, StateType, Team, Viewer,
-    WorkflowState, Workspace,
+    Attachment, Comment, Cycle, Issue, Label, Member, Priority, Project, StateSpan, StateType,
+    Team, Viewer, WorkflowState, Workspace,
 };
 
 /// Queries, mutations and live events.
@@ -411,6 +411,8 @@ pub struct IssueDetail {
     /// The comment authors.
     pub members: Vec<Member>,
     pub project: Option<Project>,
+    /// The first 50 attachments, oldest first; any more are left out.
+    pub attachments: Vec<Attachment>,
     /// What Linear could not give, as in [`AssignedIssues::problems`].
     pub problems: Vec<String>,
 }
@@ -442,6 +444,11 @@ impl IssueDetail {
                 .projects
                 .into_iter()
                 .find(|project| Some(project.id.as_str()) == project_id),
+            attachments: data
+                .attachments
+                .into_iter()
+                .filter(|attachment| attachment.issue_id == issue_id)
+                .collect(),
             problems: Vec::new(),
         }
     }

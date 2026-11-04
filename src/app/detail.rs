@@ -99,6 +99,25 @@ pub(super) fn request(state: &mut State) -> Option<Effect> {
     Some(Effect::LoadIssueDetail { issue_id, urgency })
 }
 
+/// Asks for the detail of `issue_id` as a load the viewer waits on, unless
+/// it has loaded or is loading. A failed load is tried again.
+pub(super) fn load_now(state: &mut State, issue_id: &str) -> Option<Effect> {
+    if matches!(
+        state.detail.loads.get(issue_id),
+        Some(DetailLoad::Loading | DetailLoad::Loaded)
+    ) {
+        return None;
+    }
+    state
+        .detail
+        .loads
+        .insert(issue_id.to_owned(), DetailLoad::Loading);
+    Some(Effect::LoadIssueDetail {
+        issue_id: issue_id.to_owned(),
+        urgency: Urgency::Urgent,
+    })
+}
+
 /// The viewer opened the focused issue's detail: what loaded before is
 /// asked for again, so it is fresh. A load in flight is left to finish.
 pub(super) fn reopen(state: &mut State) {

@@ -492,7 +492,8 @@ async fn copy_and_open_act_on_the_focused_team_issue() {
         press(&mut app, "yi"),
         vec![Effect::Copy(focused.identifier.clone())]
     );
-    assert_eq!(press(&mut app, "o"), vec![Effect::OpenUrl(focused.url)]);
+    press(&mut app, "o");
+    assert_eq!(press(&mut app, "\n"), vec![Effect::OpenUrl(focused.url)]);
 }
 
 #[tokio::test]
