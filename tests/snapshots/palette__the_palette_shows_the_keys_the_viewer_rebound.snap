@@ -24,8 +24,8 @@ expression: "format!(\"{}\\n\\n{}\", quit.join(\"\\n\"), screen(&app).join(\"\\n
 │  ENG-56 Notification settings reset afte ○ Todo        ▮▮▮ High    2         │
 │  ENG-6  Migrate burrow storage to the ne ○ Todo        ▮▮▯ Medium  3         │
 └──────────────────────────────────────────────────────────────────────────────┘
- Move │ Down down    │ Up up                                                    
- Do   │ Enter choose │ Esc close                                                
+ Move │ Down/Up move                                                            
+ Do   │ Esc close                                                               
 
  [1] My Issues │ [2] Team Issues │ [3] Analytics                                
 ┌My Issues─────────────────────────────────────────────────────────────────────┐
@@ -49,5 +49,5 @@ expression: "format!(\"{}\\n\\n{}\", quit.join(\"\\n\"), screen(&app).join(\"\\n
 │  ENG-56 Notification settings reset afte ○ Todo        ▮▮▮ High    2         │
 │  ENG-6  Migrate burrow storage to the ne ○ Todo        ▮▮▯ Medium  3         │
 └──────────────────────────────────────────────────────────────────────────────┘
- Move │ Down down    │ Up up                                                    
- Do   │ Enter choose │ Esc close
+ Move │ Down/Up move                                                            
+ Do   │ Esc close

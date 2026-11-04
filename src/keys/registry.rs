@@ -379,7 +379,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::ScrollDown,
         id: "scroll-down",
         description: "Scroll down",
-        hint: moves("down"),
+        hint: moves("move"),
         contexts: SCROLLS,
         default_keys: &[
             &[Key::char('j')],
@@ -392,7 +392,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::ScrollUp,
         id: "scroll-up",
         description: "Scroll up",
-        hint: moves("up"),
+        hint: moves("move"),
         contexts: SCROLLS,
         default_keys: &[
             &[Key::char('k')],
@@ -405,7 +405,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::Accept,
         id: "accept",
         description: "Choose the highlighted entry",
-        hint: does("choose"),
+        hint: None,
         contexts: OVERLAY,
         default_keys: &[&[Key::named(KeyCode::Enter)]],
         available: can_accept,
