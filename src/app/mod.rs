@@ -7,6 +7,7 @@ mod load;
 mod modal;
 mod my_issues;
 mod state;
+mod store;
 mod update;
 
 use ratatui::Terminal;
@@ -19,6 +20,7 @@ pub use load::{Load, LoadError};
 pub use modal::{Modal, ModalStack};
 pub use my_issues::{Group, MyIssues, Pane};
 pub use state::{Screen, State};
+pub use store::Store;
 pub use update::{Update, perform, update};
 
 use crate::ui;

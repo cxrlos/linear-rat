@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use ratatui::layout::Size;
 
-use super::{Load, LoadError, ModalStack, MyIssues};
+use super::{Load, LoadError, ModalStack, MyIssues, Store};
 use crate::auth::KeySource;
 use crate::config::{AnalyticsSettings, Loaded, SyncSettings, UiSettings};
 use crate::keys::Keymap;
@@ -19,6 +19,8 @@ pub struct State {
     /// A message for the viewer above the bottom bar, such as a config
     /// error. The next key press clears it.
     pub notice: Option<String>,
+    /// Everything loaded from Linear. Screens are built from it.
+    pub store: Store,
     pub my_issues: MyIssues,
     /// Whether My Issues is still loading, and why it failed.
     pub load: Load,
@@ -71,16 +73,23 @@ impl State {
         if self.notice.is_none() {
             self.notice = summary(&loaded.problems);
         }
-        self.my_issues = MyIssues::new(
-            &loaded.viewer,
-            &loaded.issues,
-            &loaded.cycles,
-            &loaded.labels,
-            &loaded.members,
-            &loaded.teams,
-            loaded.as_of,
-        );
+        self.store.merge(loaded);
+        self.rebuild_my_issues();
         self.load = Load::Loaded;
+    }
+
+    /// Builds My Issues again from the store, for example after a merge.
+    pub fn rebuild_my_issues(&mut self) {
+        let Some(viewer) = self.store.viewer() else {
+            return;
+        };
+        let as_of = self.store.as_of().unwrap_or_default();
+        let issues: Vec<_> = self.store.issues().cloned().collect();
+        let cycles: Vec<_> = self.store.cycles().cloned().collect();
+        let labels: Vec<_> = self.store.labels().cloned().collect();
+        let members: Vec<_> = self.store.members().cloned().collect();
+        let teams: Vec<_> = self.store.teams().cloned().collect();
+        self.my_issues = MyIssues::new(viewer, &issues, &cycles, &labels, &members, &teams, as_of);
     }
 
     /// The issue the current screen has focused, if it shows issues and has
