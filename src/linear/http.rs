@@ -3,6 +3,7 @@
 
 mod assigned;
 mod changes;
+mod edit;
 
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -16,8 +17,10 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use super::governor::{Governor, SystemTimer, Timer, Urgency};
-use super::model::{Viewer, Workspace};
-use super::{AssignedIssues, ClientError, GraphQlError, LinearClient, Response, TeamChanges};
+use super::model::{Issue, Member, Viewer, WorkflowState, Workspace};
+use super::{
+    AssignedIssues, ClientError, GraphQlError, IssueUpdate, LinearClient, Response, TeamChanges,
+};
 use crate::auth::ApiKey;
 
 /// Linear's GraphQL endpoint.
@@ -288,6 +291,22 @@ impl LinearClient for HttpClient {
             .governor()
             .wait(Urgency::Background, self.timer.now())
             .is_zero()
+    }
+
+    async fn workflow_states(&self, team_id: &str) -> Result<Vec<WorkflowState>, ClientError> {
+        edit::workflow_states(self, team_id).await
+    }
+
+    async fn team_members(&self, team_id: &str) -> Result<Vec<Member>, ClientError> {
+        edit::team_members(self, team_id).await
+    }
+
+    async fn update_issue(
+        &self,
+        issue_id: &str,
+        update: &IssueUpdate,
+    ) -> Result<Issue, ClientError> {
+        edit::update_issue(self, issue_id, update).await
     }
 }
 

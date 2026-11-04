@@ -1,8 +1,8 @@
-use super::TeamPoll;
+use super::{TeamPoll, Write};
 
 /// A request to the outside world, returned by [`update`](super::update) and
 /// carried out by the runtime.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Effect {
     Quit,
     /// Load the viewer's open assigned issues; the result comes back as
@@ -21,4 +21,17 @@ pub enum Effect {
     Reconcile(Vec<String>),
     /// Write the store to the snapshot cache.
     SaveSnapshot,
+    /// Load a team's workflow states; the result comes back as
+    /// [`Event::WorkflowStatesLoaded`](super::Event::WorkflowStatesLoaded).
+    LoadWorkflowStates {
+        team_id: String,
+    },
+    /// Load a team's members; the result comes back as
+    /// [`Event::TeamMembersLoaded`](super::Event::TeamMembersLoaded).
+    LoadTeamMembers {
+        team_id: String,
+    },
+    /// Send one `issueUpdate` making [`Write::edit`]; the result comes back
+    /// as [`Event::IssueUpdated`](super::Event::IssueUpdated).
+    UpdateIssue(Write),
 }

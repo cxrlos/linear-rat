@@ -1,0 +1,18 @@
+# budget: 210
+# One page of a team's active members, for the assignee picker. Pages hold 100
+# members; the client follows `endCursor` until `hasNextPage` is false.
+query TeamMembers($teamId: String!, $after: String) {
+  team(id: $teamId) {
+    members(first: 100, after: $after) {
+      nodes {
+        id
+        name
+        displayName
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}

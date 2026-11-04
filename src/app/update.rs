@@ -1,20 +1,21 @@
-use crossterm::event::KeyEventKind;
+use crossterm::event::{KeyCode, KeyEventKind};
 use ratatui::layout::Size;
 
+use super::edit::{self, Editable};
 use super::{Action, Copyable, Effect, Event, Load, Modal, Screen, State, sync};
 use crate::keys::{self, Key, Resolution};
 use crate::ui;
 
 /// What one event did: whether the screen must be drawn again, and what the
 /// runtime must do next.
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq)]
 pub struct Update {
     pub redraw: bool,
     pub effects: Vec<Effect>,
 }
 
 impl Update {
-    fn redraw() -> Self {
+    pub(super) fn redraw() -> Self {
         Self {
             redraw: true,
             effects: Vec::new(),
@@ -49,7 +50,8 @@ pub fn update(state: &mut State, event: Event) -> Update {
         Event::Key(key) => {
             sync::activity(state);
             let cleared_notice = state.notice.take().is_some();
-            let mut update = press(state, Key::from(key));
+            let key = Key::from(key);
+            let mut update = type_text(state, key).unwrap_or_else(|| press(state, key));
             update.redraw |= cleared_notice;
             update
         }
@@ -57,6 +59,65 @@ pub fn update(state: &mut State, event: Event) -> Update {
             state.notice = Some(error);
             Update::redraw()
         }
+        Event::WorkflowStatesLoaded { team_id, result } => {
+            let failure = match result {
+                Ok(states) => {
+                    state.store.set_workflow_states(&team_id, states);
+                    None
+                }
+                Err(error) => Some(error),
+            };
+            edit::loaded(state, Editable::State, &team_id, failure)
+        }
+        Event::TeamMembersLoaded { team_id, result } => {
+            let failure = match result {
+                Ok(members) => {
+                    state.store.set_team_members(&team_id, &members);
+                    None
+                }
+                Err(error) => Some(error),
+            };
+            edit::loaded(state, Editable::Assignee, &team_id, failure)
+        }
+        Event::IssueUpdated { write, result } => edit::finished(state, &write, result),
+    }
+}
+
+/// Text entry: when the top overlay has a text field, a printable key
+/// without Ctrl or Alt types into it and Backspace deletes, before the
+/// keymap, so `j`, `k` and `q` type rather than move or quit. The one
+/// exception is a key bound to a number pick that can run now, so 1 to 9
+/// pick in a picker while a number past its last entry still types.
+fn type_text(state: &mut State, key: Key) -> Option<Update> {
+    let typed = key.typed();
+    if typed.is_none() && key != Key::named(KeyCode::Backspace) {
+        return None;
+    }
+    if typed.is_some() && picks_by_number(state, key) {
+        return None;
+    }
+    let field = state.modals.top_mut()?.text_field()?;
+    let changed = match typed {
+        Some(c) => {
+            field.push(c);
+            true
+        }
+        None => field.pop().is_some(),
+    };
+    Some(Update {
+        redraw: changed,
+        effects: Vec::new(),
+    })
+}
+
+/// Whether `key` runs a number pick that can run now.
+fn picks_by_number(state: &State, key: Key) -> bool {
+    let contexts = keys::active_contexts(state);
+    match state.keymap.resolve(&contexts, &[key]) {
+        Resolution::Action(action @ Action::PickNumber(_)) => {
+            keys::spec(action).is_some_and(|spec| (spec.available)(state))
+        }
+        _ => false,
     }
 }
 
@@ -133,6 +194,11 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             }
             None => Update::default(),
         },
+        Action::Edit(field) => edit::open(state, field),
+        Action::SelectNext => edit::select(state, 1),
+        Action::SelectPrevious => edit::select(state, -1),
+        Action::Choose => edit::choose(state, None),
+        Action::PickNumber(n) => edit::choose(state, Some(usize::from(n))),
         _ => Update::default(),
     }
 }

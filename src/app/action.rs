@@ -1,4 +1,4 @@
-use super::Screen;
+use super::{Editable, Screen};
 
 /// Something the viewer can ask lrat to do. Keys, the palette and the
 /// cheatsheet all name actions; [`perform`](super::perform) carries them out.
@@ -27,6 +27,16 @@ pub enum Action {
     OpenInBrowser,
     /// Poll Linear for changes now.
     Refresh,
+    /// Open the picker that changes a field of the focused issue.
+    Edit(Editable),
+    /// Move a picker's selection one entry.
+    SelectNext,
+    SelectPrevious,
+    /// Close a picker on its selected entry.
+    Choose,
+    /// Close a picker on the entry with this number, from 1 to 9, counted
+    /// among the entries the filter leaves.
+    PickNumber(u8),
 }
 
 /// What [`Action::Copy`] puts on the clipboard.

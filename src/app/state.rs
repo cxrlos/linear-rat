@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fmt::Display;
 
 use ratatui::layout::Size;
@@ -24,6 +25,9 @@ pub struct State {
     pub notice: Option<String>,
     /// Everything loaded from Linear. Screens are built from it.
     pub store: Store,
+    /// Why Linear rejected the last edit of an issue, by issue id, shown on
+    /// its row until the next edit of that issue.
+    pub row_errors: BTreeMap<String, String>,
     pub my_issues: MyIssues,
     /// Whether My Issues is still loading, and why it failed.
     pub load: Load,

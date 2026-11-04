@@ -8,9 +8,9 @@ use futures_util::stream::{self, Stream, StreamExt};
 use jiff::Timestamp;
 use linear_rat::app::{App, State};
 use linear_rat::auth::KeySource;
-use linear_rat::linear::model::{Viewer, Workspace};
+use linear_rat::linear::model::{Issue, Member, Viewer, WorkflowState, Workspace};
 use linear_rat::linear::{
-    AssignedIssues, ClientError, FakeClient, LinearClient, TeamChanges, demo,
+    AssignedIssues, ClientError, FakeClient, IssueUpdate, LinearClient, TeamChanges, demo,
 };
 use linear_rat::runtime;
 use linear_rat::snapshot::SnapshotCache;
@@ -44,8 +44,19 @@ async fn run(
 
 /// Runs `app` with `client` and no input until it settles, then hands back
 /// what it shows.
-async fn settle(mut app: App<TestBackend>, client: Option<&impl LinearClient>) -> String {
-    let running = runtime::run(&mut app, client, None, input(Vec::new()), future::pending());
+async fn settle(app: App<TestBackend>, client: Option<&impl LinearClient>) -> String {
+    settle_after(app, client, "").await
+}
+
+/// Runs `app` with `client`, types `keys`, and hands back what it shows
+/// once it settles.
+async fn settle_after(
+    mut app: App<TestBackend>,
+    client: Option<&impl LinearClient>,
+    keys: &str,
+) -> String {
+    let typed = keys.chars().map(press).collect();
+    let running = runtime::run(&mut app, client, None, input(typed), future::pending());
     let stopped = tokio::time::timeout(Duration::from_millis(200), running).await;
     assert!(stopped.is_err(), "the runtime stopped: {stopped:?}");
     let buffer = app.backend().buffer();
@@ -79,6 +90,22 @@ impl LinearClient for RejectingClient {
     }
 
     async fn existing_issues(&self, _: &[String]) -> Result<Vec<String>, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn workflow_states(&self, _team_id: &str) -> Result<Vec<WorkflowState>, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn team_members(&self, _team_id: &str) -> Result<Vec<Member>, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn update_issue(
+        &self,
+        _issue_id: &str,
+        _update: &IssueUpdate,
+    ) -> Result<Issue, ClientError> {
         Err(ClientError::InvalidKey)
     }
 }
@@ -159,6 +186,15 @@ async fn q_quits_while_the_load_is_still_in_flight() {
         async fn existing_issues(&self, _: &[String]) -> Result<Vec<String>, ClientError> {
             future::pending().await
         }
+        async fn workflow_states(&self, _: &str) -> Result<Vec<WorkflowState>, ClientError> {
+            future::pending().await
+        }
+        async fn team_members(&self, _: &str) -> Result<Vec<Member>, ClientError> {
+            future::pending().await
+        }
+        async fn update_issue(&self, _: &str, _: &IssueUpdate) -> Result<Issue, ClientError> {
+            future::pending().await
+        }
     }
     let mut app = App::new(TestBackend::new(80, 24), State::loading(None)).unwrap();
 
@@ -197,6 +233,19 @@ impl LinearClient for CountingClient {
     }
     async fn existing_issues(&self, ids: &[String]) -> Result<Vec<String>, ClientError> {
         FakeClient.existing_issues(ids).await
+    }
+    async fn workflow_states(&self, team_id: &str) -> Result<Vec<WorkflowState>, ClientError> {
+        FakeClient.workflow_states(team_id).await
+    }
+    async fn team_members(&self, team_id: &str) -> Result<Vec<Member>, ClientError> {
+        FakeClient.team_members(team_id).await
+    }
+    async fn update_issue(
+        &self,
+        issue_id: &str,
+        update: &IssueUpdate,
+    ) -> Result<Issue, ClientError> {
+        FakeClient.update_issue(issue_id, update).await
     }
 }
 
@@ -246,4 +295,36 @@ async fn quitting_saves_the_snapshot_the_next_launch_paints_from() {
     assert_eq!(saved.store, app.state().store);
     assert!(saved.store.issues().count() > 0);
     assert!(saved.synced_at.is_some());
+}
+
+/// The row of the issue with `identifier` on `shown`.
+fn row<'a>(shown: &'a str, identifier: &str) -> &'a str {
+    shown
+        .lines()
+        .find(|line| line.contains(&format!("{identifier} ")))
+        .unwrap_or_default()
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_edit_goes_through_the_client_and_its_answer_stays() {
+    let app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+
+    let shown = settle_after(app, Some(&FakeClient), "p1").await;
+
+    assert!(row(&shown, "DES-34").contains("!!! Urgent"), "{shown}");
+    assert!(!row(&shown, "DES-34").contains('✘'), "{shown}");
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_edit_linear_rejects_is_rolled_back_with_the_reason() {
+    let app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+
+    let shown = settle_after(app, Some(&RejectingClient), "p1").await;
+
+    assert!(row(&shown, "DES-34").contains("▮▮▮ High"), "{shown}");
+    assert!(row(&shown, "DES-34").contains('✘'), "{shown}");
+    assert!(
+        shown.contains("Could not change the priority of DES-34: Linear rejected the API key"),
+        "{shown}"
+    );
 }

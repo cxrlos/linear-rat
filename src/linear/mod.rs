@@ -7,15 +7,17 @@ mod governor;
 pub mod http;
 pub mod model;
 
+use std::cell::RefCell;
 use std::cmp::Reverse;
+use std::collections::BTreeMap;
 use std::future::Future;
 
-use jiff::Timestamp;
+use jiff::{SignedDuration, Timestamp};
 
 pub use error::{ClientError, GraphQlError, Response};
 pub use governor::{SystemTimer, Timer};
 pub use http::{ClientConfig, HttpClient};
-use model::{Cycle, Issue, Label, Member, Team, Viewer, Workspace};
+use model::{Cycle, Issue, Label, Member, Priority, Team, Viewer, WorkflowState, Workspace};
 
 /// Queries, mutations and live events.
 pub trait LinearClient {
@@ -49,6 +51,26 @@ pub trait LinearClient {
     fn throttled(&self) -> bool {
         false
     }
+
+    /// Every workflow state of the team with id `team_id`.
+    fn workflow_states(
+        &self,
+        team_id: &str,
+    ) -> impl Future<Output = Result<Vec<WorkflowState>, ClientError>> + Send;
+
+    /// Every active member of the team with id `team_id`.
+    fn team_members(
+        &self,
+        team_id: &str,
+    ) -> impl Future<Output = Result<Vec<Member>, ClientError>> + Send;
+
+    /// Sends one `issueUpdate` for the issue with id `issue_id` and returns
+    /// the issue as Linear stored it.
+    fn update_issue(
+        &self,
+        issue_id: &str,
+        update: &IssueUpdate,
+    ) -> impl Future<Output = Result<Issue, ClientError>> + Send;
 }
 
 /// What changed in one team: its issues updated after a watermark, and the
@@ -69,6 +91,28 @@ pub struct TeamChanges {
     pub newest: Option<Timestamp>,
     /// When the changes were loaded, which decides the active cycle.
     pub as_of: Timestamp,
+}
+
+/// The fields one `issueUpdate` changes. Every other field stays as it is.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct IssueUpdate {
+    /// The workflow state to move to, or `None` to leave it.
+    pub state_id: Option<String>,
+    pub assignee_id: Patch<String>,
+    /// The new priority, or `None` to leave it. [`Priority::None`] is a value
+    /// like any other, not a clear.
+    pub priority: Option<Priority>,
+}
+
+/// A change to a field that can be empty: leave it, empty it, or set it.
+/// Linear tells the first two apart by whether the field is in the input at
+/// all, so they must not collapse into one `Option`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum Patch<T> {
+    #[default]
+    Unchanged,
+    Clear,
+    Set(T),
 }
 
 /// The viewer's open assigned issues, and the cycles, labels, members and
@@ -115,9 +159,53 @@ impl AssignedIssues {
     }
 }
 
-/// A client that never touches the network.
+/// A client that never touches the network. It serves the demo workspace and
+/// remembers the edits it was sent, per thread: the runtime and each test
+/// run on one.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct FakeClient;
+
+thread_local! {
+    static DEMO_EDITS: RefCell<BTreeMap<String, Issue>> = const { RefCell::new(BTreeMap::new()) };
+}
+
+/// `issue` with `update` applied as Linear would apply it in the demo
+/// workspace, one second newer.
+fn demo_update(
+    data: &demo::DemoWorkspace,
+    mut issue: Issue,
+    update: &IssueUpdate,
+) -> Result<Issue, ClientError> {
+    if let Some(state_id) = &update.state_id {
+        issue.state = data
+            .workflow_states
+            .iter()
+            .find(|state| state.id == *state_id && state.team_id == issue.team_id)
+            .cloned()
+            .ok_or_else(|| not_found("workflow state", state_id))?;
+    }
+    match &update.assignee_id {
+        Patch::Unchanged => {}
+        Patch::Clear => issue.assignee_id = None,
+        Patch::Set(id) if data.members.iter().any(|member| member.id == *id) => {
+            issue.assignee_id = Some(id.clone());
+        }
+        Patch::Set(id) => return Err(not_found("member", id)),
+    }
+    if let Some(priority) = update.priority {
+        issue.priority = priority;
+    }
+    issue.updated_at += SignedDuration::from_secs(1);
+    Ok(issue)
+}
+
+fn not_found(what: &str, id: &str) -> ClientError {
+    ClientError::GraphQl(vec![GraphQlError {
+        message: format!("Entity not found: {what} {id}"),
+        path: Vec::new(),
+        extensions: None,
+    }])
+}
 
 impl LinearClient for FakeClient {
     async fn viewer(&self) -> Result<(Viewer, Workspace), ClientError> {
@@ -176,5 +264,42 @@ impl LinearClient for FakeClient {
             .filter(|id| data.issues.iter().any(|issue| &issue.id == *id))
             .cloned()
             .collect())
+    }
+
+    async fn workflow_states(&self, team_id: &str) -> Result<Vec<WorkflowState>, ClientError> {
+        Ok(demo::workspace()
+            .workflow_states
+            .into_iter()
+            .filter(|state| state.team_id == team_id)
+            .collect())
+    }
+
+    async fn team_members(&self, team_id: &str) -> Result<Vec<Member>, ClientError> {
+        let ids = demo::team_member_ids(team_id);
+        Ok(demo::workspace()
+            .members
+            .into_iter()
+            .filter(|member| ids.contains(&member.id))
+            .collect())
+    }
+
+    async fn update_issue(
+        &self,
+        issue_id: &str,
+        update: &IssueUpdate,
+    ) -> Result<Issue, ClientError> {
+        let data = demo::workspace();
+        let stored = DEMO_EDITS
+            .with_borrow(|edits| edits.get(issue_id).cloned())
+            .or_else(|| {
+                data.issues
+                    .iter()
+                    .find(|issue| issue.id == issue_id)
+                    .cloned()
+            })
+            .ok_or_else(|| not_found("issue", issue_id))?;
+        let updated = demo_update(&data, stored, update)?;
+        DEMO_EDITS.with_borrow_mut(|edits| edits.insert(issue_id.to_owned(), updated.clone()));
+        Ok(updated)
     }
 }

@@ -1,0 +1,59 @@
+# budget: 10
+# Changes the fields in `input` and nothing else: a field left out stays as it
+# is, and a field sent as null is cleared. Returns the issue as Linear stored
+# it, with the same fields as the assigned issues query.
+mutation IssueUpdate($id: String!, $input: IssueUpdateInput!) {
+  issueUpdate(id: $id, input: $input) {
+    success
+    issue {
+      id
+      identifier
+      title
+      description
+      url
+      branchName
+      priority
+      estimate
+      labelIds
+      createdAt
+      updatedAt
+      startedAt
+      completedAt
+      canceledAt
+      triagedAt
+      team {
+        id
+        key
+        name
+        issueEstimationType
+      }
+      state {
+        id
+        name
+        type
+        position
+      }
+      assignee {
+        id
+        name
+        displayName
+      }
+      creator {
+        id
+        name
+        displayName
+      }
+      cycle {
+        id
+        number
+        name
+        startsAt
+        endsAt
+        completedAt
+      }
+      project {
+        id
+      }
+    }
+  }
+}

@@ -1,5 +1,7 @@
 //! My Issues: the grouped list and the focused issue's detail.
 
+use std::collections::BTreeMap;
+
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style, Stylize};
@@ -20,6 +22,7 @@ pub fn render(state: &State, frame: &mut Frame, area: Rect) {
         my_issues: &state.my_issues,
         theme: &state.theme,
         icons: state.ui.icons,
+        row_errors: &state.row_errors,
     };
     let pane = view.my_issues.pane();
     if area.width >= state.ui.wide_layout_columns {
@@ -46,6 +49,8 @@ struct View<'a> {
     my_issues: &'a MyIssues,
     theme: &'a Theme,
     icons: icons::IconSet,
+    /// Why the last edit of an issue failed, by issue id.
+    row_errors: &'a BTreeMap<String, String>,
 }
 
 /// How a pane shows focus: a thick accented border beside an unfocused pane,
@@ -141,7 +146,15 @@ fn render_list(view: &View, frame: &mut Frame, area: Rect, focus: Focus) {
                     frame.render_widget("▸", marker);
                 }
                 frame.render_widget(Span::raw(&issue.identifier).fg(theme.muted), identifier);
-                frame.render_widget(issue.title.as_str(), title);
+                let title_line = if view.row_errors.contains_key(&issue.id) {
+                    Line::from(vec![
+                        Span::styled("✘ ", style::error(theme)),
+                        Span::styled(issue.title.as_str(), style::error(theme)),
+                    ])
+                } else {
+                    Line::from(issue.title.as_str())
+                };
+                frame.render_widget(title_line, title);
                 frame.render_widget(state_line(view, &issue.state), state);
                 frame.render_widget(priority_line(view, issue.priority), priority);
                 frame.render_widget(
@@ -201,12 +214,18 @@ fn render_detail(view: &View, frame: &mut Frame, area: Rect, focus: Focus) {
         .map(|id| my_issues.member_name(id).unwrap_or(id))
         .unwrap_or("Unassigned");
 
-    let mut lines = vec![
-        Line::from(issue.title.as_str()).bold(),
+    let mut lines = vec![Line::from(issue.title.as_str()).bold()];
+    if let Some(error) = view.row_errors.get(&issue.id) {
+        lines.push(Line::styled(
+            format!("✘ Not saved: {error}"),
+            style::error(theme),
+        ));
+    }
+    lines.extend([
         Line::default(),
         field(theme, "State", state_line(view, &issue.state)),
         field(theme, "Priority", priority_line(view, issue.priority)),
-    ];
+    ]);
     if my_issues.uses_estimates(issue) {
         let estimate = issue
             .estimate

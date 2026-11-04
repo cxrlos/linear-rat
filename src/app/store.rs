@@ -7,7 +7,10 @@ use std::collections::{BTreeMap, HashSet};
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
-use crate::linear::model::{Comment, Cycle, Issue, Label, Member, Team, Viewer, Workspace};
+use super::edit::{Edit, Write};
+use crate::linear::model::{
+    Comment, Cycle, Issue, Label, Member, Team, Viewer, WorkflowState, Workspace,
+};
 use crate::linear::{AssignedIssues, TeamChanges};
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
@@ -24,6 +27,10 @@ pub struct Store {
     members: BTreeMap<String, Member>,
     /// Comments by issue id, oldest first.
     comments: BTreeMap<String, Vec<Comment>>,
+    /// Every workflow state of a team, by team id, once loaded.
+    workflow_states: BTreeMap<String, Vec<WorkflowState>>,
+    /// The ids of a team's members, by team id, once loaded.
+    team_members: BTreeMap<String, Vec<String>>,
     /// When the newest data was loaded, which decides the active cycle.
     as_of: Option<Timestamp>,
 }
@@ -138,6 +145,40 @@ impl Store {
         self.comments.insert(issue_id.to_owned(), comments);
     }
 
+    /// Replaces the workflow states of team `team_id`.
+    pub fn set_workflow_states(&mut self, team_id: &str, states: Vec<WorkflowState>) {
+        self.workflow_states.insert(team_id.to_owned(), states);
+    }
+
+    /// Replaces the members of team `team_id`, and stores each member by id.
+    pub fn set_team_members(&mut self, team_id: &str, members: &[Member]) {
+        by_id(&mut self.members, members, |member| &member.id);
+        let ids = members.iter().map(|member| member.id.clone()).collect();
+        self.team_members.insert(team_id.to_owned(), ids);
+    }
+
+    /// Shows `edit` on the stored issue before Linear confirms it. The
+    /// issue keeps its `updated_at`, so Linear's answer replaces it.
+    pub fn apply_edit(&mut self, issue_id: &str, edit: &Edit) {
+        if let Some(issue) = self.issues.get_mut(issue_id) {
+            edit.apply_to(issue);
+        }
+    }
+
+    /// Puts back the value `write` replaced, unless the field has moved on
+    /// from `write.edit` since (a later edit, or newer data from Linear).
+    /// Returns whether it restored anything.
+    pub fn roll_back(&mut self, write: &Write) -> bool {
+        let Some(issue) = self.issues.get_mut(&write.issue_id) else {
+            return false;
+        };
+        if write.edit.field().current(issue) != write.edit {
+            return false;
+        }
+        write.previous.apply_to(issue);
+        true
+    }
+
     pub fn viewer(&self) -> Option<&Viewer> {
         self.viewer.as_ref()
     }
@@ -169,6 +210,17 @@ impl Store {
     /// The comments of `issue_id`, if they have been loaded.
     pub fn comments(&self, issue_id: &str) -> Option<&[Comment]> {
         self.comments.get(issue_id).map(Vec::as_slice)
+    }
+
+    /// The workflow states of team `team_id`, if they have been loaded.
+    pub fn workflow_states(&self, team_id: &str) -> Option<&[WorkflowState]> {
+        self.workflow_states.get(team_id).map(Vec::as_slice)
+    }
+
+    /// The members of team `team_id`, if they have been loaded.
+    pub fn team_members(&self, team_id: &str) -> Option<Vec<&Member>> {
+        let ids = self.team_members.get(team_id)?;
+        Some(ids.iter().filter_map(|id| self.members.get(id)).collect())
     }
 
     pub fn as_of(&self) -> Option<Timestamp> {

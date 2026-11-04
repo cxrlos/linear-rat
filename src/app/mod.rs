@@ -1,11 +1,13 @@
 //! The app driver: owns the state and the terminal, applies events and redraws.
 
 mod action;
+mod edit;
 mod effect;
 mod event;
 mod load;
 mod modal;
 mod my_issues;
+mod picker;
 mod state;
 mod store;
 mod sync;
@@ -15,11 +17,13 @@ use ratatui::Terminal;
 use ratatui::backend::Backend;
 
 pub use action::{Action, Copyable};
+pub use edit::{Edit, EditPicker, Editable, Write};
 pub use effect::Effect;
 pub use event::Event;
 pub use load::{Load, LoadError};
 pub use modal::{Modal, ModalStack};
 pub use my_issues::{Group, MyIssues, Pane};
+pub use picker::{Entry, Note, Picker};
 pub use state::{Screen, State};
 pub use store::Store;
 pub use sync::{

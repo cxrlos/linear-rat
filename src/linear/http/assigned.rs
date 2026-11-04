@@ -155,9 +155,9 @@ impl Decoded {
         push_new(
             &mut self.teams,
             Team {
-                id: node.team.id,
-                key: node.team.key,
-                name: node.team.name,
+                id: node.team.id.clone(),
+                key: node.team.key.clone(),
+                name: node.team.name.clone(),
                 estimation: node.team.issue_estimation_type,
             },
             |known| known.id == team_id,
@@ -193,38 +193,62 @@ impl Decoded {
                 |known| known.id == cycle.id,
             );
         }
-        self.issues.push(Issue {
-            id: node.id,
-            identifier: node.identifier,
-            title: node.title,
-            description: node.description,
-            url: node.url,
-            branch_name: node.branch_name,
-            state: WorkflowState {
-                id: node.state.id,
-                team_id: team_id.clone(),
-                name: node.state.name,
-                state_type: node.state.state_type,
-                position: node.state.position,
-            },
+        self.issues.push(node.into_issue());
+    }
+}
+
+impl IssueNode {
+    /// The issue this node describes, without its state history.
+    pub(super) fn into_issue(self) -> Issue {
+        let team_id = self.team.id;
+        Issue {
+            id: self.id,
+            identifier: self.identifier,
+            title: self.title,
+            description: self.description,
+            url: self.url,
+            branch_name: self.branch_name,
+            state: self.state.into_state(&team_id),
             team_id,
-            priority: node.priority,
-            estimate: node.estimate,
-            assignee_id: node.assignee.map(|person| person.id),
-            creator_id: node.creator.map(|person| person.id),
-            cycle_id: node.cycle.map(|cycle| cycle.id),
-            project_id: node.project.map(|project| project.id),
-            label_ids: node.label_ids,
-            created_at: node.created_at,
-            updated_at: node.updated_at,
-            started_at: node.started_at,
-            completed_at: node.completed_at,
-            canceled_at: node.canceled_at,
-            triaged_at: node.triaged_at,
+            priority: self.priority,
+            estimate: self.estimate,
+            assignee_id: self.assignee.map(|person| person.id),
+            creator_id: self.creator.map(|person| person.id),
+            cycle_id: self.cycle.map(|cycle| cycle.id),
+            project_id: self.project.map(|project| project.id),
+            label_ids: self.label_ids,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+            started_at: self.started_at,
+            completed_at: self.completed_at,
+            canceled_at: self.canceled_at,
+            triaged_at: self.triaged_at,
             // `stateHistory` is a connection per issue, too costly for a
             // list; the detail and analytics load it where they need it.
             state_history: Vec::new(),
-        });
+        }
+    }
+}
+
+impl StateNode {
+    pub(super) fn into_state(self, team_id: &str) -> WorkflowState {
+        WorkflowState {
+            id: self.id,
+            team_id: team_id.to_owned(),
+            name: self.name,
+            state_type: self.state_type,
+            position: self.position,
+        }
+    }
+}
+
+impl PersonNode {
+    pub(super) fn into_member(self) -> Member {
+        Member {
+            id: self.id,
+            name: self.name,
+            display_name: self.display_name,
+        }
     }
 }
 
@@ -313,7 +337,7 @@ struct TeamNode {
 }
 
 #[derive(Deserialize)]
-struct StateNode {
+pub(super) struct StateNode {
     id: String,
     name: String,
     #[serde(rename = "type", deserialize_with = "state_type")]
@@ -323,7 +347,7 @@ struct StateNode {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct PersonNode {
+pub(super) struct PersonNode {
     id: String,
     name: String,
     display_name: String,

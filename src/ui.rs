@@ -5,6 +5,7 @@ mod error;
 mod hints;
 pub mod icons;
 mod my_issues;
+mod picker;
 pub mod style;
 pub mod theme;
 mod which_key;
@@ -64,6 +65,7 @@ pub fn render(state: &State, frame: &mut Frame) {
         match modal {
             Modal::Cheatsheet { scroll } => cheatsheet::render(state, *scroll, frame, body_area),
             Modal::WhichKey { prefix } => which_key::render(state, prefix, frame, body_area),
+            Modal::Picker(edit) => picker::render_edit(state, edit, frame, body_area),
         }
     }
 }

@@ -15,8 +15,8 @@ use jiff::{SignedDuration, Timestamp};
 use ratatui::backend::Backend;
 use tokio::time::{Instant, MissedTickBehavior};
 
-use crate::app::{App, Effect, Event, LoadError, SyncFailure, TeamPoll};
-use crate::linear::LinearClient;
+use crate::app::{App, Effect, Event, LoadError, SyncFailure, TeamPoll, Write};
+use crate::linear::{ClientError, LinearClient};
 use crate::snapshot::SnapshotCache;
 use crate::{browser, clipboard};
 
@@ -204,6 +204,32 @@ where
             save_snapshot_in_background(app, reach);
             Ok(())
         }
+        Effect::LoadWorkflowStates { team_id } => {
+            let client = reach.client;
+            in_flight.push(Box::pin(async move {
+                let result = match client {
+                    Some(client) => client.workflow_states(&team_id).await.map_err(message),
+                    None => Err(NO_CLIENT.to_owned()),
+                };
+                Event::WorkflowStatesLoaded { team_id, result }
+            }));
+            Ok(())
+        }
+        Effect::LoadTeamMembers { team_id } => {
+            let client = reach.client;
+            in_flight.push(Box::pin(async move {
+                let result = match client {
+                    Some(client) => client.team_members(&team_id).await.map_err(message),
+                    None => Err(NO_CLIENT.to_owned()),
+                };
+                Event::TeamMembersLoaded { team_id, result }
+            }));
+            Ok(())
+        }
+        Effect::UpdateIssue(write) => {
+            in_flight.push(Box::pin(update_issue(reach.client, write)));
+            Ok(())
+        }
         Effect::Copy(text) => outside.copy(&text),
         Effect::OpenUrl(url) => outside.open(&url),
     };
@@ -306,6 +332,30 @@ async fn reconcile<C: LinearClient>(client: Option<&C>, checked: Vec<String>) ->
         None => Err(SyncFailure::Failed("there is no API key".to_owned())),
     };
     Event::Reconciled { checked, result }
+}
+
+/// Why a request could not go out when there is no usable API key.
+const NO_CLIENT: &str = "there is no API key to reach Linear with";
+
+/// `error` with each of its causes, for the notice.
+fn message(error: ClientError) -> String {
+    format!("{:#}", anyhow::Error::new(error))
+}
+
+async fn update_issue<C: LinearClient>(client: Option<&C>, write: Write) -> Event {
+    let result = match client {
+        Some(client) => client
+            .update_issue(&write.issue_id, &write.edit.update())
+            .await
+            .map(Box::new)
+            .map_err(message),
+        None => Err(NO_CLIENT.to_owned()),
+    };
+    match &result {
+        Ok(_) => tracing::info!(issue = %write.identifier, "Linear applied an edit"),
+        Err(error) => tracing::warn!(issue = %write.identifier, %error, "Linear rejected an edit"),
+    }
+    Event::IssueUpdated { write, result }
 }
 
 fn from_terminal(event: TerminalEvent) -> Option<Event> {

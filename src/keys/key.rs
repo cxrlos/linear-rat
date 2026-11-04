@@ -30,6 +30,15 @@ impl Key {
     const fn new(code: KeyCode, modifiers: KeyModifiers) -> Self {
         Self { code, modifiers }
     }
+
+    /// The character this key types into a text field: a character without
+    /// Ctrl or Alt.
+    pub fn typed(self) -> Option<char> {
+        match self.code {
+            KeyCode::Char(c) if self.modifiers.is_empty() => Some(c),
+            _ => None,
+        }
+    }
 }
 
 impl From<KeyEvent> for Key {

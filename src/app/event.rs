@@ -1,15 +1,12 @@
 use crossterm::event::KeyEvent;
 use jiff::Timestamp;
 
-use super::{LoadError, SyncFailure};
+use super::{LoadError, SyncFailure, Write};
+use crate::linear::model::{Issue, Member, WorkflowState};
 use crate::linear::{AssignedIssues, TeamChanges};
 
 /// Something that happened, fed to [`update`](super::update).
 #[derive(Debug, Clone, PartialEq)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "a load comes once per session, so boxing it saves nothing"
-)]
 pub enum Event {
     /// The runtime is running; sent once, before any input.
     Start,
@@ -44,4 +41,23 @@ pub enum Event {
     },
     /// A poll is starting while Linear's rate limit holds requests back.
     Throttled,
+    /// The result of
+    /// [`Effect::LoadWorkflowStates`](super::Effect::LoadWorkflowStates), or
+    /// why it failed.
+    WorkflowStatesLoaded {
+        team_id: String,
+        result: Result<Vec<WorkflowState>, String>,
+    },
+    /// The result of [`Effect::LoadTeamMembers`](super::Effect::LoadTeamMembers),
+    /// or why it failed.
+    TeamMembersLoaded {
+        team_id: String,
+        result: Result<Vec<Member>, String>,
+    },
+    /// Linear's answer to [`Effect::UpdateIssue`](super::Effect::UpdateIssue):
+    /// the issue as it stored it, or why it rejected the edit.
+    IssueUpdated {
+        write: Write,
+        result: Result<Box<Issue>, String>,
+    },
 }

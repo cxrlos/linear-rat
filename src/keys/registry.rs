@@ -1,7 +1,7 @@
 use crossterm::event::KeyCode;
 
 use super::{Context, Key};
-use crate::app::{Action, Copyable, Modal, Pane, Screen, State};
+use crate::app::{Action, Copyable, EditPicker, Editable, Modal, Pane, Screen, State};
 use crate::ui;
 
 /// One action as the viewer sees it: what it is called, where it applies,
@@ -197,6 +197,141 @@ pub static ACTIONS: &[ActionSpec] = &[
         available: has_focused_issue,
     },
     ActionSpec {
+        action: Action::Edit(Editable::State),
+        id: "edit-state",
+        description: "Change the workflow state",
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('s')]],
+        available: has_focused_issue,
+    },
+    ActionSpec {
+        action: Action::Edit(Editable::Assignee),
+        id: "edit-assignee",
+        description: "Change the assignee",
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('a')]],
+        available: has_focused_issue,
+    },
+    ActionSpec {
+        action: Action::Edit(Editable::Priority),
+        id: "edit-priority",
+        description: "Change the priority",
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('p')]],
+        available: has_focused_issue,
+    },
+    ActionSpec {
+        action: Action::SelectNext,
+        id: "select-next",
+        description: "Select the next entry",
+        hint: None,
+        contexts: OVERLAY,
+        default_keys: &[&[Key::named(KeyCode::Down)], &[Key::ctrl('n')]],
+        available: |state| picker_has(1, state),
+    },
+    ActionSpec {
+        action: Action::SelectPrevious,
+        id: "select-previous",
+        description: "Select the previous entry",
+        hint: None,
+        contexts: OVERLAY,
+        default_keys: &[&[Key::named(KeyCode::Up)], &[Key::ctrl('p')]],
+        available: |state| picker_has(1, state),
+    },
+    ActionSpec {
+        action: Action::Choose,
+        id: "choose",
+        description: "Choose the selected entry",
+        hint: None,
+        contexts: OVERLAY,
+        default_keys: &[&[Key::named(KeyCode::Enter)]],
+        available: |state| picker_has(1, state),
+    },
+    ActionSpec {
+        action: Action::PickNumber(1),
+        id: "pick-1",
+        description: "Pick entry 1 of the list",
+        hint: None,
+        contexts: OVERLAY,
+        default_keys: &[&[Key::char('1')]],
+        available: |state| picker_has(1, state),
+    },
+    ActionSpec {
+        action: Action::PickNumber(2),
+        id: "pick-2",
+        description: "Pick entry 2 of the list",
+        hint: None,
+        contexts: OVERLAY,
+        default_keys: &[&[Key::char('2')]],
+        available: |state| picker_has(2, state),
+    },
+    ActionSpec {
+        action: Action::PickNumber(3),
+        id: "pick-3",
+        description: "Pick entry 3 of the list",
+        hint: None,
+        contexts: OVERLAY,
+        default_keys: &[&[Key::char('3')]],
+        available: |state| picker_has(3, state),
+    },
+    ActionSpec {
+        action: Action::PickNumber(4),
+        id: "pick-4",
+        description: "Pick entry 4 of the list",
+        hint: None,
+        contexts: OVERLAY,
+        default_keys: &[&[Key::char('4')]],
+        available: |state| picker_has(4, state),
+    },
+    ActionSpec {
+        action: Action::PickNumber(5),
+        id: "pick-5",
+        description: "Pick entry 5 of the list",
+        hint: None,
+        contexts: OVERLAY,
+        default_keys: &[&[Key::char('5')]],
+        available: |state| picker_has(5, state),
+    },
+    ActionSpec {
+        action: Action::PickNumber(6),
+        id: "pick-6",
+        description: "Pick entry 6 of the list",
+        hint: None,
+        contexts: OVERLAY,
+        default_keys: &[&[Key::char('6')]],
+        available: |state| picker_has(6, state),
+    },
+    ActionSpec {
+        action: Action::PickNumber(7),
+        id: "pick-7",
+        description: "Pick entry 7 of the list",
+        hint: None,
+        contexts: OVERLAY,
+        default_keys: &[&[Key::char('7')]],
+        available: |state| picker_has(7, state),
+    },
+    ActionSpec {
+        action: Action::PickNumber(8),
+        id: "pick-8",
+        description: "Pick entry 8 of the list",
+        hint: None,
+        contexts: OVERLAY,
+        default_keys: &[&[Key::char('8')]],
+        available: |state| picker_has(8, state),
+    },
+    ActionSpec {
+        action: Action::PickNumber(9),
+        id: "pick-9",
+        description: "Pick entry 9 of the list",
+        hint: None,
+        contexts: OVERLAY,
+        default_keys: &[&[Key::char('9')]],
+        available: |state| picker_has(9, state),
+    },
+    ActionSpec {
         action: Action::ScrollDown,
         id: "scroll-down",
         description: "Scroll down",
@@ -291,6 +426,19 @@ fn cheatsheet_scroll(state: &State) -> Option<u16> {
         Some(Modal::Cheatsheet { scroll }) => Some(*scroll),
         _ => None,
     }
+}
+
+fn picker(state: &State) -> Option<&EditPicker> {
+    match state.modals.top() {
+        Some(Modal::Picker(picker)) => Some(picker),
+        _ => None,
+    }
+}
+
+/// Whether a picker is open with at least `count` entries left by its
+/// filter.
+fn picker_has(count: usize, state: &State) -> bool {
+    picker(state).is_some_and(|picker| picker.list.visible().len() >= count)
 }
 
 fn has_focused_issue(state: &State) -> bool {

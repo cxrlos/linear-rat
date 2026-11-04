@@ -85,6 +85,20 @@ pub fn workspace() -> DemoWorkspace {
     data
 }
 
+/// The ids of the members of the demo team with id `team_id`.
+pub fn team_member_ids(team_id: &str) -> Vec<String> {
+    TEAMS
+        .iter()
+        .find(|spec| format!("team-{}", spec.key.to_lowercase()) == team_id)
+        .map(|spec| {
+            spec.members
+                .iter()
+                .map(|handle| member_id(handle))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 struct TeamSpec {
     key: &'static str,
     name: &'static str,
