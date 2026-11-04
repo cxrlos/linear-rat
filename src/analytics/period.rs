@@ -61,6 +61,21 @@ impl Period {
         &self.week_starts
     }
 
+    /// When each week ends, oldest first: midnight at the start of the next
+    /// Monday, or now for the current week.
+    pub(crate) fn week_ends(&self) -> Vec<Timestamp> {
+        self.week_starts
+            .iter()
+            .map(|start| {
+                start
+                    .saturating_add(7.days())
+                    .to_zoned(self.time_zone.clone())
+                    .map_or(self.now, |midnight| midnight.timestamp())
+                    .min(self.now)
+            })
+            .collect()
+    }
+
     /// The calendar day `at` falls on in the period's time zone.
     pub(crate) fn day_of(&self, at: Timestamp) -> Date {
         at.to_zoned(self.time_zone.clone()).date()

@@ -8,13 +8,14 @@ use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
 use super::edit::{Edit, Write};
+use crate::analytics::AdministrableTeams;
 use crate::linear::model::{
     Attachment, Comment, Cycle, Issue, Label, Member, Project, StateSpan, Team, Viewer,
     WorkflowState, Workspace,
 };
 use crate::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, PostedComment, SearchResults,
-    TeamChanges, TeamIssuesPage, TeamOptions,
+    TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions,
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
@@ -64,6 +65,15 @@ pub struct Store {
     /// trusting cycle histories from the last one.
     #[serde(skip)]
     analytics_windows: Vec<AnalyticsWindow>,
+    /// The windows team analytics loads have covered in this session, by
+    /// team id. Left out of the snapshot, as `analytics_windows` is.
+    #[serde(skip)]
+    team_analytics_windows: BTreeMap<String, Vec<AnalyticsWindow>>,
+    /// The ids of the teams the viewer can administer, once loaded in this
+    /// session. Left out of the snapshot, so a change in Linear shows on the
+    /// next launch.
+    #[serde(skip)]
+    administrable_teams: Option<Vec<String>>,
 }
 
 impl Store {
@@ -241,7 +251,40 @@ impl Store {
     /// ask for it. The rest replaces what is stored by id.
     pub fn merge_analytics(&mut self, window: AnalyticsWindow, loaded: &AnalyticsIssues) {
         self.viewer = Some(loaded.viewer.clone());
-        for issue in &loaded.issues {
+        self.upsert_keeping_history(&loaded.issues);
+        by_id(&mut self.cycles, &loaded.cycles, |cycle| &cycle.id);
+        by_id(&mut self.teams, &loaded.teams, |team| &team.id);
+        by_id(&mut self.labels, &loaded.labels, |label| &label.id);
+        by_id(&mut self.projects, &loaded.projects, |project| &project.id);
+        by_id(&mut self.members, &loaded.members, |member| &member.id);
+        self.set_viewer_teams(&loaded.teams);
+        self.analytics_windows.push(window);
+        self.loaded_at(loaded.as_of);
+    }
+
+    /// Takes in a team analytics load for `window`, as
+    /// [`Store::merge_analytics`] does, and counts the window as covered for
+    /// that team only.
+    pub fn merge_team_analytics(&mut self, window: AnalyticsWindow, loaded: &TeamAnalyticsIssues) {
+        self.upsert_keeping_history(&loaded.issues);
+        by_id(&mut self.cycles, &loaded.cycles, |cycle| &cycle.id);
+        by_id(
+            &mut self.teams,
+            std::slice::from_ref(&loaded.team),
+            |team| &team.id,
+        );
+        by_id(&mut self.labels, &loaded.labels, |label| &label.id);
+        by_id(&mut self.projects, &loaded.projects, |project| &project.id);
+        by_id(&mut self.members, &loaded.members, |member| &member.id);
+        self.team_analytics_windows
+            .entry(loaded.team.id.clone())
+            .or_default()
+            .push(window);
+        self.loaded_at(loaded.as_of);
+    }
+
+    fn upsert_keeping_history(&mut self, issues: &[Issue]) {
+        for issue in issues {
             let mut issue = issue.clone();
             if issue.state_history.is_empty()
                 && let Some(stored) = self.issues.get(&issue.id)
@@ -251,38 +294,31 @@ impl Store {
             }
             self.upsert_issue(issue);
         }
-        by_id(&mut self.cycles, &loaded.cycles, |cycle| &cycle.id);
-        by_id(&mut self.teams, &loaded.teams, |team| &team.id);
-        by_id(&mut self.labels, &loaded.labels, |label| &label.id);
-        by_id(&mut self.projects, &loaded.projects, |project| &project.id);
-        by_id(&mut self.members, &loaded.members, |member| &member.id);
-        self.set_viewer_teams(&loaded.teams);
-        self.analytics_windows.push(window);
-        self.as_of = Some(
-            self.as_of
-                .map_or(loaded.as_of, |as_of| as_of.max(loaded.as_of)),
-        );
     }
 
     /// How far back analytics loads reach without a gap up to now, or `None`
     /// before a load that reaches now has arrived.
     pub fn analytics_since(&self) -> Option<Timestamp> {
-        let mut since = self
-            .analytics_windows
-            .iter()
-            .filter(|window| window.reaches_now())
-            .map(|window| window.since)
-            .min()?;
-        while let Some(earlier) = self
-            .analytics_windows
-            .iter()
-            .filter(|window| window.since < since && window.until.is_some_and(|u| u >= since))
-            .map(|window| window.since)
-            .min()
-        {
-            since = earlier;
-        }
-        Some(since)
+        covered_since(&self.analytics_windows)
+    }
+
+    /// How far back team analytics loads of `team_id` reach without a gap
+    /// up to now, as [`Store::analytics_since`].
+    pub fn team_analytics_since(&self, team_id: &str) -> Option<Timestamp> {
+        covered_since(self.team_analytics_windows.get(team_id)?)
+    }
+
+    /// Remembers the ids of the teams the viewer can administer.
+    pub fn set_administrable_teams(&mut self, team_ids: Vec<String>) {
+        self.administrable_teams = Some(team_ids);
+    }
+
+    /// The teams the viewer can administer, or `None` until they have
+    /// loaded in this session.
+    pub fn administrable_teams(&self) -> Option<AdministrableTeams> {
+        self.administrable_teams
+            .as_ref()
+            .map(|ids| AdministrableTeams::new(ids.iter().cloned()))
     }
 
     /// Adds a comment Linear has stored to its issue's comments, in order,
@@ -496,6 +532,24 @@ impl Store {
             .flatten()
             .filter_map(|id| self.projects.get(id))
     }
+}
+
+/// How far back `windows` reach without a gap up to now.
+fn covered_since(windows: &[AnalyticsWindow]) -> Option<Timestamp> {
+    let mut since = windows
+        .iter()
+        .filter(|window| window.reaches_now())
+        .map(|window| window.since)
+        .min()?;
+    while let Some(earlier) = windows
+        .iter()
+        .filter(|window| window.since < since && window.until.is_some_and(|u| u >= since))
+        .map(|window| window.since)
+        .min()
+    {
+        since = earlier;
+    }
+    Some(since)
 }
 
 fn by_id<T: Clone>(stored: &mut BTreeMap<String, T>, incoming: &[T], id: impl Fn(&T) -> &String) {

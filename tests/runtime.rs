@@ -12,8 +12,8 @@ use linear_rat::auth::KeySource;
 use linear_rat::linear::model::{Issue, Label, Member, Team, Viewer, WorkflowState, Workspace};
 use linear_rat::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, FakeClient, IssueDetail,
-    IssueUpdate, LinearClient, SearchResults, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
-    Urgency, demo,
+    IssueUpdate, LinearClient, SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage,
+    TeamOptions, TeamQuery, Urgency, demo,
 };
 use linear_rat::runtime;
 use linear_rat::snapshot::SnapshotCache;
@@ -162,6 +162,18 @@ impl LinearClient for RejectingClient {
     ) -> Result<Issue, ClientError> {
         Err(ClientError::InvalidKey)
     }
+
+    async fn administrable_teams(&self) -> Result<Vec<String>, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn team_analytics(
+        &self,
+        _: &str,
+        _: AnalyticsWindow,
+    ) -> Result<TeamAnalyticsIssues, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
 }
 
 #[tokio::test]
@@ -295,6 +307,18 @@ async fn q_quits_while_the_load_is_still_in_flight() {
         ) -> Result<Issue, ClientError> {
             future::pending().await
         }
+
+        async fn administrable_teams(&self) -> Result<Vec<String>, ClientError> {
+            future::pending().await
+        }
+
+        async fn team_analytics(
+            &self,
+            _: &str,
+            _: AnalyticsWindow,
+        ) -> Result<TeamAnalyticsIssues, ClientError> {
+            future::pending().await
+        }
     }
     let mut app = App::new(TestBackend::new(80, 24), State::loading(None)).unwrap();
 
@@ -401,6 +425,18 @@ impl LinearClient for CountingClient {
         input: &linear_rat::linear::IssueCreate,
     ) -> Result<Issue, ClientError> {
         FakeClient.create_issue(input).await
+    }
+
+    async fn administrable_teams(&self) -> Result<Vec<String>, ClientError> {
+        FakeClient.administrable_teams().await
+    }
+
+    async fn team_analytics(
+        &self,
+        team_id: &str,
+        window: AnalyticsWindow,
+    ) -> Result<TeamAnalyticsIssues, ClientError> {
+        FakeClient.team_analytics(team_id, window).await
     }
 }
 

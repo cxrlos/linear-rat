@@ -48,6 +48,30 @@ pub fn weekly_flow(issues: &[Issue], unit: Unit, period: &Period) -> Vec<WeekFlo
     weeks
 }
 
+/// How many issues were open at the end of each week of `period`, oldest
+/// first; the current week counts at the period's now. An issue is open from
+/// its creation until it was completed or canceled, so a reopened issue
+/// (open now) counts as open since its creation.
+pub fn open_issue_trend(issues: &[Issue], period: &Period) -> Vec<u32> {
+    let ends = period.week_ends();
+    ends.iter()
+        .map(|&end| {
+            let open = issues.iter().filter(|issue| {
+                issue.created_at < end && closed_at(issue).is_none_or(|closed| closed >= end)
+            });
+            u32::try_from(open.count()).unwrap_or(u32::MAX)
+        })
+        .collect()
+}
+
+fn closed_at(issue: &Issue) -> Option<jiff::Timestamp> {
+    if is_canceled(issue) {
+        issue.canceled_at
+    } else {
+        completed_at(issue)
+    }
+}
+
 /// Issues completed on one calendar day, a cell of the completion heatmap.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DayCount {

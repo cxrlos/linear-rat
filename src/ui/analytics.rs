@@ -1,6 +1,7 @@
-//! The Analytics screen's Personal view: how the viewer's own work flowed
-//! over the picked range. Every section is plain lines, so the view scrolls
-//! as one and nothing depends on a widget's own layout.
+//! The Analytics screen: the Personal view, how the viewer's own work flowed
+//! over the picked range, and the Team view, how one of the viewer's teams
+//! is doing. Every section is plain lines, so the view scrolls as one and
+//! nothing depends on a widget's own layout.
 
 use jiff::SignedDuration;
 use jiff::civil::Date;
@@ -14,10 +15,11 @@ use super::icons::{self, IconSet};
 use super::style;
 use super::theme::Theme;
 use crate::analytics::{
-    DayCount, IssueAge, Percentiles, PersonalAnalytics, Share, Unit, WeekFlow, WeekRange,
-    personal_analytics,
+    BurnUp, DayCount, IssueAge, PerPersonBreakdown, Percentiles, PersonalAnalytics, Share,
+    TeamAnalytics, Unit, WeekFlow, WeekRange, personal_analytics, team_analytics,
 };
-use crate::app::{Load, State, Store};
+use crate::app::{Action, AnalyticsView, Load, State, Store};
+use crate::keys;
 use crate::linear::model::StateType;
 
 const TITLE: &str = "Analytics";
@@ -33,6 +35,10 @@ const SHARE_NAME_WIDTH: usize = 18;
 const SHARE_BAR_WIDTH: usize = 12;
 /// Each split lists this many keys, then how many more there are.
 const SHARES_SHOWN: usize = 6;
+/// The Team view's issue lists show this many issues, then how many more.
+const TEAM_ISSUES_SHOWN: usize = 8;
+/// The per-person breakdown's number columns.
+const PERSON_COLUMN_WIDTH: usize = 9;
 /// The gap between the two columns of the wide layout.
 const GAP: u16 = 2;
 
@@ -49,7 +55,10 @@ pub fn render(state: &State, frame: &mut Frame, area: Rect) {
         Constraint::Fill(1),
     ])
     .areas(inner);
-    frame.render_widget(Paragraph::new(header(state)), header_area);
+    frame.render_widget(
+        Paragraph::new(header(state, usize::from(header_area.width))),
+        header_area,
+    );
     frame.render_widget(Paragraph::new(status(state)), status_area);
 
     let columns = columns(state, body.width);
@@ -107,6 +116,15 @@ fn columns(state: &State, width: u16) -> Columns {
     let Some(view) = View::new(state) else {
         let message = match state.load {
             Load::Loading => "Loading your issues from Linear…",
+            Load::Loaded | Load::Failed(_) if state.store.viewer().is_none() => {
+                "Nothing to show until lrat loads from Linear."
+            }
+            Load::Loaded | Load::Failed(_) if state.analytics_screen.is_loading() => {
+                "Loading your teams from Linear…"
+            }
+            Load::Loaded | Load::Failed(_) if state.analytics_period().is_some() => {
+                "You are not a member of any team."
+            }
             Load::Loaded | Load::Failed(_) => "Nothing to show until lrat loads from Linear.",
         };
         return Columns::One(vec![Line::styled(message, style::muted(theme))]);
@@ -127,30 +145,82 @@ fn columns(state: &State, width: u16) -> Columns {
     }
 }
 
-/// The view (only Personal for now) and the range picker, with the picked
-/// range in brackets.
-fn header(state: &State) -> Line<'static> {
+/// The key that toggles the view and the two views, the team the Team
+/// view shows with the key that switches it, and the range picker. The
+/// picked view and range are in brackets. The team name is cut to what
+/// `width` leaves, so the range picker stays in view.
+fn header(state: &State, width: usize) -> Line<'static> {
     let theme = &state.theme;
-    let mut spans = vec![
-        Span::styled("Personal", style::accent(theme)),
-        Span::styled("   Range ", style::muted(theme)),
-    ];
-    let picked = state.analytics_range();
-    for range in RANGES {
-        let label = format!("{} weeks", range.weeks());
-        spans.push(if range == picked {
+    let view = state.analytics_screen.view();
+    let mut spans = key(state, Action::ToggleAnalyticsView);
+    for (label, shown) in [
+        ("Personal", view == AnalyticsView::Personal),
+        ("Team", view == AnalyticsView::Team),
+    ] {
+        spans.push(if shown {
             Span::styled(format!("[{label}]"), style::accent(theme))
         } else {
             Span::styled(format!(" {label} "), style::muted(theme))
         });
     }
+    let mut range_spans = vec![Span::styled("   Range ", style::muted(theme))];
+    let picked = state.analytics_range();
+    for range in RANGES {
+        let label = format!("{} weeks", range.weeks());
+        range_spans.push(if range == picked {
+            Span::styled(format!("[{label}]"), style::accent(theme))
+        } else {
+            Span::styled(format!(" {label} "), style::muted(theme))
+        });
+    }
+    if view == AnalyticsView::Team
+        && let Some(team) = state.analytics_team()
+    {
+        spans.push(Span::raw("  "));
+        spans.extend(key(state, Action::SwitchAnalyticsTeam));
+        let used: usize = spans.iter().chain(&range_spans).map(Span::width).sum();
+        // The team key stays whole; the name takes what is left.
+        let name_width = width.saturating_sub(used + team.key.chars().count() + 1);
+        let label = if name_width == 0 {
+            team.key.clone()
+        } else {
+            format!("{} {}", team.key, fit(&team.name, name_width))
+        };
+        spans.push(Span::styled(
+            label,
+            Style::new().add_modifier(Modifier::BOLD),
+        ));
+    }
+    spans.extend(range_spans);
     Line::from(spans)
+}
+
+/// The first key that runs `action` on the screen, as accented text and a
+/// space.
+fn key(state: &State, action: Action) -> Vec<Span<'static>> {
+    state
+        .keymap
+        .keys_for(action, &keys::screen_contexts(state))
+        .first()
+        .map(|key| {
+            vec![
+                Span::styled(key.to_string(), style::accent(&state.theme)),
+                Span::raw(" "),
+            ]
+        })
+        .unwrap_or_default()
 }
 
 /// Whether a load is in flight or why the last one failed; blank otherwise.
 fn status(state: &State) -> Line<'static> {
     let theme = &state.theme;
-    if let Some(error) = state.analytics_screen.error() {
+    let team_error = match state.analytics_screen.view() {
+        AnalyticsView::Personal => None,
+        AnalyticsView::Team => state
+            .analytics_team()
+            .and_then(|team| state.analytics_screen.team_error(&team.id)),
+    };
+    if let Some(error) = state.analytics_screen.error().or(team_error) {
         Line::styled(
             format!("Could not load analytics: {error}"),
             style::error(theme),
@@ -164,13 +234,23 @@ fn status(state: &State) -> Line<'static> {
 
 /// Everything the sections draw from.
 struct View<'a> {
+    /// What the sections both views share draw from; the Team view fills
+    /// it from its team analytics, with no completion days.
     analytics: PersonalAnalytics,
+    /// The rest of the Team view; `None` in the Personal view.
+    team: Option<TeamView>,
     names: Names<'a>,
     theme: &'a Theme,
     icons: IconSet,
     today: Date,
     /// Whether the viewer's teams have loaded, so the unit is known.
     teams_known: bool,
+}
+
+struct TeamView {
+    analytics: TeamAnalytics,
+    /// The stale threshold, from `[analytics] stale-days`.
+    stale_days: u32,
 }
 
 impl<'a> View<'a> {
@@ -180,8 +260,39 @@ impl<'a> View<'a> {
         let teams: Vec<_> = state.store.viewer_teams().cloned().collect();
         let issues: Vec<_> = state.store.issues().cloned().collect();
         let today = period.now().to_zoned(period.time_zone().clone()).date();
+        let (analytics, team) = match state.analytics_screen.view() {
+            AnalyticsView::Personal => (personal_analytics(viewer, &teams, &issues, &period), None),
+            AnalyticsView::Team => {
+                let team = state.analytics_team()?;
+                let cycles: Vec<_> = state.store.cycles().cloned().collect();
+                let threshold = state.analytics.stale_threshold;
+                let analytics = team_analytics(
+                    team,
+                    &state.store.administrable_teams().unwrap_or_default(),
+                    &issues,
+                    &cycles,
+                    threshold,
+                    &period,
+                );
+                let shared = PersonalAnalytics {
+                    unit: analytics.unit,
+                    weeks: analytics.weeks.clone(),
+                    completion_days: Vec::new(),
+                    cycle_time: analytics.cycle_time,
+                    lead_time: analytics.lead_time,
+                    in_progress: analytics.in_progress.clone(),
+                    splits: analytics.splits.clone(),
+                };
+                let team = TeamView {
+                    analytics,
+                    stale_days: threshold.in_days(),
+                };
+                (shared, Some(team))
+            }
+        };
         Some(Self {
-            analytics: personal_analytics(viewer, &teams, &issues, &period),
+            analytics,
+            team,
             names: Names(&state.store),
             theme: &state.theme,
             icons: state.ui.icons,
@@ -190,9 +301,23 @@ impl<'a> View<'a> {
         })
     }
 
-    /// Created vs completed, throughput, the heatmap and the timings.
     fn charts(&self, width: usize) -> Vec<Line<'static>> {
-        let mut lines = self.flow(width);
+        match &self.team {
+            None => self.personal_charts(width),
+            Some(team) => self.team_charts(team, width),
+        }
+    }
+
+    fn lists(&self, width: usize) -> Vec<Line<'static>> {
+        match &self.team {
+            None => self.personal_lists(width),
+            Some(team) => self.team_lists(team, width),
+        }
+    }
+
+    /// Created vs completed, throughput, the heatmap and the timings.
+    fn personal_charts(&self, width: usize) -> Vec<Line<'static>> {
+        let mut lines = self.flow(width, None);
         lines.push(Line::default());
         lines.extend(self.throughput());
         lines.push(Line::default());
@@ -203,8 +328,8 @@ impl<'a> View<'a> {
     }
 
     /// The in-progress issues and the splits of completed work.
-    fn lists(&self, width: usize) -> Vec<Line<'static>> {
-        let mut lines = self.in_progress(width);
+    fn personal_lists(&self, width: usize) -> Vec<Line<'static>> {
+        let mut lines = self.in_progress(width, usize::MAX);
         let splits = &self.analytics.splits;
         let by_project = self.shares(
             "Completed by project",
@@ -244,8 +369,9 @@ impl<'a> View<'a> {
     }
 
     /// One column per week, oldest first, then the totals. Weeks that do not
-    /// fit are left out from the oldest.
-    fn flow(&self, width: usize) -> Vec<Line<'static>> {
+    /// fit are left out from the oldest. With `open`, the issues open at the
+    /// end of each week follow, and open now in the total column.
+    fn flow(&self, width: usize, open: Option<&[u32]>) -> Vec<Line<'static>> {
         let weeks = &self.analytics.weeks;
         let fit = width.saturating_sub(LABEL_WIDTH + TOTAL_WIDTH) / WEEK_WIDTH;
         let shown = &weeks[weeks.len().saturating_sub(fit)..];
@@ -293,6 +419,15 @@ impl<'a> View<'a> {
             signed(sum(WeekFlow::net_flow)),
             Style::new(),
         ));
+        if let Some(open) = open {
+            let shown_open = &open[open.len().saturating_sub(shown.len())..];
+            lines.push(row(
+                "Open",
+                shown_open.iter().map(u32::to_string).collect(),
+                open.last().map_or_else(String::new, u32::to_string),
+                Style::new(),
+            ));
+        }
         if self.analytics.unit == Unit::Points {
             let total: f64 = weeks.iter().map(|week| week.completed_scope).sum();
             lines.push(row(
@@ -331,6 +466,11 @@ impl<'a> View<'a> {
                     "{} points a week",
                     one_decimal(points.iter().sum::<f64>() / count)
                 ),
+            ));
+        } else if self.team.is_some() {
+            lines.push(Line::styled(
+                "This team does not use estimates, so scope is counted in issues.",
+                style::muted(self.theme),
             ));
         } else if self.teams_known {
             lines.push(Line::styled(
@@ -450,8 +590,9 @@ impl<'a> View<'a> {
         lines
     }
 
-    /// The in-progress issues with their issue age, oldest first.
-    fn in_progress(&self, width: usize) -> Vec<Line<'static>> {
+    /// The in-progress issues with their issue age, oldest first, at most
+    /// `shown` of them.
+    fn in_progress(&self, width: usize, shown: usize) -> Vec<Line<'static>> {
         let ages = &self.analytics.in_progress;
         let mut lines = vec![self.title("In progress", Some(format!("{}", ages.len())))];
         if ages.is_empty() {
@@ -461,29 +602,55 @@ impl<'a> View<'a> {
             ));
             return lines;
         }
-        let rows: Vec<(&IssueAge, String, String)> = ages
+        let rows: Vec<(&str, SignedDuration)> = ages
             .iter()
-            .map(|age| {
-                let (identifier, title) = self.names.issue(&age.issue_id);
-                (age, identifier, title)
+            .map(|age: &IssueAge| (age.issue_id.as_str(), age.age))
+            .collect();
+        lines.extend(self.issue_rows(&rows, width, shown));
+        lines
+    }
+
+    /// One row per issue: its identifier, title and a duration, at most
+    /// `shown` rows, then how many more there are.
+    fn issue_rows(
+        &self,
+        issues: &[(&str, SignedDuration)],
+        width: usize,
+        shown: usize,
+    ) -> Vec<Line<'static>> {
+        let rows: Vec<(String, String, SignedDuration)> = issues
+            .iter()
+            .take(shown)
+            .map(|&(id, age)| {
+                let (identifier, title) = self.names.issue(id);
+                (identifier, title, age)
             })
             .collect();
         let id_width = rows
             .iter()
-            .map(|(_, identifier, _)| identifier.chars().count())
+            .map(|(identifier, _, _)| identifier.chars().count())
             .max()
             .unwrap_or(0);
         let age_width = 6;
         let title_width = width.saturating_sub(id_width + age_width + 2);
-        for (age, identifier, title) in rows {
-            lines.push(Line::from(vec![
-                Span::styled(
-                    format!("{identifier:<id_width$} "),
-                    style::muted(self.theme),
-                ),
-                Span::raw(format!("{:<title_width$}", fit(&title, title_width))),
-                Span::raw(format!(" {:>age_width$}", duration(age.age))),
-            ]));
+        let mut lines: Vec<Line<'static>> = rows
+            .into_iter()
+            .map(|(identifier, title, age)| {
+                Line::from(vec![
+                    Span::styled(
+                        format!("{identifier:<id_width$} "),
+                        style::muted(self.theme),
+                    ),
+                    Span::raw(format!("{:<title_width$}", fit(&title, title_width))),
+                    Span::raw(format!(" {:>age_width$}", duration(age))),
+                ])
+            })
+            .collect();
+        if issues.len() > shown {
+            lines.push(Line::styled(
+                format!("and {} more", issues.len() - shown),
+                style::muted(self.theme),
+            ));
         }
         lines
     }
@@ -514,6 +681,8 @@ impl<'a> View<'a> {
             );
             if self.analytics.unit == Unit::Points {
                 text.push_str(&format!("{:>5} pts ", scope(share.scope)));
+            } else {
+                text.push(' ');
             }
             let bar = if largest > 0.0 {
                 ((share.scope / largest) * SHARE_BAR_WIDTH as f64).round() as usize
@@ -535,6 +704,269 @@ impl<'a> View<'a> {
     }
 }
 
+impl View<'_> {
+    /// Created vs completed with the open-issue trend, throughput, the
+    /// active cycle's burn-up, velocity and the timings.
+    fn team_charts(&self, team: &TeamView, width: usize) -> Vec<Line<'static>> {
+        let mut lines = self.flow(width, Some(&team.analytics.open_trend));
+        for section in [
+            self.throughput(),
+            self.burn_up(team.analytics.burn_up.as_ref()),
+            self.velocity(team),
+            self.timing(),
+        ] {
+            lines.push(Line::default());
+            lines.extend(section);
+        }
+        lines
+    }
+
+    /// Issue age, triage health, stale issues, the splits by priority and
+    /// label, and the per-person breakdown for a team the viewer
+    /// administers.
+    fn team_lists(&self, team: &TeamView, width: usize) -> Vec<Line<'static>> {
+        let mut lines = self.in_progress(width, TEAM_ISSUES_SHOWN);
+        let splits = &self.analytics.splits;
+        let by_priority = self.shares("Completed by priority", &splits.by_priority, |key| {
+            format!(
+                "{} {}",
+                self.icons.priority(*key),
+                icons::priority_name(*key)
+            )
+        });
+        let by_label = self.shares("Completed by label", &splits.by_label, |key| match key {
+            Some(id) => self.names.label(id),
+            None => "No label".to_owned(),
+        });
+        let mut sections = vec![
+            self.triage(team, width),
+            self.stale(team, width),
+            by_priority,
+            by_label,
+        ];
+        if let Some(breakdown) = &team.analytics.per_person {
+            sections.push(self.per_person(breakdown, width));
+        }
+        for section in sections {
+            lines.push(Line::default());
+            lines.extend(section);
+        }
+        lines
+    }
+
+    /// The active cycle's scope and completed scope per day, on one scale,
+    /// and its scope creep.
+    fn burn_up(&self, burn_up: Option<&BurnUp>) -> Vec<Line<'static>> {
+        let Some(burn_up) = burn_up else {
+            return vec![
+                self.title("Active cycle", None),
+                Line::styled("No active cycle.", style::muted(self.theme)),
+            ];
+        };
+        let cycle = self.names.0.cycle(&burn_up.cycle_id);
+        let name = cycle.map_or_else(
+            || burn_up.cycle_id.clone(),
+            |cycle| {
+                cycle
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| format!("Cycle {}", cycle.number))
+            },
+        );
+        let length = cycle.map_or(0, |cycle| {
+            cycle
+                .ends_at
+                .duration_since(cycle.starts_at)
+                .as_hours()
+                .div_euclid(24)
+        });
+        let note = format!("{name}, day {} of {length}", burn_up.days.len());
+        let mut lines = vec![self.title("Active cycle", Some(note))];
+        let unit = unit_word(burn_up.unit);
+        let max = burn_up
+            .days
+            .iter()
+            .map(|day| day.scope.max(day.completed))
+            .fold(0.0, f64::max);
+        let in_scope: Vec<f64> = burn_up.days.iter().map(|day| day.scope).collect();
+        let completed: Vec<f64> = burn_up.days.iter().map(|day| day.completed).collect();
+        for (label, values) in [("Scope", in_scope), ("Completed", completed)] {
+            let last = values.last().copied().unwrap_or(0.0);
+            let mut spans = vec![Span::raw(format!("{label:<LABEL_WIDTH$}"))];
+            spans.extend(self.bars(&values, max));
+            spans.push(Span::styled(
+                format!("  {} {unit}", scope(last)),
+                style::muted(self.theme),
+            ));
+            lines.push(Line::from(spans));
+        }
+        lines.push(Line::from(vec![
+            Span::raw("Scope creep "),
+            Span::raw(format!("+{} {unit}", scope(burn_up.scope_creep))),
+            Span::styled(" added after day one", style::muted(self.theme)),
+        ]));
+        lines
+    }
+
+    /// One bar per value on a scale up to `max`; a zero is a muted dot.
+    fn bars(&self, values: &[f64], max: f64) -> Vec<Span<'static>> {
+        values
+            .iter()
+            .map(|&value| {
+                if value <= 0.0 || max <= 0.0 {
+                    Span::styled("·", style::muted(self.theme))
+                } else {
+                    Span::styled(bar(value / max).to_string(), style::accent(self.theme))
+                }
+            })
+            .collect()
+    }
+
+    /// What each of the last finished cycles completed against what it
+    /// committed to on its first day, oldest first.
+    fn velocity(&self, team: &TeamView) -> Vec<Line<'static>> {
+        let velocity = &team.analytics.velocity;
+        let unit = unit_word(team.analytics.unit);
+        if velocity.is_empty() {
+            return vec![
+                self.title("Velocity", None),
+                Line::styled("No finished cycles.", style::muted(self.theme)),
+            ];
+        }
+        let average =
+            velocity.iter().map(|cycle| cycle.completed).sum::<f64>() / velocity.len() as f64;
+        let note = format!(
+            "last {} cycles, {} {unit} a cycle",
+            velocity.len(),
+            one_decimal(average)
+        );
+        let mut lines = vec![self.title("Velocity", Some(note))];
+        let max = velocity
+            .iter()
+            .map(|cycle| cycle.completed.max(cycle.committed))
+            .fold(0.0, f64::max);
+        for cycle in velocity {
+            let share = cycle.committed_completed_share.map_or_else(
+                || "nothing committed".to_owned(),
+                |share| format!("{:.0}% of committed", share * 100.0),
+            );
+            let mut spans = vec![Span::raw(format!(
+                "{:<LABEL_WIDTH$}",
+                format!("Cycle {}", cycle.number)
+            ))];
+            let filled = if max > 0.0 {
+                ((cycle.completed / max) * SHARE_BAR_WIDTH as f64).round() as usize
+            } else {
+                0
+            };
+            spans.push(Span::styled(
+                format!("{:<SHARE_BAR_WIDTH$}", "█".repeat(filled)),
+                style::accent(self.theme),
+            ));
+            spans.push(Span::raw(format!(
+                " {:>4} of {:>4} {unit}  ",
+                scope(cycle.completed),
+                scope(cycle.committed),
+            )));
+            spans.push(Span::styled(share, style::muted(self.theme)));
+            lines.push(Line::from(spans));
+        }
+        lines
+    }
+
+    /// What waits in triage now, longest waiting first, and the median
+    /// triage time of the range.
+    fn triage(&self, team: &TeamView, width: usize) -> Vec<Line<'static>> {
+        let triage = &team.analytics.triage;
+        let median = triage.median_triage_time.map_or_else(
+            || "no issue left triage in range".to_owned(),
+            |median| format!("median triage time {}", duration(median)),
+        );
+        let note = format!("{} waiting, {median}", triage.waiting.len());
+        let mut lines = vec![self.title("Triage", Some(note))];
+        let now = self.names.0.as_of().unwrap_or_default();
+        let waiting: Vec<(&str, SignedDuration)> = triage
+            .waiting
+            .iter()
+            .map(|id| {
+                let waited = self
+                    .names
+                    .0
+                    .issue(id)
+                    .map_or(SignedDuration::ZERO, |issue| {
+                        now.duration_since(issue.created_at)
+                    });
+                (id.as_str(), waited)
+            })
+            .collect();
+        lines.extend(self.issue_rows(&waiting, width, TEAM_ISSUES_SHOWN));
+        lines
+    }
+
+    /// The open issues with no update for the stale threshold, longest
+    /// untouched first.
+    fn stale(&self, team: &TeamView, width: usize) -> Vec<Line<'static>> {
+        let stale = &team.analytics.stale;
+        let days = team.stale_days;
+        let note = format!(
+            "{}, no update in {days} {}",
+            stale.len(),
+            if days == 1 { "day" } else { "days" }
+        );
+        let mut lines = vec![self.title("Stale issues", Some(note))];
+        let rows: Vec<(&str, SignedDuration)> = stale
+            .iter()
+            .map(|issue| (issue.issue_id.as_str(), issue.since_update))
+            .collect();
+        lines.extend(self.issue_rows(&rows, width, TEAM_ISSUES_SHOWN));
+        lines
+    }
+
+    /// Each assignee's completed, in-progress, created and open work, in
+    /// member order with unassigned work last.
+    fn per_person(&self, breakdown: &PerPersonBreakdown, width: usize) -> Vec<Line<'static>> {
+        let mut lines = vec![self.title("Per person", None)];
+        let open = match breakdown.unit {
+            Unit::Points => "Open pts",
+            Unit::Issues => "Open",
+        };
+        let name_width = width.saturating_sub(4 * PERSON_COLUMN_WIDTH).max(8);
+        let row = |name: &str, cells: [String; 4]| {
+            let mut text = format!("{:<name_width$}", fit(name, name_width));
+            for cell in cells {
+                text.push_str(&format!("{cell:>PERSON_COLUMN_WIDTH$}"));
+            }
+            text
+        };
+        lines.push(Line::styled(
+            row("", ["Done", "Started", "Created", open].map(str::to_owned)),
+            style::muted(self.theme),
+        ));
+        if breakdown.people.is_empty() {
+            lines.push(Line::styled(
+                "No issues in range.",
+                style::muted(self.theme),
+            ));
+        }
+        for person in &breakdown.people {
+            let name = person
+                .assignee_id
+                .as_deref()
+                .map_or_else(|| "Unassigned".to_owned(), |id| self.names.member(id));
+            lines.push(Line::raw(row(
+                &name,
+                [
+                    person.completed.to_string(),
+                    person.in_progress.to_string(),
+                    person.created.to_string(),
+                    scope(person.open_scope),
+                ],
+            )));
+        }
+        lines
+    }
+}
+
 /// Names of what the splits and the in-progress list refer to, falling back
 /// to the id when the store does not have it.
 struct Names<'a>(&'a Store);
@@ -550,6 +982,12 @@ impl Names<'_> {
         self.0
             .label(id)
             .map_or_else(|| id.to_owned(), |label| label.name.clone())
+    }
+
+    fn member(&self, id: &str) -> String {
+        self.0
+            .member(id)
+            .map_or_else(|| id.to_owned(), |member| member.name.clone())
     }
 
     /// The identifier and title of the issue `id`.
@@ -583,6 +1021,21 @@ fn shade(completed: u32) -> char {
         2 => '▒',
         3 => '▓',
         _ => '█',
+    }
+}
+
+/// The bar for a value that is `share` of the largest, at least the
+/// lowest bar.
+fn bar(share: f64) -> char {
+    const BARS: [char; 8] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+    let level = (share * 8.0).ceil() as usize;
+    BARS[level.clamp(1, 8) - 1]
+}
+
+fn unit_word(unit: Unit) -> &'static str {
+    match unit {
+        Unit::Points => "pts",
+        Unit::Issues => "issues",
     }
 }
 

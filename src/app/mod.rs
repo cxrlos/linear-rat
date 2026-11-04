@@ -26,7 +26,7 @@ use ratatui::Terminal;
 use ratatui::backend::Backend;
 
 pub use action::{Action, Copyable};
-pub use analytics_screen::AnalyticsScreen;
+pub use analytics_screen::{AnalyticsScreen, AnalyticsView};
 pub use compose::{Drafts, IssueDraft, NewComment, NewIssue, Writing, is_local};
 pub use create::{CreateForm, Step};
 pub use detail::{Detail, DetailLoad};

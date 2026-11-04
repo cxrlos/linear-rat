@@ -16,8 +16,8 @@ use linear_rat::auth::{
 use linear_rat::linear::model::{Issue, Label, Member, Team, Viewer, WorkflowState, Workspace};
 use linear_rat::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, FakeClient, IssueDetail,
-    IssueUpdate, LinearClient, SearchResults, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
-    Urgency,
+    IssueUpdate, LinearClient, SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage,
+    TeamOptions, TeamQuery, Urgency,
 };
 
 const SECRET: &str = "lin_api_fictional0000000000000000000000000000";
@@ -198,6 +198,18 @@ impl LinearClient for RejectingClient {
         &self,
         _: &linear_rat::linear::IssueCreate,
     ) -> Result<Issue, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn administrable_teams(&self) -> Result<Vec<String>, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn team_analytics(
+        &self,
+        _: &str,
+        _: AnalyticsWindow,
+    ) -> Result<TeamAnalyticsIssues, ClientError> {
         Err(ClientError::InvalidKey)
     }
 }

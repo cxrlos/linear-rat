@@ -5,7 +5,7 @@ use super::{LoadError, NewComment, NewIssue, SyncFailure, Write, Writing};
 use crate::linear::model::{Issue, Label, Member, Team, WorkflowState};
 use crate::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, PostedComment, SearchResults,
-    TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
+    TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
 };
 
 /// Something that happened, fed to [`update`](super::update).
@@ -59,6 +59,19 @@ pub enum Event {
     AnalyticsLoaded {
         window: AnalyticsWindow,
         result: Result<AnalyticsIssues, String>,
+    },
+    /// The result of
+    /// [`Effect::LoadAdministrableTeams`](super::Effect::LoadAdministrableTeams):
+    /// team ids, or why they did not load.
+    AdministrableTeamsLoaded(Result<Vec<String>, String>),
+    /// The result of
+    /// [`Effect::LoadTeamAnalytics`](super::Effect::LoadTeamAnalytics) for
+    /// `team_id` over `window`; the error says why it failed, with its
+    /// context.
+    TeamAnalyticsLoaded {
+        team_id: String,
+        window: AnalyticsWindow,
+        result: Result<TeamAnalyticsIssues, String>,
     },
     /// The runtime could not carry out an effect. The message, with its
     /// context, becomes the notice.

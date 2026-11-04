@@ -83,6 +83,8 @@ pub enum Purpose {
     Team,
     /// Filter Team Issues by this field.
     Filter(FilterField),
+    /// Show this team in the Team view of Analytics.
+    AnalyticsTeam,
 }
 
 /// One entry of a [`Choice`]: the id it picks and what it shows.
@@ -97,7 +99,7 @@ impl Choice {
     /// What the popup is titled.
     pub fn title(&self) -> String {
         match self.purpose {
-            Purpose::Team => "Team".to_owned(),
+            Purpose::Team | Purpose::AnalyticsTeam => "Team".to_owned(),
             Purpose::Filter(field) => format!("Filter by {}", field.name().to_lowercase()),
         }
     }

@@ -1,0 +1,23 @@
+# budget: 22
+# A team's cycles matching `$cycles`, which the client builds to reach back
+# over the last six finished cycles and the active one, history arrays
+# included. 20 is room for seven cycles even when cycle settings changed; a
+# team that comes back with 20 may have more, and lrat reports it.
+query TeamCycles($teamId: String!, $cycles: CycleFilter) {
+  team(id: $teamId) {
+    cycles(first: 20, filter: $cycles) {
+      nodes {
+        id
+        number
+        name
+        startsAt
+        endsAt
+        completedAt
+        scopeHistory
+        completedScopeHistory
+        issueCountHistory
+        completedIssueCountHistory
+      }
+    }
+  }
+}

@@ -299,6 +299,32 @@ where
             in_flight.push(Box::pin(load_analytics(reach.client, window)));
             Ok(())
         }
+        Effect::LoadAdministrableTeams => {
+            let client = reach.client;
+            in_flight.push(Box::pin(async move {
+                let what = "could not load the teams you administer";
+                Event::AdministrableTeamsLoaded(
+                    ask(client, what, |c| c.administrable_teams()).await,
+                )
+            }));
+            Ok(())
+        }
+        Effect::LoadTeamAnalytics { team_id, window } => {
+            let client = reach.client;
+            in_flight.push(Box::pin(async move {
+                let what = "could not load team analytics";
+                let result = ask(client, what, |c| c.team_analytics(&team_id, window)).await;
+                if let Ok(loaded) = &result {
+                    tracing::info!(issues = loaded.issues.len(), "loaded team analytics");
+                }
+                Event::TeamAnalyticsLoaded {
+                    team_id,
+                    window,
+                    result,
+                }
+            }));
+            Ok(())
+        }
         Effect::Copy(text) => outside.copy(&text),
         Effect::OpenUrl(url) => outside.open(&url),
         // The editor owns the terminal until it exits, so the loop waits for

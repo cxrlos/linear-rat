@@ -1,8 +1,12 @@
+// clippy's allow-unwrap-in-tests does not cover helpers outside #[test] functions.
+#![allow(clippy::unwrap_used)]
+
 use jiff::Timestamp;
 use linear_rat::app::{State, Store};
 use linear_rat::linear::model::Issue;
 use linear_rat::linear::{
-    AnalyticsIssues, AnalyticsWindow, AssignedIssues, TeamChanges, TeamIssuesPage,
+    AnalyticsIssues, AnalyticsWindow, AssignedIssues, TeamAnalyticsIssues, TeamChanges,
+    TeamIssuesPage,
 };
 
 /// Midnight UTC on day `day` of October 2026.
@@ -305,4 +309,72 @@ fn the_viewers_teams_come_from_whichever_load_listed_them_last() {
     let all: Vec<String> = loaded.teams.iter().map(|team| team.id.clone()).collect();
     assert_eq!(from_analytics, all);
     assert_eq!(ids(&store), all[..1]);
+}
+
+/// A team analytics load of ENG holding only `issues`.
+fn team_analytics(issues: Vec<Issue>) -> TeamAnalyticsIssues {
+    TeamAnalyticsIssues {
+        issues,
+        ..TeamAnalyticsIssues::demo("team-eng", window(october(31), None)).unwrap()
+    }
+}
+
+#[test]
+fn team_analytics_coverage_is_kept_per_team() {
+    let mut store = Store::default();
+
+    store.merge_team_analytics(window(october(20), None), &team_analytics(Vec::new()));
+    store.merge_team_analytics(
+        window(october(1), Some(october(20))),
+        &team_analytics(Vec::new()),
+    );
+
+    assert_eq!(store.team_analytics_since("team-eng"), Some(october(1)));
+    assert_eq!(store.team_analytics_since("team-des"), None);
+    assert_eq!(store.analytics_since(), None, "personal coverage is apart");
+}
+
+#[test]
+fn a_team_analytics_copy_without_history_keeps_the_stored_history_of_its_version() {
+    let mut store = Store::default();
+    let with_history = issue(october(2), "same");
+    store.upsert_issue(with_history.clone());
+    let mut bare = with_history.clone();
+    bare.state_history.clear();
+
+    store.merge_team_analytics(window(october(1), None), &team_analytics(vec![bare]));
+
+    assert_eq!(store.issues().next().unwrap(), &with_history);
+}
+
+#[test]
+fn team_analytics_bring_the_team_and_its_cycles_with_their_history() {
+    let mut store = Store::default();
+    let loaded = team_analytics(Vec::new());
+
+    store.merge_team_analytics(window(october(1), None), &loaded);
+
+    assert_eq!(store.cycles().count(), 7);
+    assert!(store.cycles().all(|cycle| !cycle.scope_history.is_empty()));
+    assert_eq!(
+        store.team("team-eng").map(|team| team.key.as_str()),
+        Some("ENG")
+    );
+    assert_eq!(
+        store.viewer_teams().count(),
+        0,
+        "not a list of the viewer's teams"
+    );
+}
+
+#[test]
+fn the_administrable_teams_are_unknown_until_loaded() {
+    let mut store = Store::default();
+    assert!(store.administrable_teams().is_none());
+
+    store.set_administrable_teams(vec!["team-eng".to_owned()]);
+
+    let teams = store.administrable_teams().unwrap();
+    assert!(teams.includes("team-eng"));
+    assert!(!teams.includes("team-des"));
 }

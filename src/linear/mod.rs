@@ -147,6 +147,22 @@ pub trait LinearClient {
         &self,
         input: &IssueCreate,
     ) -> impl Future<Output = Result<Issue, ClientError>> + Send;
+
+    /// The ids of the teams the viewer can administer, from
+    /// `Query.administrableTeams`: the teams whose per-person breakdown lrat
+    /// shows (ADR 0001).
+    fn administrable_teams(&self) -> impl Future<Output = Result<Vec<String>, ClientError>> + Send;
+
+    /// What team analytics needs for team `team_id` over `window`: its issues
+    /// created, completed or canceled in it. A window that reaches now also
+    /// brings every open issue of the team, the in-progress ones with their
+    /// state history, and the team's last six finished cycles and its active
+    /// one with their history arrays.
+    fn team_analytics(
+        &self,
+        team_id: &str,
+        window: AnalyticsWindow,
+    ) -> impl Future<Output = Result<TeamAnalyticsIssues, ClientError>> + Send;
 }
 
 /// A comment Linear has stored, and its author.
@@ -385,6 +401,75 @@ impl AnalyticsIssues {
             as_of: demo::NOW,
             problems: Vec::new(),
         }
+    }
+}
+
+/// The result of [`LinearClient::team_analytics`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct TeamAnalyticsIssues {
+    /// The team, whose estimate setting decides whether scope is in points.
+    pub team: Team,
+    pub issues: Vec<Issue>,
+    /// The team's last six finished cycles and its active one, with their
+    /// history arrays; empty for a window that does not reach now.
+    pub cycles: Vec<Cycle>,
+    pub labels: Vec<Label>,
+    pub projects: Vec<Project>,
+    pub members: Vec<Member>,
+    /// When the data was loaded.
+    pub as_of: Timestamp,
+    /// What Linear could not give, as in [`AssignedIssues::problems`].
+    pub problems: Vec<String>,
+}
+
+impl TeamAnalyticsIssues {
+    /// The demo workspace's answer for team `team_id` over `window`, as of
+    /// [`demo::NOW`]. The state history is kept only on in-progress issues,
+    /// as Linear's is. An id the demo does not have is an error.
+    pub fn demo(team_id: &str, window: AnalyticsWindow) -> Result<Self, ClientError> {
+        let data = demo::workspace();
+        let team = data
+            .teams
+            .iter()
+            .find(|team| team.id == team_id)
+            .cloned()
+            .ok_or_else(|| not_found("team", team_id))?;
+        let in_window = |at: Option<Timestamp>| at.is_some_and(|at| window.contains(at));
+        let issues = data
+            .issues
+            .into_iter()
+            .filter(|issue| issue.team_id == team_id)
+            .filter(|issue| {
+                in_window(Some(issue.created_at))
+                    || in_window(issue.completed_at)
+                    || in_window(issue.canceled_at)
+                    || (window.reaches_now() && issue.state.state_type.is_open())
+            })
+            .map(|mut issue| {
+                if issue.state.state_type != StateType::Started {
+                    issue.state_history.clear();
+                }
+                issue
+            })
+            .collect();
+        let mut cycles: Vec<Cycle> = data
+            .cycles
+            .into_iter()
+            .filter(|cycle| window.reaches_now() && cycle.team_id == team_id)
+            .filter(|cycle| cycle.starts_at <= demo::NOW)
+            .collect();
+        cycles.sort_by_key(|cycle| Reverse(cycle.number));
+        cycles.truncate(7);
+        Ok(Self {
+            team,
+            issues,
+            cycles,
+            labels: data.labels,
+            projects: data.projects,
+            members: data.members,
+            as_of: demo::NOW,
+            problems: Vec::new(),
+        })
     }
 }
 
@@ -876,6 +961,18 @@ impl LinearClient for FakeClient {
         DEMO_CREATED.with_borrow_mut(|count| *count = created);
         DEMO_EDITS.with_borrow_mut(|edits| edits.insert(issue.id.clone(), issue.clone()));
         Ok(issue)
+    }
+
+    async fn administrable_teams(&self) -> Result<Vec<String>, ClientError> {
+        Ok(demo::administrable_team_ids())
+    }
+
+    async fn team_analytics(
+        &self,
+        team_id: &str,
+        window: AnalyticsWindow,
+    ) -> Result<TeamAnalyticsIssues, ClientError> {
+        TeamAnalyticsIssues::demo(team_id, window)
     }
 }
 

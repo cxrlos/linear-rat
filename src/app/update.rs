@@ -3,7 +3,7 @@ use ratatui::layout::Size;
 
 use super::edit::{self, Editable};
 use super::{
-    Action, Copyable, Effect, Event, Load, Modal, Palette, Pane, Screen, Search, State,
+    Action, Copyable, Effect, Event, Load, Modal, Palette, Pane, Purpose, Screen, Search, State,
     analytics_screen, compose, create, detail, links, palette, search, sync, team_issues,
 };
 use crate::keys::{self, Key, Resolution};
@@ -110,6 +110,23 @@ fn apply(state: &mut State, event: Event) -> Update {
         }
         Event::AnalyticsLoaded { window, result } => {
             analytics_screen::loaded(state, window, result);
+            clamp_analytics_scroll(state);
+            Update {
+                redraw: true,
+                effects: request_missing_team_view(state),
+            }
+        }
+        Event::TeamAnalyticsLoaded {
+            team_id,
+            window,
+            result,
+        } => {
+            analytics_screen::team_loaded(state, &team_id, window, result);
+            clamp_analytics_scroll(state);
+            Update::redraw()
+        }
+        Event::AdministrableTeamsLoaded(result) => {
+            analytics_screen::administrable_loaded(state, result);
             clamp_analytics_scroll(state);
             Update::redraw()
         }
@@ -253,6 +270,11 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             Some(Modal::Create(_)) => create::accept(state, None),
             Some(Modal::Palette(_)) => palette::accept(state),
             Some(Modal::Search(_)) => search::accept(state),
+            Some(Modal::Choice(choice)) if choice.purpose == Purpose::AnalyticsTeam => {
+                let update = analytics_screen::pick_team(state);
+                clamp_analytics_scroll(state);
+                update
+            }
             Some(Modal::Choice(_)) => Update {
                 redraw: true,
                 effects: team_issues::pick(state),
@@ -338,6 +360,17 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             }
             _ => scroll_cheatsheet(state, action),
         },
+        Action::ToggleAnalyticsView if state.screen == Screen::Analytics => {
+            let update = analytics_screen::toggle_view(state);
+            clamp_analytics_scroll(state);
+            update
+        }
+        Action::SwitchAnalyticsTeam
+            if state.screen == Screen::Analytics
+                && state.analytics_screen.view() == super::AnalyticsView::Team =>
+        {
+            open_choice(state, analytics_screen::team_choice(state))
+        }
         Action::SwitchTeam if state.screen == Screen::TeamIssues => {
             open_choice(state, team_issues::team_choice(state))
         }
@@ -402,13 +435,25 @@ fn move_choice(state: &mut State, action: Action) -> Update {
     }
 }
 
-/// Moves the open cheatsheet one row, no further than its last row.
+/// What the Team view of Analytics is missing, once a personal analytics
+/// load has brought the viewer's teams, while that view is on screen.
+fn request_missing_team_view(state: &mut State) -> Vec<super::Effect> {
+    if state.screen == Screen::Analytics
+        && state.analytics_screen.view() == super::AnalyticsView::Team
+    {
+        analytics_screen::request_missing(state)
+    } else {
+        Vec::new()
+    }
+}
+
 /// Keeps the Analytics view on its content after its size or content changed.
 fn clamp_analytics_scroll(state: &mut State) {
     let max = ui::analytics_max_scroll(state, state.viewport);
     analytics_screen::clamp_scroll(state, max);
 }
 
+/// Moves the open cheatsheet one row, no further than its last row.
 fn scroll_cheatsheet(state: &mut State, action: Action) -> Update {
     let max = ui::cheatsheet_max_scroll(state, state.viewport);
     let Some(Modal::Cheatsheet { scroll }) = state.modals.top_mut() else {

@@ -108,7 +108,7 @@ Between sessions, lrat keeps what it loaded in a snapshot under `$XDG_CACHE_HOME
 
 ## `[analytics]`
 
-The Analytics screen opens on `default-range-weeks`; `[` and `]` switch to a shorter or longer range from there. Weeks start on Monday in the system time zone.
+The Analytics screen opens on `default-range-weeks`; `[` and `]` switch to a shorter or longer range from there. Weeks start on Monday in the system time zone. `v` switches between the Personal and Team views, and `t` picks the team the Team view shows. Stale issues in the Team view use `stale-days`.
 
 | Key | Values | Default | Effect |
 | --- | --- | --- | --- |

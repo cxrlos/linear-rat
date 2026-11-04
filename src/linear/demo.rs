@@ -203,6 +203,13 @@ pub fn team_member_ids(team_id: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// The ids of the demo teams the viewer administers: Engineering and
+/// Operations, not Design, so the demo shows the per-person breakdown both
+/// present (in points and in issue counts) and absent.
+pub fn administrable_team_ids() -> Vec<String> {
+    vec!["team-eng".to_owned(), "team-ops".to_owned()]
+}
+
 /// The issues of `query` in `data`, most recently updated first, as the fake
 /// client pages through them.
 pub fn team_issues(data: &DemoWorkspace, query: &TeamQuery) -> Vec<Issue> {

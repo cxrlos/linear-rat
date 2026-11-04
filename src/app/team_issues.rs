@@ -594,6 +594,7 @@ pub(super) fn pick(state: &mut State) -> Vec<Effect> {
             }
             _ => Vec::new(),
         },
+        Purpose::AnalyticsTeam => Vec::new(),
         Purpose::Filter(field) => {
             let Some(mut query) = state.team_issues.query.clone() else {
                 return Vec::new();

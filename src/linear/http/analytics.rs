@@ -140,7 +140,7 @@ pub(super) async fn load(
 
 /// Keeps the errors Linear sent alongside data, so the viewer learns that
 /// something is missing.
-fn note(problems: &mut Vec<String>, errors: &[GraphQlError]) {
+pub(super) fn note(problems: &mut Vec<String>, errors: &[GraphQlError]) {
     problems.extend(
         errors
             .iter()
@@ -169,7 +169,7 @@ fn cycle_filter(window: AnalyticsWindow) -> Value {
 
 /// An issue that came back twice (created in the window and in progress)
 /// keeps the copy that carries its state history.
-fn one_copy_each(issues: Vec<Issue>) -> Vec<Issue> {
+pub(super) fn one_copy_each(issues: Vec<Issue>) -> Vec<Issue> {
     let mut kept: Vec<Issue> = Vec::with_capacity(issues.len());
     let mut index: HashMap<String, usize> = HashMap::new();
     for issue in issues {
@@ -187,7 +187,7 @@ fn one_copy_each(issues: Vec<Issue>) -> Vec<Issue> {
 
 /// The spans oldest first, leaving out any whose workflow state Linear did
 /// not return.
-fn spans(nodes: Vec<SpanNode>) -> Vec<StateSpan> {
+pub(super) fn spans(nodes: Vec<SpanNode>) -> Vec<StateSpan> {
     let mut spans: Vec<StateSpan> = nodes
         .into_iter()
         .filter_map(|node| {
@@ -205,7 +205,7 @@ fn spans(nodes: Vec<SpanNode>) -> Vec<StateSpan> {
 
 /// The labels `issues` carry. A failed lookup becomes a problem: the
 /// analytics still show, with label ids for names.
-async fn lookup_labels(
+pub(super) async fn lookup_labels(
     client: &HttpClient,
     issues: &[Issue],
     problems: &mut Vec<String>,
@@ -250,7 +250,7 @@ async fn lookup_labels(
 }
 
 /// The projects `issues` belong to, as [`lookup_labels`] does for labels.
-async fn lookup_projects(
+pub(super) async fn lookup_projects(
     client: &HttpClient,
     issues: &[Issue],
     problems: &mut Vec<String>,
@@ -313,13 +313,13 @@ struct TeamWithCycles {
 }
 
 #[derive(Deserialize)]
-struct Nodes<N> {
-    nodes: Vec<N>,
+pub(super) struct Nodes<N> {
+    pub(super) nodes: Vec<N>,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct CycleNode {
+pub(super) struct CycleNode {
     id: String,
     #[serde(deserialize_with = "whole_number")]
     number: u32,
@@ -339,7 +339,7 @@ struct CycleNode {
 }
 
 impl CycleNode {
-    fn into_cycle(self, team_id: &str) -> Cycle {
+    pub(super) fn into_cycle(self, team_id: &str) -> Cycle {
         Cycle {
             id: self.id,
             team_id: team_id.to_owned(),
@@ -378,7 +378,7 @@ struct InProgressNode {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct SpanNode {
+pub(super) struct SpanNode {
     state_id: String,
     #[serde(deserialize_with = "timestamp")]
     started_at: Timestamp,

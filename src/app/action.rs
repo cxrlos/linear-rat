@@ -55,6 +55,10 @@ pub enum Action {
     Comment,
     /// Open the form that creates an issue.
     CreateIssue,
+    /// Switch the Analytics screen between its Personal and Team views.
+    ToggleAnalyticsView,
+    /// Pick another of the viewer's teams for the Team view of Analytics.
+    SwitchAnalyticsTeam,
 }
 
 /// What [`Action::Copy`] puts on the clipboard.

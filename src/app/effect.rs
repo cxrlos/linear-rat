@@ -40,6 +40,17 @@ pub enum Effect {
     /// Load what personal analytics needs for this window; the result comes
     /// back as [`Event::AnalyticsLoaded`](super::Event::AnalyticsLoaded).
     LoadAnalytics(AnalyticsWindow),
+    /// Load the ids of the teams the viewer administers; the result comes
+    /// back as
+    /// [`Event::AdministrableTeamsLoaded`](super::Event::AdministrableTeamsLoaded).
+    LoadAdministrableTeams,
+    /// Load what team analytics needs for team `team_id` over `window`; the
+    /// result comes back as
+    /// [`Event::TeamAnalyticsLoaded`](super::Event::TeamAnalyticsLoaded).
+    LoadTeamAnalytics {
+        team_id: String,
+        window: AnalyticsWindow,
+    },
     /// Put this text on the system clipboard.
     Copy(String),
     /// Open this URL in the viewer's browser.

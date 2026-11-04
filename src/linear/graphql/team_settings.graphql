@@ -1,0 +1,13 @@
+# budget: 1
+# A team's estimate setting and cycle length, which bound how far back its
+# last six cycles reach.
+query TeamSettings($teamId: String!) {
+  team(id: $teamId) {
+    id
+    key
+    name
+    issueEstimationType
+    cycleDuration
+    cycleCooldownTime
+  }
+}

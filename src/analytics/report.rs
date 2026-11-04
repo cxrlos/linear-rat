@@ -1,8 +1,8 @@
 use super::{
     AdministrableTeams, BurnUp, CycleVelocity, DayCount, IssueAge, PerPersonBreakdown, Percentiles,
     Period, Splits, StaleIssue, StaleThreshold, TriageHealth, Unit, WeekFlow, active_cycle,
-    burn_up, completion_days, cycle_time, issue_ages, lead_time, per_person_breakdown, splits,
-    stale_issues, triage_health, velocity, weekly_flow,
+    burn_up, completion_days, cycle_time, issue_ages, lead_time, open_issue_trend,
+    per_person_breakdown, splits, stale_issues, triage_health, velocity, weekly_flow,
 };
 use crate::linear::model::{Cycle, Issue, Team, Viewer};
 
@@ -49,6 +49,8 @@ pub fn personal_analytics(
 pub struct TeamAnalytics {
     pub unit: Unit,
     pub weeks: Vec<WeekFlow>,
+    /// Issues open at the end of each week, aligned with `weeks`.
+    pub open_trend: Vec<u32>,
     pub cycle_time: Option<Percentiles>,
     pub lead_time: Option<Percentiles>,
     pub in_progress: Vec<IssueAge>,
@@ -81,6 +83,7 @@ pub fn team_analytics(
     TeamAnalytics {
         unit,
         weeks: weekly_flow(&team_issues, unit, period),
+        open_trend: open_issue_trend(&team_issues, period),
         cycle_time: cycle_time(&team_issues, period),
         lead_time: lead_time(&team_issues, period),
         in_progress: issue_ages(&team_issues, period.now()),

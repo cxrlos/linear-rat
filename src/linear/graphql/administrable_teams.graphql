@@ -1,0 +1,15 @@
+# budget: 101
+# One page of the teams the viewer can administer, the teams whose per-person
+# breakdown lrat shows (ADR 0001). Pages hold 50 teams. The client follows
+# `endCursor` until `hasNextPage` is false.
+query AdministrableTeams($after: String) {
+  administrableTeams(first: 50, after: $after) {
+    nodes {
+      id
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}

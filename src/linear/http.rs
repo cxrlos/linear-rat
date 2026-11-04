@@ -9,6 +9,7 @@ mod detail;
 mod edit;
 mod search;
 mod team;
+mod team_analytics;
 
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -26,8 +27,8 @@ use super::model::{Issue, Label, Member, Team, Viewer, WorkflowState, Workspace}
 use super::search_bucket::SearchBucket;
 use super::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, GraphQlError, IssueCreate,
-    IssueDetail, IssueUpdate, LinearClient, PostedComment, Response, SearchResults, TeamChanges,
-    TeamIssuesPage, TeamOptions, TeamQuery,
+    IssueDetail, IssueUpdate, LinearClient, PostedComment, Response, SearchResults,
+    TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
 };
 use crate::auth::ApiKey;
 
@@ -215,10 +216,26 @@ impl HttpClient {
     async fn all_pages<P: DeserializeOwned>(
         &self,
         document: &str,
-        mut variables: Value,
+        variables: Value,
         first_page: Urgency,
         page_info: fn(&P) -> &PageInfo,
     ) -> Result<Response<Vec<P>>, ClientError> {
+        let (response, _) = self
+            .some_pages(document, variables, first_page, page_info, usize::MAX)
+            .await?;
+        Ok(response)
+    }
+
+    /// As [`HttpClient::all_pages`], but stops after `limit` pages. The flag
+    /// says whether Linear had more pages than that.
+    async fn some_pages<P: DeserializeOwned>(
+        &self,
+        document: &str,
+        mut variables: Value,
+        first_page: Urgency,
+        page_info: fn(&P) -> &PageInfo,
+        limit: usize,
+    ) -> Result<(Response<Vec<P>>, bool), ClientError> {
         let mut pages = Vec::new();
         let mut errors = Vec::new();
         let mut urgency = first_page;
@@ -243,11 +260,15 @@ impl HttpClient {
                 }
             };
             pages.push(response.data);
-            let Some(cursor) = next else {
-                return Ok(Response {
-                    data: pages,
-                    errors,
-                });
+            let cut = next.is_some() && pages.len() >= limit;
+            let Some(cursor) = next.filter(|_| !cut) else {
+                return Ok((
+                    Response {
+                        data: pages,
+                        errors,
+                    },
+                    cut,
+                ));
             };
             variables["after"] = Value::String(cursor);
             urgency = Urgency::Background;
@@ -380,6 +401,18 @@ impl LinearClient for HttpClient {
 
     async fn create_issue(&self, input: &IssueCreate) -> Result<Issue, ClientError> {
         create::create_issue(self, input).await
+    }
+
+    async fn administrable_teams(&self) -> Result<Vec<String>, ClientError> {
+        team_analytics::administrable_teams(self).await
+    }
+
+    async fn team_analytics(
+        &self,
+        team_id: &str,
+        window: AnalyticsWindow,
+    ) -> Result<TeamAnalyticsIssues, ClientError> {
+        team_analytics::load(self, team_id, window).await
     }
 }
 

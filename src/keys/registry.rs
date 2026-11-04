@@ -3,8 +3,8 @@ use crossterm::event::KeyCode;
 use super::{Context, Key};
 use crate::analytics::WeekRange;
 use crate::app::{
-    self, Action, Copyable, EditPicker, Editable, FilterField, LinkSet, Modal, Pane, Phase, Screen,
-    State, can_load_more,
+    self, Action, AnalyticsView, Copyable, EditPicker, Editable, FilterField, LinkSet, Modal, Pane,
+    Phase, Screen, State, can_load_more,
 };
 use crate::ui;
 
@@ -488,6 +488,27 @@ pub static ACTIONS: &[ActionSpec] = &[
         contexts: ANALYTICS,
         default_keys: &[&[Key::char(']')]],
         available: |state| state.analytics_range() != WeekRange::TwentySix,
+    },
+    ActionSpec {
+        action: Action::ToggleAnalyticsView,
+        id: "toggle-analytics-view",
+        description: "Show Personal or Team analytics",
+        hint: None,
+        contexts: ANALYTICS,
+        default_keys: &[&[Key::char('v')]],
+        available: always,
+    },
+    ActionSpec {
+        action: Action::SwitchAnalyticsTeam,
+        id: "switch-analytics-team",
+        description: "Pick the team for Team analytics",
+        hint: None,
+        contexts: ANALYTICS,
+        default_keys: &[&[Key::char('t')]],
+        available: |state| {
+            state.analytics_screen.view() == AnalyticsView::Team
+                && state.store.viewer_teams().next().is_some()
+        },
     },
     ActionSpec {
         action: Action::Close,
