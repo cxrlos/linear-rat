@@ -147,6 +147,21 @@ impl LinearClient for RejectingClient {
     async fn analytics_issues(&self, _: AnalyticsWindow) -> Result<AnalyticsIssues, ClientError> {
         Err(ClientError::InvalidKey)
     }
+
+    async fn create_comment(
+        &self,
+        _: &str,
+        _: &str,
+    ) -> Result<linear_rat::linear::PostedComment, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn create_issue(
+        &self,
+        _: &linear_rat::linear::IssueCreate,
+    ) -> Result<Issue, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
 }
 
 #[tokio::test]
@@ -265,6 +280,21 @@ async fn q_quits_while_the_load_is_still_in_flight() {
         ) -> Result<AnalyticsIssues, ClientError> {
             future::pending().await
         }
+
+        async fn create_comment(
+            &self,
+            _: &str,
+            _: &str,
+        ) -> Result<linear_rat::linear::PostedComment, ClientError> {
+            future::pending().await
+        }
+
+        async fn create_issue(
+            &self,
+            _: &linear_rat::linear::IssueCreate,
+        ) -> Result<Issue, ClientError> {
+            future::pending().await
+        }
     }
     let mut app = App::new(TestBackend::new(80, 24), State::loading(None)).unwrap();
 
@@ -356,6 +386,21 @@ impl LinearClient for CountingClient {
         window: AnalyticsWindow,
     ) -> Result<AnalyticsIssues, ClientError> {
         FakeClient.analytics_issues(window).await
+    }
+
+    async fn create_comment(
+        &self,
+        issue_id: &str,
+        body: &str,
+    ) -> Result<linear_rat::linear::PostedComment, ClientError> {
+        FakeClient.create_comment(issue_id, body).await
+    }
+
+    async fn create_issue(
+        &self,
+        input: &linear_rat::linear::IssueCreate,
+    ) -> Result<Issue, ClientError> {
+        FakeClient.create_issue(input).await
     }
 }
 

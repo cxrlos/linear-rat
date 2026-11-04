@@ -259,6 +259,28 @@ pub static ACTIONS: &[ActionSpec] = &[
         available: app::focused_team_estimates,
     },
     ActionSpec {
+        action: Action::Comment,
+        id: "comment",
+        description: "Comment in $EDITOR",
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('c')]],
+        available: |state| {
+            state
+                .focused_issue()
+                .is_some_and(|issue| !app::is_local(&issue.id))
+        },
+    },
+    ActionSpec {
+        action: Action::CreateIssue,
+        id: "create-issue",
+        description: "Create an issue",
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('n')]],
+        available: |state| state.store.teams().next().is_some(),
+    },
+    ActionSpec {
         action: Action::PickNumber(1),
         id: "pick-1",
         description: "Pick entry 1 of the list",
@@ -565,6 +587,9 @@ fn can_scroll_down(state: &State) -> bool {
             .list
             .selected_position()
             .is_some_and(|position| position + 1 < links.list.visible().len()),
+        Some(Modal::Create(form)) => form
+            .list()
+            .is_some_and(|(len, selected)| selected.is_some_and(|position| position + 1 < len)),
         Some(Modal::Issue { id }) => {
             let (scroll, max) = overlay_issue_scroll(state, id);
             scroll < max
@@ -597,6 +622,9 @@ fn can_scroll_up(state: &State) -> bool {
             .list
             .selected_position()
             .is_some_and(|position| position > 0),
+        Some(Modal::Create(form)) => form
+            .list()
+            .is_some_and(|(_, selected)| selected.is_some_and(|position| position > 0)),
         Some(Modal::Issue { id }) => overlay_issue_scroll(state, id).0 > 0,
         Some(Modal::Cheatsheet { scroll }) => *scroll > 0,
         Some(Modal::Palette(palette)) => palette.selected > 0,
@@ -613,6 +641,7 @@ fn can_accept(state: &State) -> bool {
         Some(Modal::Choice(choice)) => choice.cursor < choice.entries.len(),
         Some(Modal::Picker(picker)) => picker.list.is_multi() || picker.list.selected().is_some(),
         Some(Modal::Links(links)) => links.list.selected().is_some(),
+        Some(Modal::Create(form)) => form.list().is_none_or(|(_, selected)| selected.is_some()),
         Some(Modal::Palette(palette)) => {
             palette.selected < app::palette_matches(state, &palette.query).len()
         }
@@ -640,6 +669,7 @@ fn picker_has(count: usize, state: &State) -> bool {
     }
     match state.modals.top() {
         Some(Modal::Links(links)) => links.list.visible().len() >= count,
+        Some(Modal::Create(form)) => form.list().is_some_and(|(len, _)| len >= count),
         _ => false,
     }
 }

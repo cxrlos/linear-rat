@@ -133,6 +133,40 @@ pub trait LinearClient {
         &self,
         window: AnalyticsWindow,
     ) -> impl Future<Output = Result<AnalyticsIssues, ClientError>> + Send;
+
+    /// Sends one `commentCreate` adding `body` to the issue with id
+    /// `issue_id`, and returns the comment as Linear stored it.
+    fn create_comment(
+        &self,
+        issue_id: &str,
+        body: &str,
+    ) -> impl Future<Output = Result<PostedComment, ClientError>> + Send;
+
+    /// Sends one `issueCreate` and returns the issue as Linear stored it.
+    fn create_issue(
+        &self,
+        input: &IssueCreate,
+    ) -> impl Future<Output = Result<Issue, ClientError>> + Send;
+}
+
+/// A comment Linear has stored, and its author.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PostedComment {
+    pub comment: Comment,
+    pub author: Option<Member>,
+}
+
+/// Every field of a new issue that lrat's create form sets.
+#[derive(Debug, Clone, PartialEq)]
+pub struct IssueCreate {
+    pub team_id: String,
+    pub state_id: String,
+    /// `None` leaves the issue unassigned.
+    pub assignee_id: Option<String>,
+    pub priority: Priority,
+    pub title: String,
+    /// Markdown.
+    pub description: String,
 }
 
 /// What changed in one team: its issues updated after a watermark, and the
@@ -462,6 +496,75 @@ pub struct FakeClient;
 
 thread_local! {
     static DEMO_EDITS: RefCell<BTreeMap<String, Issue>> = const { RefCell::new(BTreeMap::new()) };
+    static DEMO_COMMENTS: RefCell<Vec<Comment>> = const { RefCell::new(Vec::new()) };
+    static DEMO_CREATED: RefCell<u32> = const { RefCell::new(0) };
+}
+
+/// The issue `input` creates in the demo workspace, numbered after the
+/// team's last issue and the `created` issues before it.
+fn demo_create(
+    data: &demo::DemoWorkspace,
+    input: &IssueCreate,
+    created: u32,
+) -> Result<Issue, ClientError> {
+    let team = data
+        .teams
+        .iter()
+        .find(|team| team.id == input.team_id)
+        .ok_or_else(|| not_found("team", &input.team_id))?;
+    let state = data
+        .workflow_states
+        .iter()
+        .find(|state| state.id == input.state_id && state.team_id == team.id)
+        .cloned()
+        .ok_or_else(|| not_found("workflow state", &input.state_id))?;
+    if let Some(id) = &input.assignee_id
+        && !data.members.iter().any(|member| member.id == *id)
+    {
+        return Err(not_found("member", id));
+    }
+    let last = data
+        .issues
+        .iter()
+        .filter(|issue| issue.team_id == team.id)
+        .filter_map(|issue| issue.identifier.rsplit('-').next()?.parse::<u32>().ok())
+        .max()
+        .unwrap_or(0);
+    let identifier = format!("{}-{}", team.key, last + created);
+    let slug: String = input
+        .title
+        .to_lowercase()
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .collect::<Vec<_>>()
+        .join("-");
+    Ok(Issue {
+        id: format!("demo-created-{created}"),
+        url: format!(
+            "https://linear.app/{}/issue/{identifier}",
+            data.workspace.url_key
+        ),
+        branch_name: format!("{}-{slug}", identifier.to_lowercase()),
+        identifier,
+        title: input.title.clone(),
+        description: Some(input.description.clone()),
+        team_id: team.id.clone(),
+        state,
+        priority: input.priority,
+        estimate: None,
+        assignee_id: input.assignee_id.clone(),
+        creator_id: Some(data.viewer.id.clone()),
+        cycle_id: None,
+        project_id: None,
+        label_ids: Vec::new(),
+        created_at: demo::NOW,
+        updated_at: demo::NOW + SignedDuration::from_secs(1),
+        started_at: None,
+        completed_at: None,
+        canceled_at: None,
+        triaged_at: None,
+        state_history: Vec::new(),
+    })
 }
 
 /// `issue` with `update` applied as Linear would apply it in the demo
@@ -585,7 +688,10 @@ impl LinearClient for FakeClient {
         let data = demo::workspace();
         Ok(ids
             .iter()
-            .filter(|id| data.issues.iter().any(|issue| &issue.id == *id))
+            .filter(|id| {
+                data.issues.iter().any(|issue| &issue.id == *id)
+                    || DEMO_EDITS.with_borrow(|edits| edits.contains_key(id.as_str()))
+            })
             .cloned()
             .collect())
     }
@@ -632,7 +738,16 @@ impl LinearClient for FakeClient {
     }
 
     async fn issue_detail(&self, issue_id: &str, _: Urgency) -> Result<IssueDetail, ClientError> {
-        Ok(IssueDetail::demo(issue_id))
+        let mut detail = IssueDetail::demo(issue_id);
+        DEMO_COMMENTS.with_borrow(|comments| {
+            detail.comments.extend(
+                comments
+                    .iter()
+                    .filter(|comment| comment.issue_id == issue_id)
+                    .cloned(),
+            );
+        });
+        Ok(detail)
     }
 
     /// Every demo issue whose identifier, title or description holds each
@@ -720,6 +835,47 @@ impl LinearClient for FakeClient {
         window: AnalyticsWindow,
     ) -> Result<AnalyticsIssues, ClientError> {
         Ok(AnalyticsIssues::demo(window))
+    }
+
+    /// The comment by the demo viewer, at [`demo::NOW`], remembered for the
+    /// detail of its issue.
+    async fn create_comment(
+        &self,
+        issue_id: &str,
+        body: &str,
+    ) -> Result<PostedComment, ClientError> {
+        let data = demo::workspace();
+        let known = data.issues.iter().any(|issue| issue.id == issue_id)
+            || DEMO_EDITS.with_borrow(|edits| edits.contains_key(issue_id));
+        if !known {
+            return Err(not_found("issue", issue_id));
+        }
+        let author = data
+            .members
+            .iter()
+            .find(|member| member.id == data.viewer.id)
+            .cloned();
+        let comment = DEMO_COMMENTS.with_borrow_mut(|comments| {
+            let comment = Comment {
+                id: format!("demo-comment-new-{}", comments.len() + 1),
+                issue_id: issue_id.to_owned(),
+                author_id: Some(data.viewer.id.clone()),
+                body: body.to_owned(),
+                created_at: demo::NOW,
+            };
+            comments.push(comment.clone());
+            comment
+        });
+        Ok(PostedComment { comment, author })
+    }
+
+    async fn create_issue(&self, input: &IssueCreate) -> Result<Issue, ClientError> {
+        let data = demo::workspace();
+        let created = DEMO_CREATED.with_borrow(|created| *created) + 1;
+        let issue = demo_create(&data, input, created)?;
+        DEMO_CREATED.with_borrow_mut(|count| *count = created);
+        DEMO_EDITS.with_borrow_mut(|edits| edits.insert(issue.id.clone(), issue.clone()));
+        Ok(issue)
     }
 }
 

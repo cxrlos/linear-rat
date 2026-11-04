@@ -355,7 +355,7 @@ pub fn focused_team_estimates(state: &State) -> bool {
 
 /// The team's workflow states by state type, as work moves through them,
 /// then by their order in the team. Missing until they are loaded.
-fn state_entries(store: &Store, team_id: &str) -> (Vec<Entry<Edit>>, bool) {
+pub(super) fn state_entries(store: &Store, team_id: &str) -> (Vec<Entry<Edit>>, bool) {
     let Some(states) = store.workflow_states(team_id) else {
         return (Vec::new(), true);
     };
@@ -377,7 +377,7 @@ fn state_entries(store: &Store, team_id: &str) -> (Vec<Entry<Edit>>, bool) {
 
 /// The viewer and "unassigned" first, then the team's other members by
 /// name. The members are missing until they are loaded.
-fn assignee_entries(store: &Store, team_id: &str) -> (Vec<Entry<Edit>>, bool) {
+pub(super) fn assignee_entries(store: &Store, team_id: &str) -> (Vec<Entry<Edit>>, bool) {
     let viewer = store.viewer();
     let mut entries: Vec<Entry<Edit>> = viewer
         .map(|viewer| Entry {
@@ -402,7 +402,7 @@ fn assignee_entries(store: &Store, team_id: &str) -> (Vec<Entry<Edit>>, bool) {
     (entries, false)
 }
 
-fn priority_entries() -> Vec<Entry<Edit>> {
+pub(super) fn priority_entries() -> Vec<Entry<Edit>> {
     [
         Priority::Urgent,
         Priority::High,
@@ -427,6 +427,13 @@ pub(super) fn open(state: &mut State, field: Editable) -> Update {
     let Some(issue) = state.focused_issue() else {
         return Update::default();
     };
+    if super::is_local(&issue.id) {
+        state.notice = Some(format!(
+            "{} is not created yet; change it once Linear confirms it",
+            issue.identifier
+        ));
+        return Update::redraw();
+    }
     let list = match field {
         Editable::Labels => Picker::multi(Vec::new(), []),
         _ => Picker::new(Vec::new(), None),

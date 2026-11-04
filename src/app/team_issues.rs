@@ -3,7 +3,7 @@
 
 use super::modal::{Choice, ChoiceEntry, Purpose};
 use super::{Action, Effect, Modal, Names, Pane, State};
-use crate::linear::model::Team;
+use crate::linear::model::{Issue, Team};
 use crate::linear::{TeamFilter, TeamIssuesPage, TeamOptions, TeamQuery};
 
 /// A field Team Issues can be filtered by.
@@ -192,6 +192,39 @@ impl TeamIssues {
         let changed = scroll != self.scroll;
         self.scroll = scroll;
         changed
+    }
+
+    /// Puts a new issue at the top of the list and focuses it, when it is
+    /// of the team shown and matches the filter.
+    pub(super) fn show_created(&mut self, issue: &Issue) {
+        let Some(query) = &self.query else {
+            return;
+        };
+        if query.team_id == issue.team_id && query.filter.matches(issue) {
+            self.ids.insert(0, issue.id.clone());
+            self.count = self.count.map(|count| count + 1);
+            self.focused = 0;
+            self.pane = Pane::List;
+        }
+    }
+
+    /// Puts the id Linear gave a new issue in place of its stand-in's.
+    pub(super) fn replace_created(&mut self, local_id: &str, id: &str) {
+        for listed in &mut self.ids {
+            if listed == local_id {
+                id.clone_into(listed);
+            }
+        }
+    }
+
+    /// Takes the issue with `id` off the list.
+    pub(super) fn forget(&mut self, id: &str) {
+        let before = self.ids.len();
+        self.ids.retain(|listed| listed != id);
+        if self.ids.len() < before {
+            self.count = self.count.map(|count| count.saturating_sub(1));
+            self.focus(self.focused);
+        }
     }
 
     fn focus(&mut self, index: usize) -> bool {

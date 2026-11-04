@@ -1,4 +1,4 @@
-use super::{TeamPoll, Write};
+use super::{NewComment, NewIssue, TeamPoll, Write, Writing};
 use crate::linear::{AnalyticsWindow, TeamQuery, Urgency};
 
 /// A request to the outside world, returned by [`update`](super::update) and
@@ -71,4 +71,17 @@ pub enum Effect {
     /// Send one `issueUpdate` making [`Write::edit`]; the result comes back
     /// as [`Event::IssueUpdated`](super::Event::IssueUpdated).
     UpdateIssue(Write),
+    /// Suspend the screen and open the viewer's `$EDITOR` on `text`; the
+    /// buffer comes back as
+    /// [`Event::EditorClosed`](super::Event::EditorClosed).
+    OpenEditor {
+        writing: Writing,
+        text: String,
+    },
+    /// Send one `commentCreate`; the result comes back as
+    /// [`Event::CommentCreated`](super::Event::CommentCreated).
+    CreateComment(NewComment),
+    /// Send one `issueCreate`; the result comes back as
+    /// [`Event::IssueCreated`](super::Event::IssueCreated).
+    CreateIssue(NewIssue),
 }

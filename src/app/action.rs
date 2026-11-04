@@ -51,6 +51,10 @@ pub enum Action {
     FilterBy(FilterField),
     /// Load the next page of Team Issues.
     LoadMore,
+    /// Write a comment on the focused issue in `$EDITOR`.
+    Comment,
+    /// Open the form that creates an issue.
+    CreateIssue,
 }
 
 /// What [`Action::Copy`] puts on the clipboard.

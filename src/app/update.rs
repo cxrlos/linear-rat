@@ -4,7 +4,7 @@ use ratatui::layout::Size;
 use super::edit::{self, Editable};
 use super::{
     Action, Copyable, Effect, Event, Load, Modal, Palette, Pane, Screen, Search, State,
-    analytics_screen, detail, links, palette, search, sync, team_issues,
+    analytics_screen, compose, create, detail, links, palette, search, sync, team_issues,
 };
 use crate::keys::{self, Key, Resolution};
 use crate::ui;
@@ -125,6 +125,7 @@ fn apply(state: &mut State, event: Event) -> Update {
                 }
                 Err(error) => Some(error),
             };
+            create::loaded(state, Editable::State, &team_id, failure.as_deref());
             edit::loaded(state, Editable::State, &team_id, failure)
         }
         Event::TeamMembersLoaded { team_id, result } => {
@@ -135,6 +136,7 @@ fn apply(state: &mut State, event: Event) -> Update {
                 }
                 Err(error) => Some(error),
             };
+            create::loaded(state, Editable::Assignee, &team_id, failure.as_deref());
             edit::loaded(state, Editable::Assignee, &team_id, failure)
         }
         Event::TeamLabelsLoaded { team_id, result } => {
@@ -148,6 +150,9 @@ fn apply(state: &mut State, event: Event) -> Update {
             edit::loaded(state, Editable::Labels, &team_id, failure)
         }
         Event::IssueUpdated { write, result } => edit::finished(state, &write, result),
+        Event::EditorClosed { writing, result } => compose::closed(state, writing, result),
+        Event::CommentCreated { comment, result } => compose::commented(state, &comment, result),
+        Event::IssueCreated { issue, result } => compose::created(state, &issue, result),
     }
 }
 
@@ -245,6 +250,7 @@ pub fn perform(state: &mut State, action: Action) -> Update {
         Action::Accept => match state.modals.top() {
             Some(Modal::Picker(_)) => edit::choose(state, None),
             Some(Modal::Links(_)) => links::choose(state, None),
+            Some(Modal::Create(_)) => create::accept(state, None),
             Some(Modal::Palette(_)) => palette::accept(state),
             Some(Modal::Search(_)) => search::accept(state),
             Some(Modal::Choice(_)) => Update {
@@ -318,6 +324,7 @@ pub fn perform(state: &mut State, action: Action) -> Update {
         Action::ScrollDown | Action::ScrollUp => match state.modals.top() {
             Some(Modal::Picker(_)) => edit::select(state, step(action)),
             Some(Modal::Links(_)) => links::select(state, step(action)),
+            Some(Modal::Create(_)) => create::select(state, step(action)),
             Some(Modal::Issue { id }) => {
                 let id = id.clone();
                 detail::scroll_overlay(state, &id, action)
@@ -353,9 +360,12 @@ pub fn perform(state: &mut State, action: Action) -> Update {
         Action::Edit(field) => edit::open(state, field),
         Action::PickNumber(n) => match state.modals.top() {
             Some(Modal::Links(_)) => links::choose(state, Some(usize::from(n))),
+            Some(Modal::Create(_)) => create::accept(state, Some(usize::from(n))),
             _ => edit::choose(state, Some(usize::from(n))),
         },
         Action::ToggleEntry => edit::toggle(state, None),
+        Action::Comment => compose::comment(state),
+        Action::CreateIssue => create::open(state),
         _ => Update::default(),
     }
 }

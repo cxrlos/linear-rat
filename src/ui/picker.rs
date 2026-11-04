@@ -8,7 +8,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Padding, Paragraph};
 
 use super::style;
-use crate::app::{Action, Edit, EditPicker, Links, Note, Picker, State};
+use crate::app::{Action, CreateForm, Edit, EditPicker, Links, Note, Picker, State, Step};
 use crate::keys::Context;
 
 /// The width the list asks for at least, so short entries leave room for
@@ -17,7 +17,94 @@ const MIN_WIDTH: usize = 34;
 
 /// Draws an edit picker centered inside `area`'s border.
 pub fn render_edit(state: &State, picker: &EditPicker, frame: &mut Frame, area: Rect) {
-    let glyph = |edit: &Edit| match edit {
+    render(
+        state,
+        &picker.title(),
+        &picker.list,
+        edit_glyph(state),
+        frame,
+        area,
+    );
+}
+
+/// Draws the create form's step centered inside `area`'s border: the
+/// picker of the field it is on, or the title being typed.
+pub fn render_create(state: &State, form: &CreateForm, frame: &mut Frame, area: Rect) {
+    let heading = form.heading();
+    match &form.step {
+        Step::Team(picker) => render(state, &heading, picker, |_| None, frame, area),
+        Step::Field(_, picker) => render(state, &heading, picker, edit_glyph(state), frame, area),
+        Step::Title => render_title(state, form, &heading, frame, area),
+    }
+}
+
+/// The title step: what the form chose, and the title typed so far.
+fn render_title(state: &State, form: &CreateForm, heading: &str, frame: &mut Frame, area: Rect) {
+    let theme = &state.theme;
+    let area = area.inner(Margin::new(1, 1));
+    let mut chosen = Vec::new();
+    if let Some(workflow_state) = &form.state {
+        chosen.extend(edit_glyph(state)(&Edit::State(workflow_state.clone())));
+        chosen.push(Span::raw(format!(" {}", workflow_state.name)));
+    }
+    if let Some(assignee) = &form.assignee {
+        let name = assignee
+            .as_deref()
+            .and_then(|id| state.store.member(id))
+            .map_or("Unassigned", |member| member.name.as_str());
+        chosen.push(Span::styled(" · ", style::muted(theme)));
+        chosen.push(Span::raw(name.to_owned()));
+    }
+    if let Some(priority) = form.priority {
+        chosen.push(Span::styled(" · ", style::muted(theme)));
+        chosen.extend(edit_glyph(state)(&Edit::Priority(priority)));
+        chosen.push(Span::raw(format!(
+            " {}",
+            super::icons::priority_name(priority)
+        )));
+    }
+    let title = if form.title.is_empty() {
+        Line::from(vec![
+            Span::styled("> ", style::accent(theme)),
+            Span::styled("type the title", style::muted(theme)),
+        ])
+    } else {
+        Line::from(vec![
+            Span::styled("> ", style::accent(theme)),
+            Span::raw(form.title.clone()),
+        ])
+    };
+    let note = Line::styled(
+        "The description is written in $EDITOR next.",
+        style::muted(theme),
+    );
+    let lines = vec![Line::from(chosen), title, note];
+    let bottom = keys_line(
+        state,
+        &[(&[Action::Accept], "describe"), (&[Action::Close], "close")],
+    );
+    let width = lines
+        .iter()
+        .map(Line::width)
+        .chain([heading.chars().count() + 2, bottom.width(), MIN_WIDTH])
+        .max()
+        .unwrap_or(0)
+        + 4;
+    let width = u16::try_from(width).unwrap_or(u16::MAX);
+    let popup = super::centered(area, width, 5);
+    let block = super::popup_block(state)
+        .title(format!(" {heading} "))
+        .title_bottom(bottom);
+    frame.render_widget(Clear, popup);
+    frame.render_widget(
+        Paragraph::new(lines).block(block.padding(Padding::horizontal(1))),
+        popup,
+    );
+}
+
+/// The glyph a picker shows before a state or priority.
+fn edit_glyph(state: &State) -> impl Fn(&Edit) -> Option<Span<'static>> + '_ {
+    |edit: &Edit| match edit {
         Edit::State(workflow_state) => {
             let state_type = workflow_state.state_type;
             Some(Span::raw(state.ui.icons.state(state_type)).fg(state.theme.state(state_type)))
@@ -26,8 +113,7 @@ pub fn render_edit(state: &State, picker: &EditPicker, frame: &mut Frame, area: 
             Some(Span::raw(state.ui.icons.priority(*priority)).fg(state.theme.priority(*priority)))
         }
         Edit::Assignee(_) | Edit::Labels(_) | Edit::Estimate(_) => None,
-    };
-    render(state, &picker.title(), &picker.list, glyph, frame, area);
+    }
 }
 
 /// Draws a picker of an issue's links centered inside `area`'s border.
@@ -172,6 +258,12 @@ fn bottom_keys(state: &State, multi: bool) -> Line<'static> {
             (&[Action::Close], "close"),
         ]
     };
+    keys_line(state, items)
+}
+
+/// Each group of `items` as its keys and word, leaving out keys the text
+/// field takes.
+fn keys_line(state: &State, items: &[(&[Action], &str)]) -> Line<'static> {
     let mut spans = Vec::new();
     for &(actions, word) in items {
         let keys: Vec<String> = actions

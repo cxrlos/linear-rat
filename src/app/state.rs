@@ -6,7 +6,8 @@ use ratatui::layout::Size;
 use jiff::Timestamp;
 
 use super::{
-    AnalyticsScreen, Detail, Load, LoadError, ModalStack, MyIssues, Store, SyncStatus, TeamIssues,
+    AnalyticsScreen, Detail, Drafts, Load, LoadError, ModalStack, MyIssues, Store, SyncStatus,
+    TeamIssues,
 };
 use crate::auth::KeySource;
 use crate::config::{AnalyticsSettings, Loaded, SyncSettings, UiSettings};
@@ -52,6 +53,8 @@ pub struct State {
     /// `[analytics]`: the range the Analytics screen opens on.
     pub analytics: AnalyticsSettings,
     pub analytics_screen: AnalyticsScreen,
+    /// Comments and descriptions Linear did not take, to write again.
+    pub drafts: Drafts,
 }
 
 impl State {
@@ -108,7 +111,18 @@ impl State {
 
     /// This state painting `store` from the snapshot of the last session,
     /// which last synced at `synced_at`, until its own load comes back.
-    pub fn with_snapshot(self, store: Store, synced_at: Option<Timestamp>) -> Self {
+    pub fn with_snapshot(self, mut store: Store, synced_at: Option<Timestamp>) -> Self {
+        // Linear's answer for a stand-in saved while its issue was being
+        // created went to the last session; polls bring the issue if it was
+        // created.
+        let stand_ins: Vec<String> = store
+            .issues()
+            .map(|issue| issue.id.clone())
+            .filter(|id| super::is_local(id))
+            .collect();
+        for id in &stand_ins {
+            store.remove_issue(id);
+        }
         let mut state = Self {
             store,
             load: Load::Loaded,

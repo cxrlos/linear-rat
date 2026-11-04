@@ -1,3 +1,4 @@
+use super::create::CreateForm;
 use super::edit::EditPicker;
 use super::links::Links;
 use super::{FilterField, Palette, Phase, Search};
@@ -28,13 +29,15 @@ pub enum Modal {
     Choice(Choice),
     /// A list of an issue's links to open one of.
     Links(Links),
+    /// The form that creates an issue.
+    Create(CreateForm),
 }
 
 impl Modal {
     /// Whether typed keys go to a text field rather than the keymap now.
     pub fn takes_text(&self) -> bool {
         match self {
-            Modal::Picker(_) | Modal::Palette(_) | Modal::Links(_) => true,
+            Modal::Picker(_) | Modal::Palette(_) | Modal::Links(_) | Modal::Create(_) => true,
             Modal::Search(search) => matches!(search.phase, Phase::Typing { .. }),
             Modal::Cheatsheet { .. }
             | Modal::WhichKey { .. }
@@ -55,6 +58,7 @@ impl Modal {
                 Some(&mut palette.query)
             }
             Modal::Search(search) => search.text_field(),
+            Modal::Create(form) => form.text_field(),
             Modal::Cheatsheet { .. }
             | Modal::WhichKey { .. }
             | Modal::Issue { .. }

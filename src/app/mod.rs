@@ -2,6 +2,8 @@
 
 mod action;
 mod analytics_screen;
+mod compose;
+mod create;
 mod detail;
 mod edit;
 mod effect;
@@ -25,6 +27,8 @@ use ratatui::backend::Backend;
 
 pub use action::{Action, Copyable};
 pub use analytics_screen::AnalyticsScreen;
+pub use compose::{Drafts, IssueDraft, NewComment, NewIssue, Writing, is_local};
+pub use create::{CreateForm, Step};
 pub use detail::{Detail, DetailLoad};
 pub use edit::{Edit, EditPicker, Editable, Write, estimate_scale, focused_team_estimates};
 pub use effect::Effect;
@@ -81,6 +85,19 @@ impl<B: Backend> App<B> {
     /// snapshot.
     pub fn state(&self) -> &State {
         &self.state
+    }
+
+    /// Clears the terminal and draws the whole screen again at the
+    /// terminal's size, as after something else, such as `$EDITOR`, has
+    /// drawn over it.
+    pub fn redraw_all(&mut self) -> Result<(), B::Error> {
+        self.terminal.clear()?;
+        let size = self.terminal.size()?;
+        self.handle(Event::Resize {
+            columns: size.width,
+            rows: size.height,
+        })?;
+        Ok(())
     }
 
     /// How many frames have been drawn since [`App::new`].

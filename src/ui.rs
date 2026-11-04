@@ -79,6 +79,7 @@ pub fn render(state: &State, frame: &mut Frame) {
                 }
             }
             Modal::Choice(choice) => choice::render(state, choice, frame, body_area),
+            Modal::Create(form) => picker::render_create(state, form, frame, body_area),
         }
     }
 }

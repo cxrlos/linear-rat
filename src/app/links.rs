@@ -187,6 +187,14 @@ pub(super) fn open(state: &mut State, set: LinkSet) -> Update {
     let Some(issue) = state.focused_issue() else {
         return Update::default();
     };
+    // A stand-in has no page and no detail to load until Linear confirms it.
+    if super::is_local(&issue.id) {
+        state.notice = Some(format!(
+            "{} is not created yet; open it once Linear confirms it",
+            issue.identifier
+        ));
+        return Update::redraw();
+    }
     let issue_id = issue.id.clone();
     let mut links = Links {
         issue_id: issue_id.clone(),

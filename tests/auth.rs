@@ -185,6 +185,21 @@ impl LinearClient for RejectingClient {
     async fn analytics_issues(&self, _: AnalyticsWindow) -> Result<AnalyticsIssues, ClientError> {
         Err(ClientError::InvalidKey)
     }
+
+    async fn create_comment(
+        &self,
+        _: &str,
+        _: &str,
+    ) -> Result<linear_rat::linear::PostedComment, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn create_issue(
+        &self,
+        _: &linear_rat::linear::IssueCreate,
+    ) -> Result<Issue, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
 }
 
 /// A workspace file path in a fresh directory for one test.

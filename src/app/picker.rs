@@ -142,6 +142,13 @@ impl<T> Picker<T> {
         }
     }
 
+    /// Selects the entry at `index` among all entries, if there is one.
+    pub fn select(&mut self, index: usize) {
+        if index < self.entries.len() {
+            self.selected = index;
+        }
+    }
+
     pub fn note(&self) -> Option<&Note> {
         self.note.as_ref()
     }

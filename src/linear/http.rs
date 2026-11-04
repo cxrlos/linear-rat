@@ -4,6 +4,7 @@
 mod analytics;
 mod assigned;
 mod changes;
+mod create;
 mod detail;
 mod edit;
 mod search;
@@ -24,9 +25,9 @@ use super::governor::{Governor, SystemTimer, Timer, Urgency};
 use super::model::{Issue, Label, Member, Team, Viewer, WorkflowState, Workspace};
 use super::search_bucket::SearchBucket;
 use super::{
-    AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, GraphQlError, IssueDetail,
-    IssueUpdate, LinearClient, Response, SearchResults, TeamChanges, TeamIssuesPage, TeamOptions,
-    TeamQuery,
+    AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, GraphQlError, IssueCreate,
+    IssueDetail, IssueUpdate, LinearClient, PostedComment, Response, SearchResults, TeamChanges,
+    TeamIssuesPage, TeamOptions, TeamQuery,
 };
 use crate::auth::ApiKey;
 
@@ -367,6 +368,18 @@ impl LinearClient for HttpClient {
         window: AnalyticsWindow,
     ) -> Result<AnalyticsIssues, ClientError> {
         analytics::load(self, window).await
+    }
+
+    async fn create_comment(
+        &self,
+        issue_id: &str,
+        body: &str,
+    ) -> Result<PostedComment, ClientError> {
+        create::create_comment(self, issue_id, body).await
+    }
+
+    async fn create_issue(&self, input: &IssueCreate) -> Result<Issue, ClientError> {
+        create::create_issue(self, input).await
     }
 }
 

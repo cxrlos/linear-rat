@@ -255,7 +255,13 @@ pub(super) fn due(state: &mut State) -> Vec<Effect> {
     }
     if state.sync_status.reconcile_due(&state.sync) {
         state.sync_status.reconciling = true;
-        let ids = state.store.issues().map(|issue| issue.id.clone()).collect();
+        // A stand-in for an issue being created has no id Linear knows.
+        let ids = state
+            .store
+            .issues()
+            .map(|issue| issue.id.clone())
+            .filter(|id| !super::is_local(id))
+            .collect();
         return vec![Effect::Reconcile(ids)];
     }
     Vec::new()

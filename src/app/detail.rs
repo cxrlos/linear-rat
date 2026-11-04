@@ -84,7 +84,7 @@ pub(super) fn has_focus(state: &State) -> bool {
 /// reserve.
 pub(super) fn request(state: &mut State) -> Option<Effect> {
     let issue_id = shown_issue_id(state)?;
-    if state.detail.loads.contains_key(&issue_id) {
+    if state.detail.loads.contains_key(&issue_id) || super::is_local(&issue_id) {
         return None;
     }
     state

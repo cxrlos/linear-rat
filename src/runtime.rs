@@ -15,10 +15,12 @@ use jiff::{SignedDuration, Timestamp};
 use ratatui::backend::Backend;
 use tokio::time::{Instant, MissedTickBehavior};
 
-use crate::app::{App, Effect, Event, LoadError, SyncFailure, TeamPoll, Write};
+use crate::app::{
+    App, Effect, Event, LoadError, NewComment, NewIssue, SyncFailure, TeamPoll, Write,
+};
 use crate::linear::{AnalyticsWindow, ClientError, LinearClient, Urgency};
 use crate::snapshot::SnapshotCache;
-use crate::{browser, clipboard};
+use crate::{browser, clipboard, terminal};
 
 /// How often [`Event::Tick`] goes out.
 const TICK: Duration = Duration::from_secs(1);
@@ -129,9 +131,12 @@ impl Clock {
 trait Outside {
     fn copy(&mut self, text: &str) -> anyhow::Result<()>;
     fn open(&mut self, url: &str) -> anyhow::Result<()>;
+    /// Runs the viewer's editor on `text` until it exits, and returns what
+    /// it saved.
+    fn edit(&mut self, text: &str) -> anyhow::Result<String>;
 }
 
-/// The terminal's clipboard and the viewer's browser.
+/// The terminal's clipboard, the viewer's browser and their editor.
 struct System;
 
 impl Outside for System {
@@ -145,6 +150,10 @@ impl Outside for System {
 
     fn open(&mut self, url: &str) -> anyhow::Result<()> {
         browser::open(url)
+    }
+
+    fn edit(&mut self, text: &str) -> anyhow::Result<String> {
+        terminal::edit(text)
     }
 }
 
@@ -292,6 +301,23 @@ where
         }
         Effect::Copy(text) => outside.copy(&text),
         Effect::OpenUrl(url) => outside.open(&url),
+        // The editor owns the terminal until it exits, so the loop waits for
+        // it here: no input is read and nothing is drawn meanwhile. Input is
+        // only read between events, so nothing else reads the terminal now.
+        Effect::OpenEditor { writing, text } => {
+            let result = outside.edit(&text).map_err(|error| format!("{error:#}"));
+            app.redraw_all().context("drawing the screen")?;
+            let closed = Event::EditorClosed { writing, result };
+            return feed(app, closed, reach, in_flight, outside);
+        }
+        Effect::CreateComment(comment) => {
+            in_flight.push(Box::pin(create_comment(reach.client, comment)));
+            Ok(())
+        }
+        Effect::CreateIssue(issue) => {
+            in_flight.push(Box::pin(create_issue(reach.client, issue)));
+            Ok(())
+        }
     };
     if let Err(error) = outcome {
         let failed = Event::EffectFailed(format!("{error:#}"));
@@ -418,6 +444,39 @@ async fn update_issue<C: LinearClient>(client: Option<&C>, write: Write) -> Even
     Event::IssueUpdated { write, result }
 }
 
+async fn create_comment<C: LinearClient>(client: Option<&C>, comment: NewComment) -> Event {
+    let result = match client {
+        Some(client) => client
+            .create_comment(&comment.issue_id, &comment.body)
+            .await
+            .map_err(message),
+        None => Err(NO_CLIENT.to_owned()),
+    };
+    match &result {
+        Ok(_) => tracing::info!(issue = %comment.identifier, "Linear stored a comment"),
+        Err(error) => {
+            tracing::warn!(issue = %comment.identifier, %error, "Linear rejected a comment");
+        }
+    }
+    Event::CommentCreated { comment, result }
+}
+
+async fn create_issue<C: LinearClient>(client: Option<&C>, issue: NewIssue) -> Event {
+    let result = match client {
+        Some(client) => client
+            .create_issue(&issue.input)
+            .await
+            .map(Box::new)
+            .map_err(message),
+        None => Err(NO_CLIENT.to_owned()),
+    };
+    match &result {
+        Ok(created) => tracing::info!(issue = %created.identifier, "Linear created an issue"),
+        Err(error) => tracing::warn!(%error, "Linear did not create an issue"),
+    }
+    Event::IssueCreated { issue, result }
+}
+
 async fn load_issue_detail<C: LinearClient>(
     client: Option<&C>,
     issue_id: String,
@@ -517,6 +576,10 @@ mod tests {
     struct Fake {
         copied: Vec<String>,
         opened: Vec<String>,
+        /// The text each editor opened on.
+        edited: Vec<String>,
+        /// What the editor saves.
+        saves: String,
         failure: Option<&'static str>,
     }
 
@@ -531,6 +594,14 @@ mod tests {
             self.opened.push(url.to_owned());
             self.failure
                 .map_or(Ok(()), |failure| Err(anyhow::anyhow!(failure)))
+        }
+
+        fn edit(&mut self, text: &str) -> anyhow::Result<String> {
+            self.edited.push(text.to_owned());
+            match self.failure {
+                Some(failure) => Err(anyhow::anyhow!(failure)),
+                None => Ok(self.saves.clone()),
+            }
         }
     }
 
@@ -672,6 +743,68 @@ mod tests {
             panic!("{event:?}");
         };
         assert!(result.unwrap_err().contains("lrat auth login"));
+    }
+
+    fn comment_on_first_issue(app: &App<TestBackend>) -> Effect {
+        let issue = app.state().focused_issue().unwrap();
+        Effect::OpenEditor {
+            writing: crate::app::Writing::Comment {
+                issue_id: issue.id.clone(),
+                identifier: issue.identifier.clone(),
+            },
+            text: "draft".to_owned(),
+        }
+    }
+
+    #[test]
+    fn the_editor_gets_the_text_and_its_buffer_becomes_a_comment_in_flight() {
+        let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+        let effect = comment_on_first_issue(&app);
+        let mut outside = Fake {
+            saves: "Looks good\n".to_owned(),
+            ..Fake::default()
+        };
+        let mut in_flight = FuturesUnordered::new();
+        let reach = Reach {
+            client: Some(&FakeClient),
+            snapshots: None,
+        };
+        let frames = app.frames_drawn();
+
+        let flow = execute(&mut app, effect, &reach, &mut in_flight, &mut outside).unwrap();
+
+        assert_eq!(flow, ControlFlow::Continue(()));
+        assert_eq!(outside.edited, ["draft"]);
+        assert!(
+            app.frames_drawn() > frames,
+            "the screen was not drawn again"
+        );
+        assert_eq!(in_flight.len(), 1);
+    }
+
+    #[test]
+    fn an_editor_that_fails_says_why_and_sends_nothing() {
+        let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+        let effect = comment_on_first_issue(&app);
+        let mut outside = Fake {
+            failure: Some("`nvim` exited with exit status: 1"),
+            ..Fake::default()
+        };
+        let mut in_flight = FuturesUnordered::new();
+        let reach = Reach {
+            client: Some(&FakeClient),
+            snapshots: None,
+        };
+
+        let flow = execute(&mut app, effect, &reach, &mut in_flight, &mut outside).unwrap();
+
+        assert_eq!(flow, ControlFlow::Continue(()));
+        assert!(in_flight.is_empty());
+        assert!(
+            screen(&app).contains("`nvim` exited with"),
+            "{}",
+            screen(&app)
+        );
     }
 
     #[test]

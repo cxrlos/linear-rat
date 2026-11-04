@@ -1,0 +1,18 @@
+# budget: 10
+# Adds a comment to an issue. Returns the comment as Linear stored it, with
+# its author, as the comments query reads them.
+mutation CommentCreate($input: CommentCreateInput!) {
+  commentCreate(input: $input) {
+    success
+    comment {
+      id
+      body
+      createdAt
+      user {
+        id
+        name
+        displayName
+      }
+    }
+  }
+}

@@ -13,8 +13,8 @@ use crate::linear::model::{
     WorkflowState, Workspace,
 };
 use crate::linear::{
-    AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, SearchResults, TeamChanges,
-    TeamIssuesPage, TeamOptions,
+    AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, PostedComment, SearchResults,
+    TeamChanges, TeamIssuesPage, TeamOptions,
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
@@ -204,7 +204,9 @@ impl Store {
         changed
     }
 
-    fn remove_issue(&mut self, id: &str) -> bool {
+    /// Drops the issue with id `id`, its comments and its history. Returns
+    /// whether it was stored.
+    pub fn remove_issue(&mut self, id: &str) -> bool {
         self.comments.remove(id);
         self.state_histories.remove(id);
         self.attachments.remove(id);
@@ -281,6 +283,24 @@ impl Store {
             since = earlier;
         }
         Some(since)
+    }
+
+    /// Adds a comment Linear has stored to its issue's comments, in order,
+    /// and stores its author. Comments not loaded yet stay not loaded, so the
+    /// detail still loads all of them.
+    pub fn add_comment(&mut self, posted: PostedComment) {
+        if let Some(author) = posted.author {
+            self.members.insert(author.id.clone(), author);
+        }
+        let comment = posted.comment;
+        let Some(comments) = self.comments.get_mut(&comment.issue_id) else {
+            return;
+        };
+        if comments.iter().any(|known| known.id == comment.id) {
+            return;
+        }
+        comments.push(comment);
+        comments.sort_by_key(|comment| comment.created_at);
     }
 
     /// Replaces the comments of `issue_id`.

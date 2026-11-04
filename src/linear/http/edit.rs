@@ -133,7 +133,7 @@ fn input(update: &IssueUpdate) -> Value {
 }
 
 /// Linear stores priority as 0 (none) and 1 (urgent) to 4 (low).
-fn priority_number(priority: Priority) -> u8 {
+pub(super) fn priority_number(priority: Priority) -> u8 {
     match priority {
         Priority::None => 0,
         Priority::Urgent => 1,

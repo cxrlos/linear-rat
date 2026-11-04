@@ -1,11 +1,11 @@
 use crossterm::event::KeyEvent;
 use jiff::Timestamp;
 
-use super::{LoadError, SyncFailure, Write};
+use super::{LoadError, NewComment, NewIssue, SyncFailure, Write, Writing};
 use crate::linear::model::{Issue, Label, Member, Team, WorkflowState};
 use crate::linear::{
-    AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, SearchResults, TeamChanges,
-    TeamIssuesPage, TeamOptions, TeamQuery,
+    AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, PostedComment, SearchResults,
+    TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
 };
 
 /// Something that happened, fed to [`update`](super::update).
@@ -107,6 +107,24 @@ pub enum Event {
     /// the issue as it stored it, or why it rejected the edit.
     IssueUpdated {
         write: Write,
+        result: Result<Box<Issue>, String>,
+    },
+    /// The editor of [`Effect::OpenEditor`](super::Effect::OpenEditor)
+    /// closed: what the viewer saved, or why it could not run.
+    EditorClosed {
+        writing: Writing,
+        result: Result<String, String>,
+    },
+    /// Linear's answer to
+    /// [`Effect::CreateComment`](super::Effect::CreateComment).
+    CommentCreated {
+        comment: NewComment,
+        result: Result<PostedComment, String>,
+    },
+    /// Linear's answer to [`Effect::CreateIssue`](super::Effect::CreateIssue):
+    /// the issue as it stored it, or why it was not created.
+    IssueCreated {
+        issue: NewIssue,
         result: Result<Box<Issue>, String>,
     },
 }
