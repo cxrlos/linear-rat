@@ -1,13 +1,14 @@
 //! The runtime loop: turns terminal input into events, feeds them to the app
 //! and carries out the effects it asks for.
 
-use std::future::{self, Future};
+use std::future::Future;
 use std::io;
 use std::ops::ControlFlow;
 use std::pin::Pin;
 
 use anyhow::Context;
 use crossterm::event::Event as TerminalEvent;
+use futures_util::stream::FuturesUnordered;
 use futures_util::{Stream, StreamExt};
 use ratatui::backend::Backend;
 
@@ -15,8 +16,12 @@ use crate::app::{App, Effect, Event, LoadError};
 use crate::linear::LinearClient;
 use crate::{browser, clipboard};
 
-/// A load in flight, finishing with the event that carries its result.
+/// A request in flight, finishing with the event that carries its result.
 type Pending<'a> = Pin<Box<dyn Future<Output = Event> + 'a>>;
+
+/// Every request in flight. They run at the same time and finish in any
+/// order; each result comes back as an event.
+type InFlight<'a> = FuturesUnordered<Pending<'a>>;
 
 /// Runs until the app asks to quit, `shutdown` resolves, or terminal input
 /// ends. Waits without drawing while nothing happens. Loads go through
@@ -36,12 +41,12 @@ where
     S: Future<Output = ()>,
 {
     tokio::pin!(shutdown);
-    let mut pending: Option<Pending<'_>> = None;
+    let mut in_flight: InFlight<'_> = FuturesUnordered::new();
     let mut next = Some(Event::Start);
     loop {
         if let Some(event) = next.take() {
             for effect in app.handle(event).context("drawing the screen")? {
-                if execute(app, effect, client, &mut pending, &mut System)?.is_break() {
+                if execute(app, effect, client, &mut in_flight, &mut System)?.is_break() {
                     return Ok(());
                 }
             }
@@ -51,10 +56,7 @@ where
                 tracing::info!("shutdown signal received");
                 return Ok(());
             }
-            event = finish(&mut pending) => {
-                pending = None;
-                Some(event)
-            }
+            Some(event) = in_flight.next(), if !in_flight.is_empty() => Some(event),
             terminal_event = input.next() => match terminal_event {
                 Some(event) => from_terminal(event.context("reading terminal input")?),
                 None => return Ok(()),
@@ -86,13 +88,13 @@ impl Outside for System {
     }
 }
 
-/// Carries out `effect`. A load starts in `pending` and finishes later; a
+/// Carries out `effect`. A load joins `in_flight` and finishes later; a
 /// failure to copy or open becomes the notice rather than ending the loop.
 fn execute<'a, B, C>(
     app: &mut App<B>,
     effect: Effect,
     client: Option<&'a C>,
-    pending: &mut Option<Pending<'a>>,
+    in_flight: &mut InFlight<'a>,
     outside: &mut impl Outside,
 ) -> anyhow::Result<ControlFlow<()>>
 where
@@ -103,7 +105,7 @@ where
     let outcome = match effect {
         Effect::Quit => return Ok(ControlFlow::Break(())),
         Effect::LoadMyIssues => {
-            *pending = Some(Box::pin(load_my_issues(client)));
+            in_flight.push(Box::pin(load_my_issues(client)));
             Ok(())
         }
         Effect::Copy(text) => outside.copy(&text),
@@ -112,7 +114,7 @@ where
     if let Err(error) = outcome {
         let failed = Event::EffectFailed(format!("{error:#}"));
         for effect in app.handle(failed).context("drawing the screen")? {
-            if execute(app, effect, client, pending, outside)?.is_break() {
+            if execute(app, effect, client, in_flight, outside)?.is_break() {
                 return Ok(ControlFlow::Break(()));
             }
         }
@@ -133,14 +135,6 @@ async fn load_my_issues<C: LinearClient>(client: Option<&C>) -> Event {
         Err(error) => tracing::warn!(?error, "loading My Issues failed"),
     }
     Event::MyIssuesLoaded(result)
-}
-
-/// Waits for the load in flight, or forever when there is none.
-async fn finish(pending: &mut Option<Pending<'_>>) -> Event {
-    match pending {
-        Some(load) => load.await,
-        None => future::pending().await,
-    }
 }
 
 fn from_terminal(event: TerminalEvent) -> Option<Event> {
@@ -199,8 +193,8 @@ mod tests {
         effect: Effect,
         outside: &mut Fake,
     ) -> ControlFlow<()> {
-        let mut pending = None;
-        execute(app, effect, None::<&FakeClient>, &mut pending, outside).unwrap()
+        let mut in_flight = FuturesUnordered::new();
+        execute(app, effect, None::<&FakeClient>, &mut in_flight, outside).unwrap()
     }
 
     #[test]
@@ -246,6 +240,26 @@ mod tests {
             "{}",
             screen(&app)
         );
+    }
+
+    #[test]
+    fn requests_stay_in_flight_together() {
+        let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+        let mut in_flight = FuturesUnordered::new();
+
+        for _ in 0..2 {
+            let flow = execute(
+                &mut app,
+                Effect::LoadMyIssues,
+                Some(&FakeClient),
+                &mut in_flight,
+                &mut Fake::default(),
+            )
+            .unwrap();
+            assert_eq!(flow, ControlFlow::Continue(()));
+        }
+
+        assert_eq!(in_flight.len(), 2);
     }
 
     #[test]
