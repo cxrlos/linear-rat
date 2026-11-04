@@ -2,12 +2,15 @@ use std::fmt::Display;
 
 use ratatui::layout::Size;
 
-use super::{Load, LoadError, ModalStack, MyIssues, Store};
+use jiff::Timestamp;
+
+use super::{Load, LoadError, ModalStack, MyIssues, Store, SyncStatus};
 use crate::auth::KeySource;
 use crate::config::{AnalyticsSettings, Loaded, SyncSettings, UiSettings};
 use crate::keys::Keymap;
 use crate::linear::AssignedIssues;
 use crate::linear::model::Issue;
+use crate::ui;
 use crate::ui::theme::Theme;
 
 /// Everything the screen shows. Rendering reads only this.
@@ -33,8 +36,10 @@ pub struct State {
     pub theme: Theme,
     /// `[ui]`: the icon set and the wide-layout breakpoint.
     pub ui: UiSettings,
-    /// `[sync]`, kept for polling, which does not read it yet.
+    /// `[sync]`: the poll intervals and whether to pause unfocused.
     pub sync: SyncSettings,
+    /// How fresh the store is and what sync is doing.
+    pub sync_status: SyncStatus,
     /// `[analytics]`, kept for the Analytics screen, which does not read it
     /// yet.
     pub analytics: AnalyticsSettings,
@@ -73,12 +78,41 @@ impl State {
         if self.notice.is_none() {
             self.notice = summary(&loaded.problems);
         }
+        // A store from another workspace or viewer, as a snapshot of the
+        // last session can be, is thrown away rather than mixed in.
+        let other_viewer = self
+            .store
+            .viewer()
+            .is_some_and(|viewer| viewer.id != loaded.viewer.id);
+        let other_workspace = self
+            .store
+            .workspace()
+            .is_some_and(|workspace| workspace.id != loaded.workspace.id);
+        if other_viewer || other_workspace {
+            self.store = Store::default();
+            self.sync_status.forget_syncs();
+        }
         self.store.merge(loaded);
         self.rebuild_my_issues();
         self.load = Load::Loaded;
     }
 
-    /// Builds My Issues again from the store, for example after a merge.
+    /// This state painting `store` from the snapshot of the last session,
+    /// which last synced at `synced_at`, until its own load comes back.
+    pub fn with_snapshot(self, store: Store, synced_at: Option<Timestamp>) -> Self {
+        let mut state = Self {
+            store,
+            load: Load::Loaded,
+            sync_status: SyncStatus::from_snapshot(synced_at),
+            ..self
+        };
+        state.rebuild_my_issues();
+        state
+    }
+
+    /// Builds My Issues again from the store, for example after a merge,
+    /// keeping the focused issue, the pane and the scroll. When the focused
+    /// issue left, the focus stays at its place in the list.
     pub fn rebuild_my_issues(&mut self) {
         let Some(viewer) = self.store.viewer() else {
             return;
@@ -89,7 +123,10 @@ impl State {
         let labels: Vec<_> = self.store.labels().cloned().collect();
         let members: Vec<_> = self.store.members().cloned().collect();
         let teams: Vec<_> = self.store.teams().cloned().collect();
-        self.my_issues = MyIssues::new(viewer, &issues, &cycles, &labels, &members, &teams, as_of);
+        let mut rebuilt = MyIssues::new(viewer, &issues, &cycles, &labels, &members, &teams, as_of);
+        let rows = ui::list_rows(self, self.viewport);
+        rebuilt.keep_place_of(&self.my_issues, rows);
+        self.my_issues = rebuilt;
     }
 
     /// The issue the current screen has focused, if it shows issues and has

@@ -1,4 +1,5 @@
-//! The terminal guard: the one owner of raw mode and the alternate screen.
+//! The terminal guard: the one owner of raw mode, the alternate screen and
+//! focus reporting.
 
 use std::future::Future;
 use std::io;
@@ -6,6 +7,7 @@ use std::panic;
 use std::sync::Once;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use crossterm::event::{DisableFocusChange, EnableFocusChange};
 use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::{cursor, execute};
 use tokio::signal::unix::{SignalKind, signal};
@@ -25,7 +27,12 @@ impl TerminalGuard {
         ACTIVE.store(true, Ordering::SeqCst);
         // From here on, an early return drops the guard and restores.
         let guard = Self(());
-        execute!(io::stdout(), EnterAlternateScreen, cursor::Hide)?;
+        execute!(
+            io::stdout(),
+            EnterAlternateScreen,
+            EnableFocusChange,
+            cursor::Hide
+        )?;
         Ok(guard)
     }
 }
@@ -44,7 +51,12 @@ fn restore() {
     if let Err(error) = terminal::disable_raw_mode() {
         tracing::warn!(%error, "could not leave raw mode");
     }
-    if let Err(error) = execute!(io::stdout(), LeaveAlternateScreen, cursor::Show) {
+    if let Err(error) = execute!(
+        io::stdout(),
+        DisableFocusChange,
+        LeaveAlternateScreen,
+        cursor::Show
+    ) {
         tracing::warn!(%error, "could not leave the alternate screen");
     }
 }

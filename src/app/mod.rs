@@ -8,6 +8,7 @@ mod modal;
 mod my_issues;
 mod state;
 mod store;
+mod sync;
 mod update;
 
 use ratatui::Terminal;
@@ -21,6 +22,9 @@ pub use modal::{Modal, ModalStack};
 pub use my_issues::{Group, MyIssues, Pane};
 pub use state::{Screen, State};
 pub use store::Store;
+pub use sync::{
+    IDLE_AFTER, Indicator, OVERLAP, RECONCILE_EVERY, SyncFailure, SyncStatus, TeamPoll,
+};
 pub use update::{Update, perform, update};
 
 use crate::ui;
@@ -53,6 +57,12 @@ impl<B: Backend> App<B> {
             self.draw()?;
         }
         Ok(effects)
+    }
+
+    /// What the screen shows, for effects that read it, such as saving the
+    /// snapshot.
+    pub fn state(&self) -> &State {
+        &self.state
     }
 
     /// How many frames have been drawn since [`App::new`].

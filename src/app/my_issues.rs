@@ -112,6 +112,25 @@ impl MyIssues {
         }
     }
 
+    /// Takes the focused issue, the pane and the scroll of `previous`, an
+    /// earlier build of the list, and brings the focus on screen in a list
+    /// of `rows` lines. When the focused issue is no longer listed, the
+    /// focus stays at its position, on the issue that took its place.
+    pub fn keep_place_of(&mut self, previous: &MyIssues, rows: usize) {
+        let index = previous
+            .focused_issue()
+            .and_then(|focused| self.issues().position(|issue| issue.id == focused.id))
+            .unwrap_or(previous.focused);
+        self.focused = index.min(self.len().saturating_sub(1));
+        self.scroll = previous.scroll;
+        self.pane = if self.len() == 0 {
+            Pane::List
+        } else {
+            previous.pane
+        };
+        self.scroll_into_view(rows);
+    }
+
     /// The non-empty groups: started, unstarted, backlog, then triage.
     pub fn groups(&self) -> &[Group] {
         &self.groups

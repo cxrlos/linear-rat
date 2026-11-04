@@ -2,16 +2,21 @@
 //! and write confirmations all merge into it, in any order, and screens are
 //! built from it.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 use jiff::Timestamp;
+use serde::{Deserialize, Serialize};
 
-use crate::linear::AssignedIssues;
-use crate::linear::model::{Comment, Cycle, Issue, Label, Member, Team, Viewer};
+use crate::linear::model::{Comment, Cycle, Issue, Label, Member, Team, Viewer, Workspace};
+use crate::linear::{AssignedIssues, TeamChanges};
 
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Store {
     viewer: Option<Viewer>,
+    workspace: Option<Workspace>,
+    /// Per team id, the newest `updatedAt` a poll of that team has returned.
+    /// Only server values, never the local clock.
+    watermarks: BTreeMap<String, Timestamp>,
     issues: BTreeMap<String, Issue>,
     cycles: BTreeMap<String, Cycle>,
     teams: BTreeMap<String, Team>,
@@ -42,6 +47,7 @@ impl Store {
     /// [`Store::upsert_issue`]; the rest replaces what is stored by id.
     pub fn merge(&mut self, loaded: &AssignedIssues) {
         self.viewer = Some(loaded.viewer.clone());
+        self.workspace = Some(loaded.workspace.clone());
         for issue in &loaded.issues {
             self.upsert_issue(issue.clone());
         }
@@ -53,6 +59,78 @@ impl Store {
             self.as_of
                 .map_or(loaded.as_of, |as_of| as_of.max(loaded.as_of)),
         );
+    }
+
+    /// Takes in one team's poll: its issues go through
+    /// [`Store::upsert_issue`], trashed ones leave, what they refer to
+    /// replaces what is stored by id, the team's watermark moves up to the
+    /// newest change, and the store's time moves up to the poll's. Returns
+    /// whether any issue changed or a cycle started or ended.
+    pub fn apply(&mut self, changes: &TeamChanges) -> bool {
+        let active_before = self.active_cycle_ids();
+        let mut changed = false;
+        for issue in &changes.issues {
+            if self.issues.get(&issue.id) != Some(issue) {
+                changed |= self.upsert_issue(issue.clone());
+            }
+        }
+        for id in &changes.trashed {
+            changed |= self.remove_issue(id);
+        }
+        by_id(&mut self.cycles, &changes.cycles, |cycle| &cycle.id);
+        by_id(&mut self.teams, &changes.teams, |team| &team.id);
+        by_id(&mut self.labels, &changes.labels, |label| &label.id);
+        by_id(&mut self.members, &changes.members, |member| &member.id);
+        if let Some(newest) = changes.newest {
+            let watermark = self
+                .watermarks
+                .entry(changes.team_id.clone())
+                .or_insert(newest);
+            *watermark = (*watermark).max(newest);
+        }
+        self.as_of = Some(
+            self.as_of
+                .map_or(changes.as_of, |as_of| as_of.max(changes.as_of)),
+        );
+        changed || self.active_cycle_ids() != active_before
+    }
+
+    /// The cycles that [`Store::as_of`] falls inside.
+    fn active_cycle_ids(&self) -> HashSet<String> {
+        let Some(now) = self.as_of else {
+            return HashSet::new();
+        };
+        self.cycles
+            .values()
+            .filter(|cycle| cycle.starts_at <= now && now < cycle.ends_at)
+            .map(|cycle| cycle.id.clone())
+            .collect()
+    }
+
+    /// Drops the issues among `checked` that are not in `existing`, for the
+    /// reconciliation. Issues that were not checked stay, since they may
+    /// have arrived after the check began. Returns whether any left.
+    pub fn retain_existing(&mut self, checked: &[String], existing: &[String]) -> bool {
+        let existing: HashSet<&String> = existing.iter().collect();
+        let mut changed = false;
+        for id in checked.iter().filter(|id| !existing.contains(id)) {
+            changed |= self.remove_issue(id);
+        }
+        changed
+    }
+
+    fn remove_issue(&mut self, id: &str) -> bool {
+        self.comments.remove(id);
+        self.issues.remove(id).is_some()
+    }
+
+    /// The newest `updatedAt` a poll of `team_id` has returned, if any.
+    pub fn watermark(&self, team_id: &str) -> Option<Timestamp> {
+        self.watermarks.get(team_id).copied()
+    }
+
+    pub fn workspace(&self) -> Option<&Workspace> {
+        self.workspace.as_ref()
     }
 
     /// Replaces the comments of `issue_id`.

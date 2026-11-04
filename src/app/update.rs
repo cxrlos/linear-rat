@@ -1,7 +1,7 @@
 use crossterm::event::KeyEventKind;
 use ratatui::layout::Size;
 
-use super::{Action, Copyable, Effect, Event, Load, Modal, Screen, State};
+use super::{Action, Copyable, Effect, Event, Load, Modal, Screen, State, sync};
 use crate::keys::{self, Key, Resolution};
 use crate::ui;
 
@@ -24,19 +24,21 @@ impl Update {
 
 pub fn update(state: &mut State, event: Event) -> Update {
     match event {
-        Event::Start if state.load == Load::Loading => Update {
-            redraw: false,
-            effects: vec![Effect::LoadMyIssues],
-        },
+        Event::Start if state.load == Load::Loading || state.sync_status.is_refreshing() => {
+            Update {
+                redraw: false,
+                effects: vec![Effect::LoadMyIssues],
+            }
+        }
         Event::Start => Update::default(),
-        Event::MyIssuesLoaded(Ok(loaded)) => {
-            state.show_assigned(&loaded);
-            Update::redraw()
-        }
-        Event::MyIssuesLoaded(Err(error)) => {
-            state.load = Load::Failed(error);
-            Update::redraw()
-        }
+        Event::MyIssuesLoaded(Ok(loaded)) => sync::loaded(state, &loaded),
+        Event::MyIssuesLoaded(Err(error)) => sync::load_failed(state, error),
+        Event::Tick(now) => sync::tick(state, now),
+        Event::FocusGained => sync::focus(state, true),
+        Event::FocusLost => sync::focus(state, false),
+        Event::Polled { changes, failure } => sync::polled(state, &changes, failure),
+        Event::Reconciled { checked, result } => sync::reconciled(state, &checked, result),
+        Event::Throttled => sync::throttled(state),
         Event::Resize { columns, rows } => {
             state.viewport = Size::new(columns, rows);
             let rows = ui::list_rows(state, state.viewport);
@@ -45,6 +47,7 @@ pub fn update(state: &mut State, event: Event) -> Update {
         }
         Event::Key(key) if key.kind == KeyEventKind::Release => Update::default(),
         Event::Key(key) => {
+            sync::activity(state);
             let cleared_notice = state.notice.take().is_some();
             let mut update = press(state, Key::from(key));
             update.redraw |= cleared_notice;
@@ -93,6 +96,7 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             state.screen = screen;
             Update::redraw()
         }
+        Action::Refresh => sync::refresh(state),
         Action::ShowCheatsheet => {
             state.modals.push(Modal::Cheatsheet { scroll: 0 });
             Update::redraw()

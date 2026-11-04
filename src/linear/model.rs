@@ -3,16 +3,17 @@
 //! share these types.
 
 use jiff::Timestamp;
+use serde::{Deserialize, Serialize};
 
 /// The person running lrat, identified by the API key in use.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Viewer {
     pub id: String,
     pub name: String,
 }
 
 /// The single Linear organization the API key belongs to.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Workspace {
     pub id: String,
     pub name: String,
@@ -22,14 +23,14 @@ pub struct Workspace {
 
 /// Anyone in the workspace who can be an assignee, creator or comment author.
 /// Linear calls this a `User`; the viewer is one of them.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Member {
     pub id: String,
     pub name: String,
     pub display_name: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Team {
     pub id: String,
     /// The identifier prefix, for example `ENG`.
@@ -40,7 +41,7 @@ pub struct Team {
 
 /// A team's estimation scale. With [`Estimation::NotUsed`], estimates are
 /// hidden and analytics count issues instead of points.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Estimation {
     NotUsed,
     Exponential,
@@ -50,7 +51,7 @@ pub enum Estimation {
 }
 
 /// A team's named status for an issue.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WorkflowState {
     pub id: String,
     pub team_id: String,
@@ -62,7 +63,7 @@ pub struct WorkflowState {
 
 /// Every workflow state belongs to exactly one of these. Declared in the order
 /// work moves through them.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum StateType {
     Triage,
     Backlog,
@@ -80,7 +81,7 @@ impl StateType {
 }
 
 /// Linear's priority, which it stores as 0 (none) to 4 (low).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum Priority {
     Urgent,
     High,
@@ -89,7 +90,7 @@ pub enum Priority {
     None,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Label {
     pub id: String,
     /// `None` for a workspace label.
@@ -97,14 +98,14 @@ pub struct Label {
     pub name: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Project {
     pub id: String,
     pub name: String,
 }
 
 /// A team's fixed time box of committed issues.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Cycle {
     pub id: String,
     pub team_id: String,
@@ -125,7 +126,7 @@ pub struct Cycle {
 }
 
 /// A unit of work in a team, identified by its key (for example `ENG-123`).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Issue {
     pub id: String,
     /// The key, for example `ENG-123`.
@@ -158,7 +159,7 @@ pub struct Issue {
 
 /// A stretch of time an issue spent in one workflow state, as Linear's
 /// `IssueStateSpan`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct StateSpan {
     pub state_id: String,
     pub state_type: StateType,
@@ -167,7 +168,7 @@ pub struct StateSpan {
     pub ended_at: Option<Timestamp>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Comment {
     pub id: String,
     pub issue_id: String,

@@ -254,6 +254,15 @@ pub static ACTIONS: &[ActionSpec] = &[
         available: |state| state.screen != Screen::Analytics,
     },
     ActionSpec {
+        action: Action::Refresh,
+        id: "refresh",
+        description: "Refresh now",
+        hint: None,
+        contexts: GLOBAL,
+        default_keys: &[&[Key::char('r')]],
+        available: |state| state.can_refresh(),
+    },
+    ActionSpec {
         action: Action::ShowCheatsheet,
         id: "show-cheatsheet",
         description: "Show every key for this context",

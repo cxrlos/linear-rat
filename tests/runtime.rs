@@ -1,14 +1,19 @@
 use std::future::{self, Future};
 use std::io;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use crossterm::event::{Event as TerminalEvent, KeyCode, KeyEvent, KeyModifiers};
 use futures_util::stream::{self, Stream, StreamExt};
+use jiff::Timestamp;
 use linear_rat::app::{App, State};
 use linear_rat::auth::KeySource;
 use linear_rat::linear::model::{Viewer, Workspace};
-use linear_rat::linear::{AssignedIssues, ClientError, FakeClient, LinearClient};
+use linear_rat::linear::{
+    AssignedIssues, ClientError, FakeClient, LinearClient, TeamChanges, demo,
+};
 use linear_rat::runtime;
+use linear_rat::snapshot::SnapshotCache;
 use ratatui::backend::TestBackend;
 
 fn press(c: char) -> io::Result<TerminalEvent> {
@@ -31,7 +36,7 @@ async fn run(
     shutdown: impl Future<Output = ()>,
 ) -> Option<anyhow::Result<()>> {
     let mut app = App::new(TestBackend::new(80, 24), State::default()).unwrap();
-    let running = runtime::run(&mut app, Some(&FakeClient), input(events), shutdown);
+    let running = runtime::run(&mut app, Some(&FakeClient), None, input(events), shutdown);
     tokio::time::timeout(Duration::from_millis(200), running)
         .await
         .ok()
@@ -40,7 +45,7 @@ async fn run(
 /// Runs `app` with `client` and no input until it settles, then hands back
 /// what it shows.
 async fn settle(mut app: App<TestBackend>, client: Option<&impl LinearClient>) -> String {
-    let running = runtime::run(&mut app, client, input(Vec::new()), future::pending());
+    let running = runtime::run(&mut app, client, None, input(Vec::new()), future::pending());
     let stopped = tokio::time::timeout(Duration::from_millis(200), running).await;
     assert!(stopped.is_err(), "the runtime stopped: {stopped:?}");
     let buffer = app.backend().buffer();
@@ -62,6 +67,18 @@ impl LinearClient for RejectingClient {
     }
 
     async fn assigned_issues(&self) -> Result<AssignedIssues, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn changed_issues(
+        &self,
+        _: &str,
+        _: Option<Timestamp>,
+    ) -> Result<TeamChanges, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn existing_issues(&self, _: &[String]) -> Result<Vec<String>, ClientError> {
         Err(ClientError::InvalidKey)
     }
 }
@@ -104,7 +121,7 @@ async fn loads_my_issues_through_the_client_at_start() {
     let shown = settle(app, Some(&FakeClient)).await;
 
     let demo = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
-    let demo_shown = settle(demo, None::<&FakeClient>).await;
+    let demo_shown = settle(demo, Some(&FakeClient)).await;
     assert_eq!(shown, demo_shown);
 }
 
@@ -132,16 +149,101 @@ async fn q_quits_while_the_load_is_still_in_flight() {
         async fn assigned_issues(&self) -> Result<AssignedIssues, ClientError> {
             future::pending().await
         }
+        async fn changed_issues(
+            &self,
+            _: &str,
+            _: Option<Timestamp>,
+        ) -> Result<TeamChanges, ClientError> {
+            future::pending().await
+        }
+        async fn existing_issues(&self, _: &[String]) -> Result<Vec<String>, ClientError> {
+            future::pending().await
+        }
     }
     let mut app = App::new(TestBackend::new(80, 24), State::loading(None)).unwrap();
 
     let running = runtime::run(
         &mut app,
         Some(&SlowClient),
+        None,
         input(vec![press('q')]),
         future::pending(),
     );
     let result = tokio::time::timeout(Duration::from_millis(200), running).await;
 
     assert!(matches!(result, Ok(Ok(()))), "{result:?}");
+}
+
+/// The demo workspace, counting the delta polls asked of it.
+#[derive(Default)]
+struct CountingClient {
+    deltas: AtomicUsize,
+}
+
+impl LinearClient for CountingClient {
+    async fn viewer(&self) -> Result<(Viewer, Workspace), ClientError> {
+        FakeClient.viewer().await
+    }
+    async fn assigned_issues(&self) -> Result<AssignedIssues, ClientError> {
+        FakeClient.assigned_issues().await
+    }
+    async fn changed_issues(
+        &self,
+        team_id: &str,
+        since: Option<Timestamp>,
+    ) -> Result<TeamChanges, ClientError> {
+        self.deltas.fetch_add(1, Ordering::SeqCst);
+        FakeClient.changed_issues(team_id, since).await
+    }
+    async fn existing_issues(&self, ids: &[String]) -> Result<Vec<String>, ClientError> {
+        FakeClient.existing_issues(ids).await
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn polls_every_team_after_the_load_and_then_every_active_interval() {
+    let client = CountingClient::default();
+    let mut app = App::new(TestBackend::new(80, 24), State::loading(None)).unwrap();
+    let teams = demo::workspace().teams.len();
+
+    let running = runtime::run(
+        &mut app,
+        Some(&client),
+        None,
+        input(Vec::new()),
+        future::pending(),
+    );
+    let stopped = tokio::time::timeout(Duration::from_millis(31_500), running).await;
+
+    assert!(stopped.is_err(), "the runtime stopped: {stopped:?}");
+    let deltas = client.deltas.load(Ordering::SeqCst);
+    assert_eq!(deltas, 3 * teams, "polls at 0s, 15s and 30s");
+}
+
+#[tokio::test(start_paused = true)]
+async fn quitting_saves_the_snapshot_the_next_launch_paints_from() {
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("runtime-snapshot-{}", std::process::id()));
+    let cache = SnapshotCache::new(dir);
+    let mut app = App::new(TestBackend::new(80, 24), State::loading(None)).unwrap();
+    // q comes a minute in, once the load and the first polls are done.
+    let late_q = stream::once(async {
+        tokio::time::sleep(Duration::from_secs(60)).await;
+        press('q')
+    });
+
+    let running = runtime::run(
+        &mut app,
+        Some(&FakeClient),
+        Some(&cache),
+        Box::pin(late_q.chain(stream::pending())),
+        future::pending(),
+    );
+    let quit = tokio::time::timeout(Duration::from_secs(61), running).await;
+
+    assert!(matches!(quit, Ok(Ok(()))), "{quit:?}");
+    let saved = cache.load().unwrap();
+    assert_eq!(saved.store, app.state().store);
+    assert!(saved.store.issues().count() > 0);
+    assert!(saved.synced_at.is_some());
 }

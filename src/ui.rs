@@ -29,8 +29,10 @@ pub fn render(state: &State, frame: &mut Frame) {
     let selected = Screen::ALL
         .iter()
         .position(|&screen| screen == state.screen);
-    let tabs = Tabs::new(Screen::ALL.map(|screen| tab_title(state, screen))).select(selected);
-    frame.render_widget(tabs, tabs_area);
+    let titles = Screen::ALL.map(|screen| tab_title(state, screen));
+    let tabs_width = titles_width(&titles);
+    frame.render_widget(Tabs::new(titles).select(selected), tabs_area);
+    render_sync_indicator(state, frame, tabs_area, tabs_width);
     match state.screen {
         Screen::MyIssues => match &state.load {
             Load::Loaded => my_issues::render(state, frame, body_area),
@@ -78,6 +80,39 @@ fn tab_title(state: &State, screen: Screen) -> String {
         Some(key) => format!("[{key}] {}", screen.title()),
         None => screen.title().to_owned(),
     }
+}
+
+/// How wide [`Tabs`] draws `titles`: each padded by a space on both sides,
+/// with a one-column divider between them.
+fn titles_width(titles: &[String]) -> u16 {
+    let padded: usize = titles
+        .iter()
+        .map(|title| Span::raw(title.as_str()).width() + 2)
+        .sum();
+    let dividers = titles.len().saturating_sub(1);
+    u16::try_from(padded + dividers).unwrap_or(u16::MAX)
+}
+
+/// The sync indicator at the right end of the tab row, muted while sync is
+/// fine and accented when it is failing or throttled. Left out when it
+/// would touch the tabs.
+fn render_sync_indicator(state: &State, frame: &mut Frame, area: Rect, tabs_width: u16) {
+    let Some(indicator) = state.sync_status.indicator() else {
+        return;
+    };
+    let text = Span::raw(format!("{} ", indicator.text));
+    let width = u16::try_from(text.width()).unwrap_or(u16::MAX);
+    if tabs_width.saturating_add(width).saturating_add(1) > area.width {
+        return;
+    }
+    let style = if indicator.alert {
+        style::accent(&state.theme)
+    } else {
+        style::muted(&state.theme)
+    };
+    let [_, right] =
+        Layout::horizontal([Constraint::Fill(1), Constraint::Length(width)]).areas(area);
+    frame.render_widget(text.style(style), right);
 }
 
 /// The first key that closes an overlay, as ` Esc close `, or nothing if

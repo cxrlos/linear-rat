@@ -26,7 +26,7 @@ clap = { version = "4.6.7", features = ["derive"] }
 crossterm = { version = "0.29.0", features = ["event-stream"] }
 etcetera = "0.11.0"
 futures-util = { version = "0.3.34", default-features = false, features = ["alloc"] }
-jiff = "0.2.38"
+jiff = { version = "0.2.38", features = ["serde"] }
 keyring-core = "1.0.1"
 ratatui = "0.30.2"
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls"] }
@@ -50,7 +50,7 @@ dbus-secret-service-keyring-store = { version = "1.0.1", features = ["crypto-rus
 [dev-dependencies]
 apollo-compiler = "1.33.1"
 insta = "1.49.0"
-tokio = { version = "1.53.3", features = ["net"] }
+tokio = { version = "1.53.3", features = ["net", "test-util"] }
 wiremock = "0.6.5"
 
 [lints.clippy]

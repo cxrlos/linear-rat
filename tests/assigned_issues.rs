@@ -94,6 +94,7 @@ fn issue(n: u32) -> Value {
 fn page(issues: Vec<Value>, end_cursor: Option<&str>) -> Value {
     json!({
         "data": {
+            "organization": { "id": "workspace-cheddar", "name": "Cheddar Works", "urlKey": "cheddar-works" },
             "viewer": {
                 "id": "viewer",
                 "name": "Remy Fromage",

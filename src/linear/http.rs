@@ -2,11 +2,13 @@
 //! reqwest (ADR 0002).
 
 mod assigned;
+mod changes;
 
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
+use jiff::Timestamp;
 use reqwest::StatusCode;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue, RETRY_AFTER};
 use serde::Deserialize;
@@ -15,7 +17,7 @@ use serde_json::{Value, json};
 
 use super::governor::{Governor, SystemTimer, Timer, Urgency};
 use super::model::{Viewer, Workspace};
-use super::{AssignedIssues, ClientError, GraphQlError, LinearClient, Response};
+use super::{AssignedIssues, ClientError, GraphQlError, LinearClient, Response, TeamChanges};
 use crate::auth::ApiKey;
 
 /// Linear's GraphQL endpoint.
@@ -267,6 +269,25 @@ impl LinearClient for HttpClient {
 
     async fn assigned_issues(&self) -> Result<AssignedIssues, ClientError> {
         assigned::load(self).await
+    }
+
+    async fn changed_issues(
+        &self,
+        team_id: &str,
+        since: Option<Timestamp>,
+    ) -> Result<TeamChanges, ClientError> {
+        changes::changed(self, team_id, since).await
+    }
+
+    async fn existing_issues(&self, ids: &[String]) -> Result<Vec<String>, ClientError> {
+        changes::existing(self, ids).await
+    }
+
+    fn throttled(&self) -> bool {
+        !self
+            .governor()
+            .wait(Urgency::Background, self.timer.now())
+            .is_zero()
     }
 }
 

@@ -3,8 +3,14 @@
 # state, people, cycle and project each one refers to. Linear filters out
 # completed, canceled and duplicate issues. Pages hold 100 issues: Linear's
 # true maximum `first` is unverified (250 is commonly assumed). The client
-# follows `endCursor` until `hasNextPage` is false.
+# follows `endCursor` until `hasNextPage` is false. The workspace names the
+# snapshot the issues are cached in.
 query AssignedIssues($after: String) {
+  organization {
+    id
+    name
+    urlKey
+  }
   viewer {
     id
     name

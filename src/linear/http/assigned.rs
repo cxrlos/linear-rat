@@ -8,6 +8,7 @@ use serde_json::json;
 use super::{HttpClient, PageInfo, Urgency};
 use crate::linear::model::{
     Cycle, Estimation, Issue, Label, Member, Priority, StateType, Team, Viewer, WorkflowState,
+    Workspace,
 };
 use crate::linear::{AssignedIssues, ClientError, GraphQlError, Response};
 
@@ -26,15 +27,31 @@ pub(super) async fn load(client: &HttpClient) -> Result<AssignedIssues, ClientEr
             |page: &AssignedPage| &page.viewer.assigned_issues.page_info,
         )
         .await?;
-    let viewer = pages
+    let (viewer, workspace) = pages
         .first()
-        .map(|page| Viewer {
-            id: page.viewer.id.clone(),
-            name: page.viewer.name.clone(),
+        .map(|page| {
+            let viewer = Viewer {
+                id: page.viewer.id.clone(),
+                name: page.viewer.name.clone(),
+            };
+            let workspace = Workspace {
+                id: page.organization.id.clone(),
+                name: page.organization.name.clone(),
+                url_key: page.organization.url_key.clone(),
+            };
+            (viewer, workspace)
         })
         .ok_or_else(|| ClientError::Decode("Linear returned no page".to_owned()))?;
+    let mut decoded = Decoded::default();
+    for node in pages
+        .into_iter()
+        .flat_map(|page| page.viewer.assigned_issues.nodes)
+    {
+        decoded.add(node);
+    }
     let mut loaded = AssignedIssues {
         viewer,
+        workspace,
         issues: Vec::new(),
         cycles: Vec::new(),
         labels: Vec::new(),
@@ -44,45 +61,13 @@ pub(super) async fn load(client: &HttpClient) -> Result<AssignedIssues, ClientEr
         problems: Vec::new(),
     };
     loaded.note(&errors);
-    let mut label_ids: Vec<String> = Vec::new();
-    for node in pages
-        .into_iter()
-        .flat_map(|page| page.viewer.assigned_issues.nodes)
-    {
-        for id in &node.label_ids {
-            push_new(&mut label_ids, id.clone(), |known| known == id);
-        }
-        loaded.add(node);
-    }
 
-    if label_ids.is_empty() {
-        return Ok(loaded);
-    }
-    let labels = client
-        .all_pages(
-            LABELS,
-            json!({ "ids": label_ids }),
-            Urgency::Background,
-            |page: &LabelsPage| &page.issue_labels.page_info,
-        )
-        .await;
     // The issues are what My Issues is for, so they still show without
     // label names.
-    match labels {
-        Ok(Response {
-            data: pages,
-            errors,
-        }) => {
+    match labels(client, &decoded.label_ids).await {
+        Ok(Response { data, errors }) => {
             loaded.note(&errors);
-            loaded.labels = pages
-                .into_iter()
-                .flat_map(|page| page.issue_labels.nodes)
-                .map(|node| Label {
-                    id: node.id,
-                    team_id: node.team.map(|team| team.id),
-                    name: node.name,
-                })
-                .collect();
+            loaded.labels = data;
         }
         Err(error) => {
             tracing::warn!(%error, "the label lookup failed");
@@ -91,7 +76,49 @@ pub(super) async fn load(client: &HttpClient) -> Result<AssignedIssues, ClientEr
                 .push(format!("label names did not load: {error}"));
         }
     }
+    loaded.issues = decoded.issues;
+    loaded.cycles = decoded.cycles;
+    loaded.members = decoded.members;
+    loaded.teams = decoded.teams;
     Ok(loaded)
+}
+
+/// The labels with `ids`, archived ones included, as a background request.
+/// No ids, no request.
+pub(super) async fn labels(
+    client: &HttpClient,
+    ids: &[String],
+) -> Result<Response<Vec<Label>>, ClientError> {
+    if ids.is_empty() {
+        return Ok(Response {
+            data: Vec::new(),
+            errors: Vec::new(),
+        });
+    }
+    let Response {
+        data: pages,
+        errors,
+    } = client
+        .all_pages(
+            LABELS,
+            json!({ "ids": ids }),
+            Urgency::Background,
+            |page: &LabelsPage| &page.issue_labels.page_info,
+        )
+        .await?;
+    let labels = pages
+        .into_iter()
+        .flat_map(|page| page.issue_labels.nodes)
+        .map(|node| Label {
+            id: node.id,
+            team_id: node.team.map(|team| team.id),
+            name: node.name,
+        })
+        .collect();
+    Ok(Response {
+        data: labels,
+        errors,
+    })
 }
 
 impl AssignedIssues {
@@ -104,10 +131,26 @@ impl AssignedIssues {
                 .map(|error| format!("Linear left something out: {error}")),
         );
     }
+}
 
-    /// Adds one issue, and its team, cycle and people the first time each
-    /// shows up.
-    fn add(&mut self, node: IssueNode) {
+/// Issues decoded from their nodes, with the teams, people and cycles they
+/// refer to and the ids of their labels, each once.
+#[derive(Default)]
+pub(super) struct Decoded {
+    pub(super) issues: Vec<Issue>,
+    pub(super) cycles: Vec<Cycle>,
+    pub(super) members: Vec<Member>,
+    pub(super) teams: Vec<Team>,
+    pub(super) label_ids: Vec<String>,
+}
+
+impl Decoded {
+    /// Adds one issue, and its team, cycle, people and label ids the first
+    /// time each shows up.
+    pub(super) fn add(&mut self, node: IssueNode) {
+        for id in &node.label_ids {
+            push_new(&mut self.label_ids, id.clone(), |known| known == id);
+        }
         let team_id = node.team.id.clone();
         push_new(
             &mut self.teams,
@@ -194,6 +237,15 @@ fn push_new<T>(list: &mut Vec<T>, item: T, is_same: impl Fn(&T) -> bool) {
 #[derive(Deserialize)]
 struct AssignedPage {
     viewer: ViewerWithIssues,
+    organization: WorkspaceNode,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceNode {
+    id: String,
+    name: String,
+    url_key: String,
 }
 
 #[derive(Deserialize)]
@@ -212,15 +264,15 @@ struct LabelsPage {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct Connection<N> {
-    nodes: Vec<N>,
-    page_info: PageInfo,
+pub(super) struct Connection<N> {
+    pub(super) nodes: Vec<N>,
+    pub(super) page_info: PageInfo,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct IssueNode {
-    id: String,
+pub(super) struct IssueNode {
+    pub(super) id: String,
     identifier: String,
     title: String,
     description: Option<String>,
@@ -233,7 +285,7 @@ struct IssueNode {
     #[serde(deserialize_with = "timestamp")]
     created_at: Timestamp,
     #[serde(deserialize_with = "timestamp")]
-    updated_at: Timestamp,
+    pub(super) updated_at: Timestamp,
     #[serde(deserialize_with = "optional_timestamp")]
     started_at: Option<Timestamp>,
     #[serde(deserialize_with = "optional_timestamp")]

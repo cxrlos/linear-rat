@@ -93,7 +93,9 @@ noop = ["gg", "<C-d>"]                 # these keys do nothing, and leave every 
 
 ## `[sync]`
 
-Read and checked now; polling uses it once it lands.
+lrat polls Linear for changed issues on these intervals, and `r` polls at once. You count as idle after two minutes without a key press. `live` is read and checked now; live updates use it once they land.
+
+Between sessions, lrat keeps what it loaded in a snapshot under `$XDG_CACHE_HOME/lrat/` (`~/.cache/lrat/` by default, on macOS too), one file per workspace and viewer, readable only by you and never holding the API key. The next launch shows it before the first request returns. When Linear cannot be reached at launch, the snapshot stays on screen and lrat loads My Issues again every poll interval (or at once with `r`); it polls only after that load confirms the workspace and viewer. Deleting the directory is always safe.
 
 | Key | Values | Default | Effect |
 | --- | --- | --- | --- |

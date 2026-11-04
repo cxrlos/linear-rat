@@ -65,7 +65,7 @@ impl From<&ClientError> for LoadError {
 }
 
 /// `error` and each of its sources, joined by `: `.
-fn chain(error: &dyn Error) -> String {
+pub(super) fn chain(error: &dyn Error) -> String {
     let mut text = error.to_string();
     let mut source = error.source();
     while let Some(cause) = source {

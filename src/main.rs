@@ -4,11 +4,12 @@ use std::io;
 use anyhow::Context;
 use clap::Parser;
 use crossterm::event::EventStream;
-use linear_rat::app::{App, LoadError, State};
+use linear_rat::app::{App, Load, LoadError, State};
 use linear_rat::auth::{self, Credentials, OsKeyring, WorkspaceFile};
 use linear_rat::cli::{AuthCommand, Cli, Command};
 use linear_rat::config::{self, Loaded};
 use linear_rat::linear::{FakeClient, HttpClient, LinearClient};
+use linear_rat::snapshot::SnapshotCache;
 use linear_rat::terminal::{self, TerminalGuard};
 use linear_rat::{logging, runtime};
 use ratatui::backend::CrosstermBackend;
@@ -42,10 +43,12 @@ async fn main() -> anyhow::Result<()> {
         terminal::shutdown_signal().context("listening for SIGINT, SIGTERM and SIGHUP")?;
     let result = if cli.demo {
         let state = State::loading(None).with_config(&loaded);
-        run_tui(state, Some(&FakeClient), shutdown).await
+        run_tui(state, Some(&FakeClient), None, shutdown).await
     } else {
         let (state, client) = connect();
-        run_tui(state.with_config(&loaded), client.as_ref(), shutdown).await
+        let snapshots = snapshot_cache();
+        let state = from_snapshot(state.with_config(&loaded), snapshots.as_ref());
+        run_tui(state, client.as_ref(), snapshots.as_ref(), shutdown).await
     };
 
     match &result {
@@ -84,14 +87,40 @@ fn connect() -> (State, Option<HttpClient>) {
     }
 }
 
+/// The snapshot cache under the XDG cache dir, or `None`, logged, when there
+/// is no home directory to put it in.
+fn snapshot_cache() -> Option<SnapshotCache> {
+    SnapshotCache::in_cache_dir()
+        .inspect_err(|error| tracing::warn!("no snapshot cache: {error:#}"))
+        .ok()
+}
+
+/// `state`, painting the last session's snapshot while it waits for its own
+/// load. A state that cannot load, for want of a usable key, stays as it is.
+fn from_snapshot(state: State, snapshots: Option<&SnapshotCache>) -> State {
+    if state.load != Load::Loading {
+        return state;
+    }
+    match snapshots.and_then(SnapshotCache::load) {
+        Some(saved) => {
+            tracing::info!("painting from the snapshot");
+            state.with_snapshot(saved.store, saved.synced_at)
+        }
+        None => state,
+    }
+}
+
 async fn run_tui<C: LinearClient>(
     state: State,
     client: Option<&C>,
+    snapshots: Option<&SnapshotCache>,
     shutdown: impl Future<Output = ()>,
 ) -> anyhow::Result<()> {
     let guard = TerminalGuard::enter().context("preparing the terminal")?;
     let result = match App::new(CrosstermBackend::new(io::stdout()), state) {
-        Ok(mut app) => runtime::run(&mut app, client, EventStream::new(), shutdown).await,
+        Ok(mut app) => {
+            runtime::run(&mut app, client, snapshots, EventStream::new(), shutdown).await
+        }
         Err(error) => Err(error).context("drawing the first frame"),
     };
     drop(guard);

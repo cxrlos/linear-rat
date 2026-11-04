@@ -25,6 +25,8 @@ pub enum Action {
     Copy(Copyable),
     /// Open the focused issue's page in the browser.
     OpenInBrowser,
+    /// Poll Linear for changes now.
+    Refresh,
 }
 
 /// What [`Action::Copy`] puts on the clipboard.
