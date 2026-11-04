@@ -23,6 +23,6 @@ expression: app.backend()
 "│                                                                              │"
 "│                                                                              │"
 "│                                                                              │"
-"│                                                                              │"
 "└──────────────────────────────────────────────────────────────────────────────┘"
-" j down  k up  gg top  G bottom  Esc close  ? keys  q quit                      "
+" Move │ j down │ k up      │ gg top    │ G bottom │ C-d/C-u page │ h/l pane     "
+" Do   │ y yank │ o browser │ Esc close │ ? keys   │ q quit                      "

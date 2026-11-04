@@ -8,7 +8,7 @@ mod registry;
 
 pub use key::{Key, KeySequence, ParseKeyError};
 pub use keymap::{Change, Keymap, Override, Resolution, Target};
-pub use registry::{ACTIONS, ActionSpec, by_id, spec};
+pub use registry::{ACTIONS, ActionSpec, Hint, HintRow, by_id, spec};
 
 use crate::app::{Load, Modal, Pane, Screen, State};
 

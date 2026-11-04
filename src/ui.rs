@@ -139,7 +139,7 @@ fn areas(area: Rect, notice_rows: usize) -> [Rect; 4] {
         Constraint::Length(1),
         Constraint::Fill(1),
         Constraint::Length(u16::try_from(notice_rows).unwrap_or(0)),
-        Constraint::Length(1),
+        Constraint::Length(hints::ROWS),
     ])
     .areas(area)
 }

@@ -13,12 +13,53 @@ pub struct ActionSpec {
     pub id: &'static str,
     /// What the cheatsheet and the palette say it does.
     pub description: &'static str,
-    /// The short word shown in the bottom bar, if it appears there.
-    pub hint: Option<&'static str>,
+    /// Where the action shows in the bottom bar, if it does.
+    pub hint: Option<Hint>,
     pub contexts: &'static [Context],
     pub default_keys: &'static [&'static [Key]],
     /// Whether it can run now. Unavailable actions are still listed, muted.
     pub available: fn(&State) -> bool,
+}
+
+/// An action's place in the bottom bar: its row and the word after its key.
+/// Actions in one row with the same word share an item.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Hint {
+    pub row: HintRow,
+    pub word: &'static str,
+}
+
+/// The two rows of the bottom bar, top first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HintRow {
+    Move,
+    Do,
+}
+
+impl HintRow {
+    pub const ALL: [HintRow; 2] = [HintRow::Move, HintRow::Do];
+
+    /// The label at the start of the row.
+    pub fn label(self) -> &'static str {
+        match self {
+            HintRow::Move => "Move",
+            HintRow::Do => "Do",
+        }
+    }
+}
+
+const fn moves(word: &'static str) -> Option<Hint> {
+    Some(Hint {
+        row: HintRow::Move,
+        word,
+    })
+}
+
+const fn does(word: &'static str) -> Option<Hint> {
+    Some(Hint {
+        row: HintRow::Do,
+        word,
+    })
 }
 
 const LIST: &[Context] = &[Context::List];
@@ -33,7 +74,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::MoveDown,
         id: "move-down",
         description: "Move down",
-        hint: Some("down"),
+        hint: moves("down"),
         contexts: PANES,
         default_keys: &[&[Key::char('j')]],
         available: not_in_detail,
@@ -42,7 +83,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::MoveUp,
         id: "move-up",
         description: "Move up",
-        hint: Some("up"),
+        hint: moves("up"),
         contexts: PANES,
         default_keys: &[&[Key::char('k')]],
         available: not_in_detail,
@@ -51,7 +92,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::MoveToTop,
         id: "move-to-top",
         description: "Move to the top",
-        hint: Some("top"),
+        hint: moves("top"),
         contexts: PANES,
         default_keys: &[&[Key::char('g'), Key::char('g')]],
         available: not_in_detail,
@@ -60,7 +101,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::MoveToBottom,
         id: "move-to-bottom",
         description: "Move to the bottom",
-        hint: Some("bottom"),
+        hint: moves("bottom"),
         contexts: PANES,
         default_keys: &[&[Key::char('G')]],
         available: not_in_detail,
@@ -69,7 +110,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::HalfPageDown,
         id: "half-page-down",
         description: "Move down half a page",
-        hint: None,
+        hint: moves("page"),
         contexts: PANES,
         default_keys: &[&[Key::ctrl('d')]],
         available: not_in_detail,
@@ -78,7 +119,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::HalfPageUp,
         id: "half-page-up",
         description: "Move up half a page",
-        hint: None,
+        hint: moves("page"),
         contexts: PANES,
         default_keys: &[&[Key::ctrl('u')]],
         available: not_in_detail,
@@ -87,7 +128,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::FocusLeft,
         id: "focus-left",
         description: "Focus the pane on the left",
-        hint: None,
+        hint: moves("pane"),
         contexts: PANES,
         default_keys: &[&[Key::char('h')]],
         available: always,
@@ -96,7 +137,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::FocusRight,
         id: "focus-right",
         description: "Focus the pane on the right",
-        hint: None,
+        hint: moves("pane"),
         contexts: PANES,
         default_keys: &[&[Key::char('l')]],
         available: always,
@@ -105,16 +146,61 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::Open,
         id: "open",
         description: "Open the focused issue",
-        hint: Some("open"),
+        hint: does("open"),
         contexts: LIST,
         default_keys: &[&[Key::named(KeyCode::Enter)]],
         available: always,
     },
     ActionSpec {
+        action: Action::Copy(Copyable::Identifier),
+        id: "copy-identifier",
+        description: "Copy the identifier",
+        hint: does("yank"),
+        contexts: PANES,
+        default_keys: &[&[Key::char('y'), Key::char('i')]],
+        available: has_focused_issue,
+    },
+    ActionSpec {
+        action: Action::Copy(Copyable::Url),
+        id: "copy-url",
+        description: "Copy the URL",
+        hint: does("yank"),
+        contexts: PANES,
+        default_keys: &[&[Key::char('y'), Key::char('u')]],
+        available: has_focused_issue,
+    },
+    ActionSpec {
+        action: Action::Copy(Copyable::BranchName),
+        id: "copy-branch-name",
+        description: "Copy the branch name",
+        hint: does("yank"),
+        contexts: PANES,
+        default_keys: &[&[Key::char('y'), Key::char('b')]],
+        available: has_focused_issue,
+    },
+    ActionSpec {
+        action: Action::Copy(Copyable::MarkdownLink),
+        id: "copy-markdown-link",
+        description: "Copy a Markdown link",
+        hint: does("yank"),
+        contexts: PANES,
+        default_keys: &[&[Key::char('y'), Key::char('m')]],
+        available: has_focused_issue,
+    },
+    ActionSpec {
+        action: Action::OpenInBrowser,
+        id: "open-in-browser",
+        description: "Open in the browser",
+        hint: does("browser"),
+        contexts: PANES,
+        default_keys: &[&[Key::char('o')]],
+        available: has_focused_issue,
+    },
+    ActionSpec {
         action: Action::ScrollDown,
         id: "scroll-down",
         description: "Scroll down",
-        hint: Some("down"),
+        hint: moves("down"),
         contexts: OVERLAY,
         default_keys: &[&[Key::char('j')]],
         available: |state| {
@@ -126,7 +212,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::ScrollUp,
         id: "scroll-up",
         description: "Scroll up",
-        hint: Some("up"),
+        hint: moves("up"),
         contexts: OVERLAY,
         default_keys: &[&[Key::char('k')]],
         available: |state| cheatsheet_scroll(state).is_some_and(|scroll| scroll > 0),
@@ -135,55 +221,10 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::Close,
         id: "close",
         description: "Close the top overlay or step back",
-        hint: Some("close"),
+        hint: does("close"),
         contexts: &[Context::List, Context::Detail, Context::Overlay],
         default_keys: &[&[Key::named(KeyCode::Esc)]],
         available: |state| state.modals.top().is_some() || in_detail(state),
-    },
-    ActionSpec {
-        action: Action::Copy(Copyable::Identifier),
-        id: "copy-identifier",
-        description: "Copy the identifier",
-        hint: None,
-        contexts: PANES,
-        default_keys: &[&[Key::char('y'), Key::char('i')]],
-        available: has_focused_issue,
-    },
-    ActionSpec {
-        action: Action::Copy(Copyable::Url),
-        id: "copy-url",
-        description: "Copy the URL",
-        hint: None,
-        contexts: PANES,
-        default_keys: &[&[Key::char('y'), Key::char('u')]],
-        available: has_focused_issue,
-    },
-    ActionSpec {
-        action: Action::Copy(Copyable::BranchName),
-        id: "copy-branch-name",
-        description: "Copy the branch name",
-        hint: None,
-        contexts: PANES,
-        default_keys: &[&[Key::char('y'), Key::char('b')]],
-        available: has_focused_issue,
-    },
-    ActionSpec {
-        action: Action::Copy(Copyable::MarkdownLink),
-        id: "copy-markdown-link",
-        description: "Copy a Markdown link",
-        hint: None,
-        contexts: PANES,
-        default_keys: &[&[Key::char('y'), Key::char('m')]],
-        available: has_focused_issue,
-    },
-    ActionSpec {
-        action: Action::OpenInBrowser,
-        id: "open-in-browser",
-        description: "Open in the browser",
-        hint: None,
-        contexts: PANES,
-        default_keys: &[&[Key::char('o')]],
-        available: has_focused_issue,
     },
     ActionSpec {
         action: Action::ShowScreen(Screen::MyIssues),
@@ -216,7 +257,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::ShowCheatsheet,
         id: "show-cheatsheet",
         description: "Show every key for this context",
-        hint: Some("keys"),
+        hint: does("keys"),
         contexts: GLOBAL,
         default_keys: &[&[Key::char('?')]],
         available: always,
@@ -225,7 +266,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::Quit,
         id: "quit",
         description: "Quit lrat",
-        hint: Some("quit"),
+        hint: does("quit"),
         contexts: GLOBAL,
         default_keys: &[&[Key::char('q')]],
         available: always,
