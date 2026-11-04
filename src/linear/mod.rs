@@ -92,6 +92,31 @@ pub trait LinearClient {
         &self,
         term: &str,
     ) -> impl Future<Output = Result<SearchResults, ClientError>> + Send;
+
+    /// The teams the viewer is a member of, in the order Linear lists them.
+    fn teams(&self) -> impl Future<Output = Result<Vec<Team>, ClientError>> + Send;
+
+    /// What the Team Issues filters offer for `team_id`: its workflow
+    /// states, members, labels (its own and the workspace's), recent cycles
+    /// and projects.
+    fn team_options(
+        &self,
+        team_id: &str,
+    ) -> impl Future<Output = Result<TeamOptions, ClientError>> + Send;
+
+    /// One page of the issues of `query`, most recently updated first,
+    /// starting after the cursor `after` (or at the top when `None`).
+    fn team_issues(
+        &self,
+        query: &TeamQuery,
+        after: Option<&str>,
+    ) -> impl Future<Output = Result<TeamIssuesPage, ClientError>> + Send;
+
+    /// How many issues match `query`, counted over every page.
+    fn count_team_issues(
+        &self,
+        query: &TeamQuery,
+    ) -> impl Future<Output = Result<usize, ClientError>> + Send;
 }
 
 /// What changed in one team: its issues updated after a watermark, and the
@@ -146,6 +171,78 @@ pub struct SearchResults {
     pub members: Vec<Member>,
     pub teams: Vec<Team>,
     /// What Linear could not give, as in [`AssignedIssues::problems`].
+    pub problems: Vec<String>,
+}
+
+/// A team's issues, narrowed by a filter.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TeamQuery {
+    pub team_id: String,
+    pub filter: TeamFilter,
+}
+
+/// One optional value per field; an issue matches when it matches every
+/// field that is set. `None` leaves the field unfiltered.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TeamFilter {
+    /// A workflow state id.
+    pub state: Option<String>,
+    /// A member id.
+    pub assignee: Option<String>,
+    /// A label id; the issue carries it among its labels.
+    pub label: Option<String>,
+    /// A cycle id.
+    pub cycle: Option<String>,
+    /// A project id.
+    pub project: Option<String>,
+}
+
+impl TeamFilter {
+    /// Whether no field is set.
+    pub fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+
+    /// Whether `issue` matches every field that is set.
+    pub fn matches(&self, issue: &Issue) -> bool {
+        let field = |wanted: &Option<String>, actual: Option<&String>| {
+            wanted.as_ref().is_none_or(|wanted| actual == Some(wanted))
+        };
+        field(&self.state, Some(&issue.state.id))
+            && field(&self.assignee, issue.assignee_id.as_ref())
+            && field(&self.cycle, issue.cycle_id.as_ref())
+            && field(&self.project, issue.project_id.as_ref())
+            && self
+                .label
+                .as_ref()
+                .is_none_or(|label| issue.label_ids.contains(label))
+    }
+}
+
+/// What the filters of one team can pick from.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TeamOptions {
+    pub team_id: String,
+    pub states: Vec<WorkflowState>,
+    pub members: Vec<Member>,
+    pub labels: Vec<Label>,
+    pub cycles: Vec<Cycle>,
+    pub projects: Vec<Project>,
+    /// What Linear could not give, such as a list cut short.
+    pub problems: Vec<String>,
+}
+
+/// One page of a team's issues, and the cycles and members they refer to.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TeamIssuesPage {
+    pub issues: Vec<Issue>,
+    pub cycles: Vec<Cycle>,
+    pub members: Vec<Member>,
+    /// The cursor to ask for the next page with, `None` on the last page.
+    pub next: Option<String>,
+    /// When the page was loaded, which decides the active cycle.
+    pub as_of: Timestamp,
+    /// What Linear could not give: errors that came back with the data.
     pub problems: Vec<String>,
 }
 
@@ -418,4 +515,59 @@ impl LinearClient for FakeClient {
             problems: Vec::new(),
         })
     }
+
+    async fn teams(&self) -> Result<Vec<Team>, ClientError> {
+        Ok(demo::workspace().teams)
+    }
+
+    async fn team_options(&self, team_id: &str) -> Result<TeamOptions, ClientError> {
+        Ok(demo::team_options(&demo::workspace(), team_id))
+    }
+
+    async fn team_issues(
+        &self,
+        query: &TeamQuery,
+        after: Option<&str>,
+    ) -> Result<TeamIssuesPage, ClientError> {
+        let data = demo::workspace();
+        let matching = demo::team_issues(&data, query);
+        let start = after.and_then(|cursor| cursor.parse().ok()).unwrap_or(0);
+        let end = (start + FAKE_PAGE_SIZE).min(matching.len());
+        let issues: Vec<Issue> = matching.get(start..end).unwrap_or_default().to_vec();
+        let cycles = data
+            .cycles
+            .into_iter()
+            .filter(|cycle| {
+                issues
+                    .iter()
+                    .any(|issue| issue.cycle_id.as_ref() == Some(&cycle.id))
+            })
+            .collect();
+        let members = data
+            .members
+            .into_iter()
+            .filter(|member| {
+                issues.iter().any(|issue| {
+                    issue.assignee_id.as_ref() == Some(&member.id)
+                        || issue.creator_id.as_ref() == Some(&member.id)
+                })
+            })
+            .collect();
+        Ok(TeamIssuesPage {
+            issues,
+            cycles,
+            members,
+            next: (end < matching.len()).then(|| end.to_string()),
+            as_of: demo::NOW,
+            problems: Vec::new(),
+        })
+    }
+
+    async fn count_team_issues(&self, query: &TeamQuery) -> Result<usize, ClientError> {
+        Ok(demo::team_issues(&demo::workspace(), query).len())
+    }
 }
+
+/// How many issues a page from [`FakeClient`] holds, as the real client asks
+/// Linear for.
+const FAKE_PAGE_SIZE: usize = 50;

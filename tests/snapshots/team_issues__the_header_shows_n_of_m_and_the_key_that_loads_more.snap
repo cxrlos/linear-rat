@@ -1,0 +1,28 @@
+---
+source: tests/team_issues.rs
+expression: app.backend()
+---
+" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+"t ENG Engineering · 50 of 70 m more · f Filters none                            "
+"┌Team Issues───────────────────────────────────────────────────────────────────┐"
+"│▸ ENG-69 Make the importer resumable      ● Done        ▮▮▯ Medium  8 Cycle 7 │"
+"│  ENG-49 Support metric and imperial whee ● Done        !!! Urgent  8 Cycle 7 │"
+"│  ENG-41 Fix memory leak in the crumb pro ⊘ Canceled    ▮▮▯ Medium  8         │"
+"│  ENG-70 Gouda batch labels print off-cen ◇ Triage      ▮▮▯ Medium  3         │"
+"│  ENG-35 Split the auth module out of the ◌ Backlog     ▮▮▯ Medium            │"
+"│  ENG-67 Expiry dates parse wrong in some ● Done        ··· None    8 Cycle 7 │"
+"│  ENG-64 Support multiple cellars per hou ● Done        ▮▯▯ Low     5 Cycle 7 │"
+"│  ENG-63 Precompute nightly cellar report ◇ Triage      ▮▯▯ Low     8         │"
+"│  ENG-62 Burrow returns 500 on empty uplo ◇ Triage      !!! Urgent  5         │"
+"│  ENG-66 Add keyboard shortcuts to the we ◌ Backlog     ··· None              │"
+"│  ENG-65 Rotate refresh tokens on every u ○ Todo        ··· None    2 Cycle 7 │"
+"│  ENG-68 Profile the slow pantry dashboar ◇ Triage      ▮▯▯ Low               │"
+"│  ENG-53 Bump the minimum supported iOS v ◐ In Progress ··· None    5 Cycle 7 │"
+"│  ENG-61 Add contract tests for the recip ◐ In Progress ▮▯▯ Low     2 Cycle 7 │"
+"│  ENG-60 Improve error messages on sync c ◐ In Progress ··· None    5 Cycle 7 │"
+"│  ENG-59 Show who last moved a wheel      ◌ Backlog     ▮▯▯ Low     2         │"
+"│  ENG-51 Add a dry-run mode to the import ◐ In Progress ▮▮▯ Medium  2 Cycle 7 │"
+"│  ENG-55 Add a read replica for reporting ● Done        ▮▮▮ High    5 Cycle 6 │"
+"└──────────────────────────────────────────────────────────────────────────────┘"
+" Move │ j down     │ k up   │ gg top    │ G bottom  │ C-d/C-u page │ h/l pane   "
+" Do   │ Enter open │ y yank │ o browser │ Esc close │ ? keys       │ q quit     "

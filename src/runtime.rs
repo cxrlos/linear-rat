@@ -238,6 +238,43 @@ where
             in_flight.push(Box::pin(search(reach.client, term)));
             Ok(())
         }
+        Effect::LoadTeams => {
+            let client = reach.client;
+            in_flight.push(Box::pin(async move {
+                Event::TeamsLoaded(ask(client, "could not load your teams", |c| c.teams()).await)
+            }));
+            Ok(())
+        }
+        Effect::LoadTeamOptions(team_id) => {
+            let client = reach.client;
+            in_flight.push(Box::pin(async move {
+                let what = "could not load the team's filters";
+                Event::TeamOptionsLoaded(ask(client, what, |c| c.team_options(&team_id)).await)
+            }));
+            Ok(())
+        }
+        Effect::LoadTeamIssues { query, after } => {
+            let client = reach.client;
+            in_flight.push(Box::pin(async move {
+                let what = "could not load the team's issues";
+                let result = ask(client, what, |c| c.team_issues(&query, after.as_deref())).await;
+                Event::TeamIssuesLoaded {
+                    query,
+                    after,
+                    result,
+                }
+            }));
+            Ok(())
+        }
+        Effect::CountTeamIssues(query) => {
+            let client = reach.client;
+            in_flight.push(Box::pin(async move {
+                let what = "could not count the team's issues";
+                let result = ask(client, what, |c| c.count_team_issues(&query)).await;
+                Event::TeamIssuesCounted { query, result }
+            }));
+            Ok(())
+        }
         Effect::Copy(text) => outside.copy(&text),
         Effect::OpenUrl(url) => outside.open(&url),
     };
@@ -402,6 +439,29 @@ async fn search<C: LinearClient>(client: Option<&C>, term: String) -> Event {
         Err(error) => tracing::warn!(%error, "searching Linear failed"),
     }
     Event::SearchDone { term, result }
+}
+
+/// Sends `request` through `client`. A failure, or no client for lack of an
+/// API key, becomes a message that starts with `what`.
+async fn ask<'a, C, T, R>(
+    client: Option<&'a C>,
+    what: &str,
+    request: impl FnOnce(&'a C) -> R,
+) -> Result<T, String>
+where
+    C: LinearClient,
+    R: Future<Output = Result<T, ClientError>>,
+{
+    let result = match client {
+        Some(client) => request(client)
+            .await
+            .map_err(|error| format!("{:#}", anyhow::Error::new(error).context(what.to_owned()))),
+        None => Err(format!("{what}: there is no API key")),
+    };
+    if let Err(message) = &result {
+        tracing::warn!(%message, "a request failed");
+    }
+    result
 }
 
 fn from_terminal(event: TerminalEvent) -> Option<Event> {

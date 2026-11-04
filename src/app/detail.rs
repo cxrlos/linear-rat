@@ -49,17 +49,20 @@ fn shown_issue_id(state: &State) -> Option<String> {
         return Some(id.to_owned());
     }
     let wide = state.viewport.width >= state.ui.wide_layout_columns;
-    let shown = state.screen == Screen::MyIssues
-        && state.load == Load::Loaded
-        && (wide || state.my_issues.pane() == Pane::Detail);
+    let shown = screen_pane(state).is_some_and(|pane| wide || pane == Pane::Detail);
     shown
-        .then(|| {
-            state
-                .my_issues
-                .focused_issue()
-                .map(|issue| issue.id.clone())
-        })
+        .then(|| state.focused_issue().map(|issue| issue.id.clone()))
         .flatten()
+}
+
+/// The focused pane of the screen, when it is one with an issue list and a
+/// detail and its list has loaded.
+fn screen_pane(state: &State) -> Option<Pane> {
+    match state.screen {
+        Screen::MyIssues => (state.load == Load::Loaded).then(|| state.my_issues.pane()),
+        Screen::TeamIssues => Some(state.team_issues.pane()),
+        Screen::Analytics => None,
+    }
 }
 
 /// The issue the top overlay shows in full, when it is an issue overlay.
@@ -72,9 +75,7 @@ fn overlay_issue_id(state: &State) -> Option<&str> {
 
 /// Whether the detail pane has focus, so moves scroll it.
 pub(super) fn has_focus(state: &State) -> bool {
-    state.screen == Screen::MyIssues
-        && state.load == Load::Loaded
-        && state.my_issues.pane() == Pane::Detail
+    screen_pane(state) == Some(Pane::Detail)
 }
 
 /// Asks for the comments and history of the issue on screen, unless they
@@ -101,12 +102,12 @@ pub(super) fn request(state: &mut State) -> Option<Effect> {
 /// The viewer opened the focused issue's detail: what loaded before is
 /// asked for again, so it is fresh. A load in flight is left to finish.
 pub(super) fn reopen(state: &mut State) {
-    let Some(issue) = state.my_issues.focused_issue() else {
+    let Some(id) = state.focused_issue().map(|issue| issue.id.clone()) else {
         return;
     };
     let loads = &mut state.detail.loads;
-    if loads.get(&issue.id) != Some(&DetailLoad::Loading) {
-        loads.remove(&issue.id);
+    if loads.get(&id) != Some(&DetailLoad::Loading) {
+        loads.remove(&id);
     }
 }
 
@@ -129,11 +130,7 @@ pub(super) fn loaded(state: &mut State, issue_id: String, result: Result<IssueDe
 /// Scrolls the focused issue's detail for a move, no further than its last
 /// line. Half a page is half the rows the detail shows.
 pub(super) fn scroll(state: &mut State, action: Action) -> Update {
-    let Some(issue_id) = state
-        .my_issues
-        .focused_issue()
-        .map(|issue| issue.id.clone())
-    else {
+    let Some(issue_id) = state.focused_issue().map(|issue| issue.id.clone()) else {
         return Update::default();
     };
     let shown = ui::detail_rows(state, state.viewport);

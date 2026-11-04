@@ -8,10 +8,10 @@ use futures_util::stream::{self, Stream, StreamExt};
 use jiff::Timestamp;
 use linear_rat::app::{App, State};
 use linear_rat::auth::KeySource;
-use linear_rat::linear::model::{Issue, Member, Viewer, WorkflowState, Workspace};
+use linear_rat::linear::model::{Issue, Member, Team, Viewer, WorkflowState, Workspace};
 use linear_rat::linear::{
     AssignedIssues, ClientError, FakeClient, IssueDetail, IssueUpdate, LinearClient, SearchResults,
-    TeamChanges, Urgency, demo,
+    TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery, Urgency, demo,
 };
 use linear_rat::runtime;
 use linear_rat::snapshot::SnapshotCache;
@@ -117,6 +117,26 @@ impl LinearClient for RejectingClient {
     async fn search_issues(&self, _: &str) -> Result<SearchResults, ClientError> {
         Err(ClientError::InvalidKey)
     }
+
+    async fn teams(&self) -> Result<Vec<Team>, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn team_options(&self, _: &str) -> Result<TeamOptions, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn team_issues(
+        &self,
+        _: &TeamQuery,
+        _: Option<&str>,
+    ) -> Result<TeamIssuesPage, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn count_team_issues(&self, _: &TeamQuery) -> Result<usize, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
 }
 
 #[tokio::test]
@@ -210,6 +230,22 @@ async fn q_quits_while_the_load_is_still_in_flight() {
         async fn search_issues(&self, _: &str) -> Result<SearchResults, ClientError> {
             future::pending().await
         }
+        async fn teams(&self) -> Result<Vec<Team>, ClientError> {
+            future::pending().await
+        }
+        async fn team_options(&self, _: &str) -> Result<TeamOptions, ClientError> {
+            future::pending().await
+        }
+        async fn team_issues(
+            &self,
+            _: &TeamQuery,
+            _: Option<&str>,
+        ) -> Result<TeamIssuesPage, ClientError> {
+            future::pending().await
+        }
+        async fn count_team_issues(&self, _: &TeamQuery) -> Result<usize, ClientError> {
+            future::pending().await
+        }
     }
     let mut app = App::new(TestBackend::new(80, 24), State::loading(None)).unwrap();
 
@@ -271,6 +307,22 @@ impl LinearClient for CountingClient {
     }
     async fn search_issues(&self, term: &str) -> Result<SearchResults, ClientError> {
         FakeClient.search_issues(term).await
+    }
+    async fn teams(&self) -> Result<Vec<Team>, ClientError> {
+        FakeClient.teams().await
+    }
+    async fn team_options(&self, team_id: &str) -> Result<TeamOptions, ClientError> {
+        FakeClient.team_options(team_id).await
+    }
+    async fn team_issues(
+        &self,
+        query: &TeamQuery,
+        after: Option<&str>,
+    ) -> Result<TeamIssuesPage, ClientError> {
+        FakeClient.team_issues(query, after).await
+    }
+    async fn count_team_issues(&self, query: &TeamQuery) -> Result<usize, ClientError> {
+        FakeClient.count_team_issues(query).await
     }
 }
 
@@ -376,4 +428,37 @@ async fn opening_the_detail_loads_its_comments_and_history_through_the_client() 
     assert!(shown.contains("Comments ("), "{shown}");
     assert!(shown.contains("so far"), "{shown}");
     assert!(!shown.contains("Loading"), "{shown}");
+}
+
+#[tokio::test]
+async fn team_issues_load_through_the_client_when_the_screen_opens() {
+    let app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+
+    let shown = settle_after(app, Some(&FakeClient), "2").await;
+
+    assert!(shown.contains("ENG Engineering · 50 of 70"), "{shown}");
+}
+
+#[tokio::test]
+async fn team_issues_without_a_key_say_so() {
+    let app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+
+    let shown = settle_after(app, None::<&FakeClient>, "2").await;
+
+    assert!(
+        shown.contains("could not load your teams: there is no API key"),
+        "{shown}"
+    );
+}
+
+#[tokio::test]
+async fn a_rejected_key_names_the_team_load_that_failed() {
+    let app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+
+    let shown = settle_after(app, Some(&RejectingClient), "2").await;
+
+    assert!(
+        shown.contains("│could not load your teams: Linear rejected the API key"),
+        "{shown}"
+    );
 }

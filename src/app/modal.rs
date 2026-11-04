@@ -1,5 +1,5 @@
 use super::edit::EditPicker;
-use super::{Palette, Phase, Search};
+use super::{FilterField, Palette, Phase, Search};
 use crate::keys::Key;
 
 /// Popups and overlays, drawn over the screen in order. The top one gets keys
@@ -23,6 +23,8 @@ pub enum Modal {
     Search(Search),
     /// The detail of one issue from the store, over the screen.
     Issue { id: String },
+    /// A list to pick one entry from.
+    Choice(Choice),
 }
 
 impl Modal {
@@ -31,7 +33,10 @@ impl Modal {
         match self {
             Modal::Picker(_) | Modal::Palette(_) => true,
             Modal::Search(search) => matches!(search.phase, Phase::Typing { .. }),
-            Modal::Cheatsheet { .. } | Modal::WhichKey { .. } | Modal::Issue { .. } => false,
+            Modal::Cheatsheet { .. }
+            | Modal::WhichKey { .. }
+            | Modal::Issue { .. }
+            | Modal::Choice(_) => false,
         }
     }
 
@@ -46,7 +51,46 @@ impl Modal {
                 Some(&mut palette.query)
             }
             Modal::Search(search) => search.text_field(),
-            Modal::Cheatsheet { .. } | Modal::WhichKey { .. } | Modal::Issue { .. } => None,
+            Modal::Cheatsheet { .. }
+            | Modal::WhichKey { .. }
+            | Modal::Issue { .. }
+            | Modal::Choice(_) => None,
+        }
+    }
+}
+
+/// A list to pick one entry from, such as the team switcher, with the entry
+/// the cursor is on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Choice {
+    pub purpose: Purpose,
+    pub entries: Vec<ChoiceEntry>,
+    pub cursor: usize,
+}
+
+/// What picking an entry of a [`Choice`] does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Purpose {
+    /// Show this team in Team Issues.
+    Team,
+    /// Filter Team Issues by this field.
+    Filter(FilterField),
+}
+
+/// One entry of a [`Choice`]: the id it picks and what it shows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChoiceEntry {
+    /// `None` for "Any", which clears a filter.
+    pub id: Option<String>,
+    pub label: String,
+}
+
+impl Choice {
+    /// What the popup is titled.
+    pub fn title(&self) -> String {
+        match self.purpose {
+            Purpose::Team => "Team".to_owned(),
+            Purpose::Filter(field) => format!("Filter by {}", field.name().to_lowercase()),
         }
     }
 }

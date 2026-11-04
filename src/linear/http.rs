@@ -6,6 +6,7 @@ mod changes;
 mod detail;
 mod edit;
 mod search;
+mod team;
 
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -19,11 +20,11 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use super::governor::{Governor, SystemTimer, Timer, Urgency};
-use super::model::{Issue, Member, Viewer, WorkflowState, Workspace};
+use super::model::{Issue, Member, Team, Viewer, WorkflowState, Workspace};
 use super::search_bucket::SearchBucket;
 use super::{
     AssignedIssues, ClientError, GraphQlError, IssueDetail, IssueUpdate, LinearClient, Response,
-    SearchResults, TeamChanges,
+    SearchResults, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
 };
 use crate::auth::ApiKey;
 
@@ -333,6 +334,26 @@ impl LinearClient for HttpClient {
 
     async fn search_issues(&self, term: &str) -> Result<SearchResults, ClientError> {
         search::search(self, term).await
+    }
+
+    async fn teams(&self) -> Result<Vec<Team>, ClientError> {
+        team::teams(self).await
+    }
+
+    async fn team_options(&self, team_id: &str) -> Result<TeamOptions, ClientError> {
+        team::options(self, team_id).await
+    }
+
+    async fn team_issues(
+        &self,
+        query: &TeamQuery,
+        after: Option<&str>,
+    ) -> Result<TeamIssuesPage, ClientError> {
+        team::issues(self, query, after).await
+    }
+
+    async fn count_team_issues(&self, query: &TeamQuery) -> Result<usize, ClientError> {
+        team::count(self, query).await
     }
 }
 

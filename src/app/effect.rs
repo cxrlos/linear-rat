@@ -1,5 +1,5 @@
 use super::{TeamPoll, Write};
-use crate::linear::Urgency;
+use crate::linear::{TeamQuery, Urgency};
 
 /// A request to the outside world, returned by [`update`](super::update) and
 /// carried out by the runtime.
@@ -21,6 +21,22 @@ pub enum Effect {
     /// Search the workspace for this term; the result comes back as
     /// [`Event::SearchDone`](super::Event::SearchDone).
     Search(String),
+    /// Load the viewer's teams; the result comes back as
+    /// [`Event::TeamsLoaded`](super::Event::TeamsLoaded).
+    LoadTeams,
+    /// Load what the filters of this team offer; the result comes back as
+    /// [`Event::TeamOptionsLoaded`](super::Event::TeamOptionsLoaded).
+    LoadTeamOptions(String),
+    /// Load the page of `query`'s issues after the cursor `after`, or the
+    /// first page; the result comes back as
+    /// [`Event::TeamIssuesLoaded`](super::Event::TeamIssuesLoaded).
+    LoadTeamIssues {
+        query: TeamQuery,
+        after: Option<String>,
+    },
+    /// Count every issue of the query; the result comes back as
+    /// [`Event::TeamIssuesCounted`](super::Event::TeamIssuesCounted).
+    CountTeamIssues(TeamQuery),
     /// Put this text on the system clipboard.
     Copy(String),
     /// Open this URL in the viewer's browser.

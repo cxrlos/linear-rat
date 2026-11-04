@@ -1,7 +1,10 @@
 use crossterm::event::KeyCode;
 
 use super::{Context, Key};
-use crate::app::{self, Action, Copyable, EditPicker, Editable, Modal, Pane, Phase, Screen, State};
+use crate::app::{
+    self, Action, Copyable, EditPicker, Editable, FilterField, Modal, Pane, Phase, Screen, State,
+    can_load_more,
+};
 use crate::ui;
 
 /// One action as the viewer sees it: what it is called, where it applies,
@@ -63,6 +66,7 @@ const fn does(word: &'static str) -> Option<Hint> {
 }
 
 const LIST: &[Context] = &[Context::List];
+const TEAM_ISSUES: &[Context] = &[Context::TeamIssues];
 const PANES: &[Context] = &[Context::List, Context::Detail];
 const GLOBAL: &[Context] = &[Context::Global];
 const OVERLAY: &[Context] = &[Context::Overlay];
@@ -305,6 +309,69 @@ pub static ACTIONS: &[ActionSpec] = &[
         available: |state| picker_has(9, state),
     },
     ActionSpec {
+        action: Action::SwitchTeam,
+        id: "switch-team",
+        description: "Switch the team of Team Issues",
+        hint: None,
+        contexts: TEAM_ISSUES,
+        default_keys: &[&[Key::char('t')]],
+        available: |state| state.store.viewer_teams().next().is_some(),
+    },
+    ActionSpec {
+        action: Action::FilterBy(FilterField::State),
+        id: "filter-by-state",
+        description: "Filter by workflow state",
+        hint: None,
+        contexts: TEAM_ISSUES,
+        default_keys: &[&[Key::char('f'), Key::char('s')]],
+        available: has_team,
+    },
+    ActionSpec {
+        action: Action::FilterBy(FilterField::Assignee),
+        id: "filter-by-assignee",
+        description: "Filter by assignee",
+        hint: None,
+        contexts: TEAM_ISSUES,
+        default_keys: &[&[Key::char('f'), Key::char('a')]],
+        available: has_team,
+    },
+    ActionSpec {
+        action: Action::FilterBy(FilterField::Label),
+        id: "filter-by-label",
+        description: "Filter by label",
+        hint: None,
+        contexts: TEAM_ISSUES,
+        default_keys: &[&[Key::char('f'), Key::char('l')]],
+        available: has_team,
+    },
+    ActionSpec {
+        action: Action::FilterBy(FilterField::Cycle),
+        id: "filter-by-cycle",
+        description: "Filter by cycle",
+        hint: None,
+        contexts: TEAM_ISSUES,
+        default_keys: &[&[Key::char('f'), Key::char('c')]],
+        available: has_team,
+    },
+    ActionSpec {
+        action: Action::FilterBy(FilterField::Project),
+        id: "filter-by-project",
+        description: "Filter by project",
+        hint: None,
+        contexts: TEAM_ISSUES,
+        default_keys: &[&[Key::char('f'), Key::char('p')]],
+        available: has_team,
+    },
+    ActionSpec {
+        action: Action::LoadMore,
+        id: "load-more",
+        description: "Load the next page of Team Issues",
+        hint: None,
+        contexts: TEAM_ISSUES,
+        default_keys: &[&[Key::char('m')]],
+        available: can_load_more,
+    },
+    ActionSpec {
         action: Action::ScrollDown,
         id: "scroll-down",
         description: "Scroll down",
@@ -428,6 +495,7 @@ fn always(_: &State) -> bool {
 
 fn can_scroll_down(state: &State) -> bool {
     match state.modals.top() {
+        Some(Modal::Choice(choice)) => choice.cursor + 1 < choice.entries.len(),
         Some(Modal::Picker(picker)) => picker
             .list
             .selected_position()
@@ -452,6 +520,7 @@ fn can_scroll_down(state: &State) -> bool {
 
 fn can_scroll_up(state: &State) -> bool {
     match state.modals.top() {
+        Some(Modal::Choice(choice)) => choice.cursor > 0,
         Some(Modal::Picker(picker)) => picker
             .list
             .selected_position()
@@ -468,6 +537,7 @@ fn can_scroll_up(state: &State) -> bool {
 
 fn can_accept(state: &State) -> bool {
     match state.modals.top() {
+        Some(Modal::Choice(choice)) => choice.cursor < choice.entries.len(),
         Some(Modal::Picker(picker)) => picker.list.selected().is_some(),
         Some(Modal::Palette(palette)) => {
             palette.selected < app::palette_matches(state, &palette.query).len()
@@ -492,6 +562,10 @@ fn picker(state: &State) -> Option<&EditPicker> {
 /// filter.
 fn picker_has(count: usize, state: &State) -> bool {
     picker(state).is_some_and(|picker| picker.list.visible().len() >= count)
+}
+
+fn has_team(state: &State) -> bool {
+    state.team_issues.query().is_some()
 }
 
 fn has_focused_issue(state: &State) -> bool {
@@ -530,7 +604,11 @@ fn detail_scroll(state: &State) -> (usize, usize) {
 }
 
 fn in_detail(state: &State) -> bool {
-    state.screen == Screen::MyIssues && state.my_issues.pane() == Pane::Detail
+    match state.screen {
+        Screen::MyIssues => state.my_issues.pane() == Pane::Detail,
+        Screen::TeamIssues => state.team_issues.pane() == Pane::Detail,
+        Screen::Analytics => false,
+    }
 }
 
 /// The registry entry for `action`.

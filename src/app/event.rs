@@ -2,8 +2,10 @@ use crossterm::event::KeyEvent;
 use jiff::Timestamp;
 
 use super::{LoadError, SyncFailure, Write};
-use crate::linear::model::{Issue, Member, WorkflowState};
-use crate::linear::{AssignedIssues, IssueDetail, SearchResults, TeamChanges};
+use crate::linear::model::{Issue, Member, Team, WorkflowState};
+use crate::linear::{
+    AssignedIssues, IssueDetail, SearchResults, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
+};
 
 /// Something that happened, fed to [`update`](super::update).
 #[derive(Debug, Clone, PartialEq)]
@@ -29,6 +31,27 @@ pub enum Event {
     SearchDone {
         term: String,
         result: Result<SearchResults, String>,
+    },
+    /// The result of [`Effect::LoadTeams`](super::Effect::LoadTeams). An
+    /// error is a message with its context.
+    TeamsLoaded(Result<Vec<Team>, String>),
+    /// The result of
+    /// [`Effect::LoadTeamOptions`](super::Effect::LoadTeamOptions).
+    TeamOptionsLoaded(Result<TeamOptions, String>),
+    /// The result of
+    /// [`Effect::LoadTeamIssues`](super::Effect::LoadTeamIssues), with the
+    /// request it answers.
+    TeamIssuesLoaded {
+        query: TeamQuery,
+        after: Option<String>,
+        result: Result<TeamIssuesPage, String>,
+    },
+    /// The result of
+    /// [`Effect::CountTeamIssues`](super::Effect::CountTeamIssues), with the
+    /// query it counted.
+    TeamIssuesCounted {
+        query: TeamQuery,
+        result: Result<usize, String>,
     },
     /// The runtime could not carry out an effect. The message, with its
     /// context, becomes the notice.

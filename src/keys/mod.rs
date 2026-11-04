@@ -20,6 +20,8 @@ pub enum Context {
     Global,
     /// An issue list.
     List,
+    /// The Team Issues list, ahead of [`Context::List`] there.
+    TeamIssues,
     /// An issue's detail.
     Detail,
     /// An overlay such as the cheatsheet, which takes every key.
@@ -27,9 +29,10 @@ pub enum Context {
 }
 
 impl Context {
-    pub const ALL: [Context; 4] = [
+    pub const ALL: [Context; 5] = [
         Context::Global,
         Context::List,
+        Context::TeamIssues,
         Context::Detail,
         Context::Overlay,
     ];
@@ -39,6 +42,7 @@ impl Context {
         match self {
             Context::Global => "global",
             Context::List => "list",
+            Context::TeamIssues => "team-issues",
             Context::Detail => "detail",
             Context::Overlay => "overlay",
         }
@@ -53,6 +57,7 @@ impl Context {
         match self {
             Context::Global => "Everywhere",
             Context::List => "Issue list",
+            Context::TeamIssues => "Team Issues",
             Context::Detail => "Issue detail",
             Context::Overlay => "Overlays",
         }
@@ -81,7 +86,11 @@ pub fn screen_contexts(state: &State) -> Vec<Context> {
         Screen::MyIssues if state.my_issues.pane() == Pane::Detail => {
             vec![Context::Detail, Context::Global]
         }
-        Screen::MyIssues | Screen::TeamIssues => vec![Context::List, Context::Global],
+        Screen::TeamIssues if state.team_issues.pane() == Pane::Detail => {
+            vec![Context::Detail, Context::Global]
+        }
+        Screen::TeamIssues => vec![Context::TeamIssues, Context::List, Context::Global],
+        Screen::MyIssues => vec![Context::List, Context::Global],
         Screen::Analytics => vec![Context::Global],
     }
 }

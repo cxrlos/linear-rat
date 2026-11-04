@@ -13,10 +13,10 @@ use jiff::Timestamp;
 use linear_rat::auth::{
     self, ApiKey, AuthError, Credentials, InvalidApiKey, KeyStore, KeyringError, WorkspaceFile,
 };
-use linear_rat::linear::model::{Issue, Member, Viewer, WorkflowState, Workspace};
+use linear_rat::linear::model::{Issue, Member, Team, Viewer, WorkflowState, Workspace};
 use linear_rat::linear::{
     AssignedIssues, ClientError, FakeClient, IssueDetail, IssueUpdate, LinearClient, SearchResults,
-    TeamChanges, Urgency,
+    TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery, Urgency,
 };
 
 const SECRET: &str = "lin_api_fictional0000000000000000000000000000";
@@ -154,6 +154,26 @@ impl LinearClient for RejectingClient {
     }
 
     async fn search_issues(&self, _: &str) -> Result<SearchResults, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn teams(&self) -> Result<Vec<Team>, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn team_options(&self, _: &str) -> Result<TeamOptions, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn team_issues(
+        &self,
+        _: &TeamQuery,
+        _: Option<&str>,
+    ) -> Result<TeamIssuesPage, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn count_team_issues(&self, _: &TeamQuery) -> Result<usize, ClientError> {
         Err(ClientError::InvalidKey)
     }
 }

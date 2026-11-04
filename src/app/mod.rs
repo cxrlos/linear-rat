@@ -8,12 +8,14 @@ mod event;
 mod load;
 mod modal;
 mod my_issues;
+mod names;
 mod palette;
 mod picker;
 mod search;
 mod state;
 mod store;
 mod sync;
+mod team_issues;
 mod update;
 
 use ratatui::Terminal;
@@ -25,8 +27,9 @@ pub use edit::{Edit, EditPicker, Editable, Write};
 pub use effect::Effect;
 pub use event::Event;
 pub use load::{Load, LoadError};
-pub use modal::{Modal, ModalStack};
+pub use modal::{Choice, ChoiceEntry, Modal, ModalStack, Purpose};
 pub use my_issues::{Group, MyIssues, Pane};
+pub use names::Names;
 pub use palette::{Palette, PaletteEntry, palette_matches};
 pub use picker::{Entry, Note, Picker};
 pub use search::{Phase, Search};
@@ -35,6 +38,7 @@ pub use store::Store;
 pub use sync::{
     IDLE_AFTER, Indicator, OVERLAP, RECONCILE_EVERY, SyncFailure, SyncStatus, TeamPoll,
 };
+pub use team_issues::{FilterField, Progress, TeamIssues, can_load_more, filter_label};
 pub use update::{Update, perform, update};
 
 use crate::ui;

@@ -1,7 +1,7 @@
 use jiff::Timestamp;
 use linear_rat::app::{State, Store};
 use linear_rat::linear::model::Issue;
-use linear_rat::linear::{AssignedIssues, TeamChanges};
+use linear_rat::linear::{AssignedIssues, TeamChanges, TeamIssuesPage};
 
 /// Midnight UTC on day `day` of October 2026.
 fn october(day: i64) -> Timestamp {
@@ -197,4 +197,23 @@ fn a_load_remembers_the_workspace() {
         store.workspace().map(|workspace| workspace.id.as_str()),
         Some("workspace-squeakworks")
     );
+}
+
+#[test]
+fn a_page_of_team_issues_never_overwrites_a_newer_stored_issue() {
+    let mut store = Store::default();
+    store.upsert_issue(issue(october(2), "edited"));
+    let page = TeamIssuesPage {
+        issues: vec![issue(october(1), "stale")],
+        cycles: Vec::new(),
+        members: Vec::new(),
+        next: None,
+        as_of: october(3),
+        problems: Vec::new(),
+    };
+
+    store.merge_team_page(&page);
+
+    assert_eq!(store.issues().next().unwrap().title, "edited");
+    assert_eq!(store.as_of(), Some(october(3)));
 }

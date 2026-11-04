@@ -12,7 +12,9 @@ use crate::linear::model::{
     Comment, Cycle, Issue, Label, Member, Project, StateSpan, Team, Viewer, WorkflowState,
     Workspace,
 };
-use crate::linear::{AssignedIssues, IssueDetail, SearchResults, TeamChanges};
+use crate::linear::{
+    AssignedIssues, IssueDetail, SearchResults, TeamChanges, TeamIssuesPage, TeamOptions,
+};
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Store {
@@ -32,7 +34,8 @@ pub struct Store {
     workflow_states: BTreeMap<String, WorkflowState>,
     /// The ids of every workflow state of a team, by team id, once loaded.
     team_states: BTreeMap<String, Vec<String>>,
-    /// The ids of a team's members, by team id, once loaded.
+    /// The ids of a team's members, by team id, once loaded for a picker
+    /// or with the team's filter options.
     team_members: BTreeMap<String, Vec<String>>,
     /// Workflow state history by issue id, oldest first, as the detail
     /// loaded it. Kept apart from the issues so an upsert from a list,
@@ -40,6 +43,11 @@ pub struct Store {
     state_histories: BTreeMap<String, Vec<StateSpan>>,
     /// When the newest data was loaded, which decides the active cycle.
     as_of: Option<Timestamp>,
+    /// The ids of the viewer's teams, in the order Linear lists them.
+    viewer_teams: Vec<String>,
+    /// Project ids by team id, for the teams whose filter options have
+    /// loaded.
+    team_projects: BTreeMap<String, Vec<String>>,
 }
 
 impl Store {
@@ -69,10 +77,56 @@ impl Store {
         by_id(&mut self.teams, &loaded.teams, |team| &team.id);
         by_id(&mut self.labels, &loaded.labels, |label| &label.id);
         by_id(&mut self.members, &loaded.members, |member| &member.id);
-        self.as_of = Some(
-            self.as_of
-                .map_or(loaded.as_of, |as_of| as_of.max(loaded.as_of)),
+        self.loaded_at(loaded.as_of);
+    }
+
+    /// Takes in one page of a team's issues, through
+    /// [`Store::upsert_issue`], and the cycles and members they refer to.
+    pub fn merge_team_page(&mut self, page: &TeamIssuesPage) {
+        for issue in &page.issues {
+            self.upsert_issue(issue.clone());
+        }
+        by_id(&mut self.cycles, &page.cycles, |cycle| &cycle.id);
+        by_id(&mut self.members, &page.members, |member| &member.id);
+        self.loaded_at(page.as_of);
+    }
+
+    /// Stores the viewer's teams and remembers them, in this order, as the
+    /// teams Team Issues offers.
+    pub fn set_viewer_teams(&mut self, teams: &[Team]) {
+        by_id(&mut self.teams, teams, |team| &team.id);
+        self.viewer_teams = teams.iter().map(|team| team.id.clone()).collect();
+    }
+
+    /// Takes in what a team's filters offer.
+    pub fn merge_team_options(&mut self, options: &TeamOptions) {
+        by_id(&mut self.workflow_states, &options.states, |state| {
+            &state.id
+        });
+        by_id(&mut self.members, &options.members, |member| &member.id);
+        by_id(&mut self.labels, &options.labels, |label| &label.id);
+        by_id(&mut self.cycles, &options.cycles, |cycle| &cycle.id);
+        by_id(&mut self.projects, &options.projects, |project| &project.id);
+        self.team_members.insert(
+            options.team_id.clone(),
+            options
+                .members
+                .iter()
+                .map(|member| member.id.clone())
+                .collect(),
         );
+        self.team_projects.insert(
+            options.team_id.clone(),
+            options
+                .projects
+                .iter()
+                .map(|project| project.id.clone())
+                .collect(),
+        );
+    }
+
+    fn loaded_at(&mut self, as_of: Timestamp) {
+        self.as_of = Some(self.as_of.map_or(as_of, |stored| stored.max(as_of)));
     }
 
     /// Takes in one team's poll: its issues go through
@@ -300,6 +354,36 @@ impl Store {
 
     pub fn as_of(&self) -> Option<Timestamp> {
         self.as_of
+    }
+
+    /// The viewer's teams, in the order Linear lists them. Empty until they
+    /// have loaded.
+    pub fn viewer_teams(&self) -> impl Iterator<Item = &Team> {
+        self.viewer_teams.iter().filter_map(|id| self.teams.get(id))
+    }
+
+    /// Every workflow state loaded, of any team.
+    pub fn all_workflow_states(&self) -> impl Iterator<Item = &WorkflowState> {
+        self.workflow_states.values()
+    }
+
+    pub fn projects(&self) -> impl Iterator<Item = &Project> {
+        self.projects.values()
+    }
+
+    /// Whether the filter options of `team_id` have loaded. A picker's
+    /// member load alone does not count.
+    pub fn has_team_options(&self, team_id: &str) -> bool {
+        self.team_projects.contains_key(team_id)
+    }
+
+    /// The projects of `team_id`, once its options have loaded.
+    pub fn team_projects(&self, team_id: &str) -> impl Iterator<Item = &Project> {
+        self.team_projects
+            .get(team_id)
+            .into_iter()
+            .flatten()
+            .filter_map(|id| self.projects.get(id))
     }
 }
 

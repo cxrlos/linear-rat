@@ -1,9 +1,7 @@
-use std::collections::{HashMap, HashSet};
-
 use jiff::Timestamp;
 
-use super::Action;
-use crate::linear::model::{Cycle, Estimation, Issue, Label, Member, StateType, Team, Viewer};
+use super::{Action, Names};
+use crate::linear::model::{Cycle, Issue, Label, Member, StateType, Team, Viewer};
 
 /// The state types My Issues shows, in the order its groups appear.
 const GROUP_ORDER: [StateType; 4] = [
@@ -22,11 +20,7 @@ pub struct MyIssues {
     /// The first list line on screen, counting group headers.
     scroll: usize,
     pane: Pane,
-    cycle_names: HashMap<String, String>,
-    active_cycles: HashSet<String>,
-    label_names: HashMap<String, String>,
-    member_names: HashMap<String, String>,
-    teams_without_estimates: HashSet<String>,
+    names: Names,
 }
 
 /// The open issues of one state type, active-cycle issues first.
@@ -56,11 +50,7 @@ impl MyIssues {
         teams: &[Team],
         now: Timestamp,
     ) -> Self {
-        let active_cycles: HashSet<String> = cycles
-            .iter()
-            .filter(|cycle| cycle.starts_at <= now && now < cycle.ends_at)
-            .map(|cycle| cycle.id.clone())
-            .collect();
+        let names = Names::new(cycles, labels, members, teams, now);
         let groups = GROUP_ORDER
             .into_iter()
             .filter_map(|state_type| {
@@ -71,11 +61,11 @@ impl MyIssues {
                     .cloned()
                     .collect();
                 issues.sort_by_key(|issue| {
-                    let in_active_cycle = issue
-                        .cycle_id
-                        .as_ref()
-                        .is_some_and(|id| active_cycles.contains(id));
-                    (!in_active_cycle, issue.priority, issue.created_at)
+                    (
+                        !names.is_in_active_cycle(issue),
+                        issue.priority,
+                        issue.created_at,
+                    )
                 });
                 (!issues.is_empty()).then_some(Group { state_type, issues })
             })
@@ -85,30 +75,7 @@ impl MyIssues {
             focused: 0,
             scroll: 0,
             pane: Pane::List,
-            cycle_names: cycles
-                .iter()
-                .map(|cycle| {
-                    let name = cycle
-                        .name
-                        .clone()
-                        .unwrap_or_else(|| format!("Cycle {}", cycle.number));
-                    (cycle.id.clone(), name)
-                })
-                .collect(),
-            active_cycles,
-            label_names: labels
-                .iter()
-                .map(|label| (label.id.clone(), label.name.clone()))
-                .collect(),
-            member_names: members
-                .iter()
-                .map(|member| (member.id.clone(), member.name.clone()))
-                .collect(),
-            teams_without_estimates: teams
-                .iter()
-                .filter(|team| team.estimation == Estimation::NotUsed)
-                .map(|team| team.id.clone())
-                .collect(),
+            names,
         }
     }
 
@@ -180,32 +147,14 @@ impl MyIssues {
         self.pane
     }
 
-    /// The cycle's name, or `Cycle <number>` when it has none.
-    pub fn cycle_name(&self, cycle_id: &str) -> Option<&str> {
-        self.cycle_names.get(cycle_id).map(String::as_str)
+    /// The names its rows and detail look up.
+    pub fn names(&self) -> &Names {
+        &self.names
     }
 
     /// Whether `issue` belongs to a cycle running now.
     pub fn is_in_active_cycle(&self, issue: &Issue) -> bool {
-        issue
-            .cycle_id
-            .as_ref()
-            .is_some_and(|id| self.active_cycles.contains(id))
-    }
-
-    /// Whether `issue`'s team uses estimates. Estimates are hidden when not.
-    pub fn uses_estimates(&self, issue: &Issue) -> bool {
-        !self.teams_without_estimates.contains(&issue.team_id)
-    }
-
-    /// The name of a label, by id.
-    pub fn label_name(&self, label_id: &str) -> Option<&str> {
-        self.label_names.get(label_id).map(String::as_str)
-    }
-
-    /// The full name of a workspace member, by id.
-    pub fn member_name(&self, member_id: &str) -> Option<&str> {
-        self.member_names.get(member_id).map(String::as_str)
+        self.names.is_in_active_cycle(issue)
     }
 
     /// Carries out a navigation action on a list that shows `rows` lines at

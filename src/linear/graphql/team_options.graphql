@@ -1,0 +1,71 @@
+# budget: 950
+# What the Team Issues filters offer for one team: its workflow states,
+# members, labels, the cycles that have not ended or ended in the last twelve
+# weeks, and its projects, plus the workspace's labels. Each list is one
+# bounded page; `hasNextPage` says when a list was cut short.
+query TeamOptions($teamId: String!) {
+  team(id: $teamId) {
+    id
+    states(first: 50) {
+      nodes {
+        id
+        name
+        type
+        position
+      }
+      pageInfo {
+        hasNextPage
+      }
+    }
+    members(first: 100) {
+      nodes {
+        id
+        name
+        displayName
+      }
+      pageInfo {
+        hasNextPage
+      }
+    }
+    labels(first: 100) {
+      nodes {
+        id
+        name
+      }
+      pageInfo {
+        hasNextPage
+      }
+    }
+    cycles(first: 50, filter: { endsAt: { gt: "-P12W" } }) {
+      nodes {
+        id
+        number
+        name
+        startsAt
+        endsAt
+        completedAt
+      }
+      pageInfo {
+        hasNextPage
+      }
+    }
+    projects(first: 50) {
+      nodes {
+        id
+        name
+      }
+      pageInfo {
+        hasNextPage
+      }
+    }
+  }
+  issueLabels(first: 100, filter: { team: { null: true } }) {
+    nodes {
+      id
+      name
+    }
+    pageInfo {
+      hasNextPage
+    }
+  }
+}

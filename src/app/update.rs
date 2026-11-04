@@ -4,7 +4,7 @@ use ratatui::layout::Size;
 use super::edit::{self, Editable};
 use super::{
     Action, Copyable, Effect, Event, Load, Modal, Palette, Pane, Screen, Search, State, detail,
-    palette, search, sync,
+    palette, search, sync, team_issues,
 };
 use crate::keys::{self, Key, Resolution};
 use crate::ui;
@@ -59,8 +59,30 @@ fn apply(state: &mut State, event: Event) -> Update {
             state.viewport = Size::new(columns, rows);
             let rows = ui::list_rows(state, state.viewport);
             state.my_issues.scroll_into_view(rows);
+            let rows = ui::team_list_rows(state, state.viewport);
+            state.team_issues.scroll_into_view(rows);
             Update::redraw()
         }
+        Event::TeamsLoaded(result) => Update {
+            redraw: true,
+            effects: team_issues::teams_loaded(state, result),
+        },
+        Event::TeamOptionsLoaded(result) => {
+            team_issues::options_loaded(state, result);
+            Update::redraw()
+        }
+        Event::TeamIssuesLoaded {
+            query,
+            after,
+            result,
+        } => Update {
+            redraw: team_issues::page_loaded(state, &query, after, result),
+            effects: Vec::new(),
+        },
+        Event::TeamIssuesCounted { query, result } => Update {
+            redraw: team_issues::counted(state, &query, result),
+            effects: Vec::new(),
+        },
         Event::Key(key) if key.kind == KeyEventKind::Release => Update::default(),
         Event::Key(key) => {
             sync::activity(state);
@@ -170,7 +192,14 @@ pub fn perform(state: &mut State, action: Action) -> Update {
         },
         Action::ShowScreen(screen) if screen != state.screen => {
             state.screen = screen;
-            Update::redraw()
+            let effects = match screen {
+                Screen::TeamIssues => team_issues::open(state),
+                Screen::MyIssues | Screen::Analytics => Vec::new(),
+            };
+            Update {
+                redraw: true,
+                effects,
+            }
         }
         Action::Refresh => sync::refresh(state),
         Action::ShowCheatsheet => {
@@ -189,6 +218,10 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             Some(Modal::Picker(_)) => edit::choose(state, None),
             Some(Modal::Palette(_)) => palette::accept(state),
             Some(Modal::Search(_)) => search::accept(state),
+            Some(Modal::Choice(_)) => Update {
+                redraw: true,
+                effects: team_issues::pick(state),
+            },
             _ => Update::default(),
         },
         Action::Close if state.modals.pop().is_some() => Update::redraw(),
@@ -225,16 +258,57 @@ pub fn perform(state: &mut State, action: Action) -> Update {
                 effects: Vec::new(),
             }
         }
+        Action::MoveDown
+        | Action::MoveUp
+        | Action::MoveToTop
+        | Action::MoveToBottom
+        | Action::HalfPageDown
+        | Action::HalfPageUp
+        | Action::FocusLeft
+        | Action::FocusRight
+        | Action::Open
+        | Action::Close
+            if state.screen == Screen::TeamIssues =>
+        {
+            let rows = ui::team_list_rows(state, state.viewport);
+            let pane = state.team_issues.pane();
+            let redraw = state.team_issues.perform(action, rows);
+            if pane == Pane::List && state.team_issues.pane() == Pane::Detail {
+                detail::reopen(state);
+            }
+            Update {
+                redraw,
+                effects: Vec::new(),
+            }
+        }
         Action::ScrollDown | Action::ScrollUp => match state.modals.top() {
             Some(Modal::Picker(_)) => edit::select(state, step(action)),
             Some(Modal::Issue { id }) => {
                 let id = id.clone();
                 detail::scroll_overlay(state, &id, action)
             }
+            Some(Modal::Choice(_)) => move_choice(state, action),
             Some(Modal::Palette(_)) => palette::step(state, action),
             Some(Modal::Search(_)) => search::step(state, action),
             _ => scroll_cheatsheet(state, action),
         },
+        Action::SwitchTeam if state.screen == Screen::TeamIssues => {
+            open_choice(state, team_issues::team_choice(state))
+        }
+        Action::FilterBy(field) if state.screen == Screen::TeamIssues => {
+            let (choice, effects) = team_issues::open_filter(state, field);
+            Update {
+                effects,
+                ..open_choice(state, choice)
+            }
+        }
+        Action::LoadMore if state.screen == Screen::TeamIssues => {
+            let effects = team_issues::load_more(state);
+            Update {
+                redraw: !effects.is_empty(),
+                effects,
+            }
+        }
         Action::Copy(copyable) => copy(state, copyable),
         Action::OpenInBrowser => match state.focused_issue() {
             Some(issue) => {
@@ -256,6 +330,33 @@ pub fn perform(state: &mut State, action: Action) -> Update {
 /// One entry down for [`Action::ScrollDown`], one up for the rest.
 fn step(action: Action) -> isize {
     if action == Action::ScrollDown { 1 } else { -1 }
+}
+
+/// Shows `choice` over the screen, if there is one to show.
+fn open_choice(state: &mut State, choice: Option<super::Choice>) -> Update {
+    match choice {
+        Some(choice) => {
+            state.modals.push(Modal::Choice(choice));
+            Update::redraw()
+        }
+        None => Update::default(),
+    }
+}
+
+/// Moves the cursor of the open choice one entry, staying on the list.
+fn move_choice(state: &mut State, action: Action) -> Update {
+    let Some(Modal::Choice(choice)) = state.modals.top_mut() else {
+        return Update::default();
+    };
+    let before = choice.cursor;
+    choice.cursor = match action {
+        Action::ScrollDown => (choice.cursor + 1).min(choice.entries.len().saturating_sub(1)),
+        _ => choice.cursor.saturating_sub(1),
+    };
+    Update {
+        redraw: choice.cursor != before,
+        effects: Vec::new(),
+    }
 }
 
 /// Moves the open cheatsheet one row, no further than its last row.

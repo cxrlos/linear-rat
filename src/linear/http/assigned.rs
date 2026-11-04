@@ -297,80 +297,80 @@ pub(super) struct Connection<N> {
 #[serde(rename_all = "camelCase")]
 pub(super) struct IssueNode {
     pub(super) id: String,
-    identifier: String,
-    title: String,
-    description: Option<String>,
-    url: String,
-    branch_name: String,
+    pub(super) identifier: String,
+    pub(super) title: String,
+    pub(super) description: Option<String>,
+    pub(super) url: String,
+    pub(super) branch_name: String,
     #[serde(deserialize_with = "priority")]
-    priority: Priority,
-    estimate: Option<f64>,
-    label_ids: Vec<String>,
+    pub(super) priority: Priority,
+    pub(super) estimate: Option<f64>,
+    pub(super) label_ids: Vec<String>,
     #[serde(deserialize_with = "timestamp")]
-    created_at: Timestamp,
+    pub(super) created_at: Timestamp,
     #[serde(deserialize_with = "timestamp")]
     pub(super) updated_at: Timestamp,
     #[serde(deserialize_with = "optional_timestamp")]
-    started_at: Option<Timestamp>,
+    pub(super) started_at: Option<Timestamp>,
     #[serde(deserialize_with = "optional_timestamp")]
-    completed_at: Option<Timestamp>,
+    pub(super) completed_at: Option<Timestamp>,
     #[serde(deserialize_with = "optional_timestamp")]
-    canceled_at: Option<Timestamp>,
+    pub(super) canceled_at: Option<Timestamp>,
     #[serde(deserialize_with = "optional_timestamp")]
-    triaged_at: Option<Timestamp>,
-    team: TeamNode,
-    state: StateNode,
-    assignee: Option<PersonNode>,
-    creator: Option<PersonNode>,
-    cycle: Option<CycleNode>,
-    project: Option<IdNode>,
+    pub(super) triaged_at: Option<Timestamp>,
+    pub(super) team: TeamNode,
+    pub(super) state: StateNode,
+    pub(super) assignee: Option<PersonNode>,
+    pub(super) creator: Option<PersonNode>,
+    pub(super) cycle: Option<CycleNode>,
+    pub(super) project: Option<IdNode>,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct TeamNode {
-    id: String,
-    key: String,
-    name: String,
+pub(super) struct TeamNode {
+    pub(super) id: String,
+    pub(super) key: String,
+    pub(super) name: String,
     #[serde(deserialize_with = "estimation")]
-    issue_estimation_type: Estimation,
+    pub(super) issue_estimation_type: Estimation,
 }
 
 #[derive(Deserialize)]
 pub(super) struct StateNode {
-    id: String,
-    name: String,
+    pub(super) id: String,
+    pub(super) name: String,
     #[serde(rename = "type", deserialize_with = "state_type")]
-    state_type: StateType,
-    position: f64,
+    pub(super) state_type: StateType,
+    pub(super) position: f64,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct PersonNode {
-    id: String,
-    name: String,
-    display_name: String,
+    pub(super) id: String,
+    pub(super) name: String,
+    pub(super) display_name: String,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct CycleNode {
-    id: String,
+pub(super) struct CycleNode {
+    pub(super) id: String,
     #[serde(deserialize_with = "whole_number")]
-    number: u32,
-    name: Option<String>,
+    pub(super) number: u32,
+    pub(super) name: Option<String>,
     #[serde(deserialize_with = "timestamp")]
-    starts_at: Timestamp,
+    pub(super) starts_at: Timestamp,
     #[serde(deserialize_with = "timestamp")]
-    ends_at: Timestamp,
+    pub(super) ends_at: Timestamp,
     #[serde(deserialize_with = "optional_timestamp")]
-    completed_at: Option<Timestamp>,
+    pub(super) completed_at: Option<Timestamp>,
 }
 
 #[derive(Deserialize)]
-struct IdNode {
-    id: String,
+pub(super) struct IdNode {
+    pub(super) id: String,
 }
 
 #[derive(Deserialize)]

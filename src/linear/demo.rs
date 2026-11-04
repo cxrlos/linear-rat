@@ -11,6 +11,7 @@ use super::model::{
     Comment, Cycle, Estimation, Issue, Label, Member, Priority, Project, StateSpan, StateType,
     Team, Viewer, WorkflowState, Workspace,
 };
+use super::{TeamOptions, TeamQuery};
 
 /// The demo's "now": every date in the demo workspace is anchored to it.
 pub const NOW: Timestamp = Timestamp::constant(1_793_631_600, 0); // 2026-11-02T15:00:00Z
@@ -97,6 +98,70 @@ pub fn team_member_ids(team_id: &str) -> Vec<String> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+/// The issues of `query` in `data`, most recently updated first, as the fake
+/// client pages through them.
+pub fn team_issues(data: &DemoWorkspace, query: &TeamQuery) -> Vec<Issue> {
+    let mut issues: Vec<Issue> = data
+        .issues
+        .iter()
+        .filter(|issue| issue.team_id == query.team_id && query.filter.matches(issue))
+        .cloned()
+        .collect();
+    issues.sort_by(|a, b| {
+        b.updated_at
+            .cmp(&a.updated_at)
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    issues
+}
+
+/// What the Team Issues filters offer for `team_id` in `data`. Its projects
+/// are the ones its issues belong to.
+pub fn team_options(data: &DemoWorkspace, team_id: &str) -> TeamOptions {
+    let handles: &[&str] = TEAMS
+        .iter()
+        .find(|spec| format!("team-{}", spec.key.to_lowercase()) == team_id)
+        .map_or(&[], |spec| spec.members);
+    TeamOptions {
+        team_id: team_id.to_owned(),
+        states: data
+            .workflow_states
+            .iter()
+            .filter(|state| state.team_id == team_id)
+            .cloned()
+            .collect(),
+        members: data
+            .members
+            .iter()
+            .filter(|member| handles.iter().any(|&handle| member_id(handle) == member.id))
+            .cloned()
+            .collect(),
+        labels: data
+            .labels
+            .iter()
+            .filter(|label| label.team_id.as_deref().is_none_or(|id| id == team_id))
+            .cloned()
+            .collect(),
+        cycles: data
+            .cycles
+            .iter()
+            .filter(|cycle| cycle.team_id == team_id)
+            .cloned()
+            .collect(),
+        projects: data
+            .projects
+            .iter()
+            .filter(|project| {
+                data.issues.iter().any(|issue| {
+                    issue.team_id == team_id && issue.project_id.as_ref() == Some(&project.id)
+                })
+            })
+            .cloned()
+            .collect(),
+        problems: Vec::new(),
+    }
 }
 
 struct TeamSpec {

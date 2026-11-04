@@ -1,4 +1,4 @@
-use super::{Editable, Screen};
+use super::{Editable, FilterField, Screen};
 
 /// Something the viewer can ask lrat to do. Keys, the palette and the
 /// cheatsheet all name actions; [`perform`](super::perform) carries them out.
@@ -38,6 +38,12 @@ pub enum Action {
     /// Close a picker on the entry with this number, from 1 to 9, counted
     /// among the entries the filter leaves.
     PickNumber(u8),
+    /// Pick another of the viewer's teams for Team Issues.
+    SwitchTeam,
+    /// Pick the value Team Issues filters this field by.
+    FilterBy(FilterField),
+    /// Load the next page of Team Issues.
+    LoadMore,
 }
 
 /// What [`Action::Copy`] puts on the clipboard.

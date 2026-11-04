@@ -10,21 +10,38 @@ use ratatui::widgets::{Block, BorderType, Paragraph};
 
 use super::theme::Theme;
 use super::{detail, icons, style};
-use crate::app::{Group, MyIssues, Pane, State};
+use crate::app::{Group, Names, Pane, State};
 use crate::linear::model::{Issue, Priority, StateType, WorkflowState};
 
 /// From `ui.wide-layout-columns` columns on, the detail shows beside the
 /// list; below it the focused pane fills the body.
 pub fn render(state: &State, frame: &mut Frame, area: Rect) {
-    let view = View {
-        my_issues: &state.my_issues,
-        theme: &state.theme,
-        icons: state.ui.icons,
-        row_errors: &state.row_errors,
-    };
-    let pane = view.my_issues.pane();
+    let my_issues = &state.my_issues;
+    let view = View::new(state, my_issues.names());
+    let (list, detail) = panes(state, area, my_issues.pane());
+    if let Some((list_area, focus)) = list {
+        render_list(&view, state, frame, list_area, focus);
+    }
+    if let Some((detail_area, focus)) = detail {
+        render_detail(state, detail::issue(state), frame, detail_area, focus);
+    }
+}
+
+/// Where the detail pane is in `area`, with the list's pane `pane`
+/// focused, or `None` when only the list shows.
+pub(super) fn detail_area(state: &State, area: Rect, pane: Pane) -> Option<Rect> {
+    panes(state, area, pane).1.map(|(detail, _)| detail)
+}
+
+/// Where a pane goes and how it shows focus, or `None` when it does not show.
+pub(super) type Placed = Option<(Rect, Focus)>;
+
+/// Where the list and the detail go in `area` with `pane` focused, and how
+/// each shows focus. On a narrow terminal only the focused one shows.
+pub(super) fn panes(state: &State, area: Rect, pane: Pane) -> (Placed, Placed) {
     if area.width >= state.ui.wide_layout_columns {
-        let [list_area, detail_area] = split(area);
+        let [list_area, detail_area] =
+            Layout::horizontal([Constraint::Fill(3), Constraint::Fill(2)]).areas(area);
         let focus = |of| {
             if pane == of {
                 Focus::Focused
@@ -32,55 +49,51 @@ pub fn render(state: &State, frame: &mut Frame, area: Rect) {
                 Focus::Unfocused
             }
         };
-        render_list(&view, frame, list_area, focus(Pane::List));
-        render_detail(
-            state,
-            detail::issue(state),
-            frame,
-            detail_area,
-            focus(Pane::Detail),
-        );
+        (
+            Some((list_area, focus(Pane::List))),
+            Some((detail_area, focus(Pane::Detail))),
+        )
     } else if pane == Pane::Detail {
-        render_detail(state, detail::issue(state), frame, area, Focus::Alone);
+        (None, Some((area, Focus::Alone)))
     } else {
-        render_list(&view, frame, area, Focus::Alone);
+        (Some((area, Focus::Alone)), None)
     }
 }
 
-/// Where the detail pane is in a body of `area`, or `None` when only the
-/// list shows.
-pub(super) fn detail_area(state: &State, area: Rect) -> Option<Rect> {
-    if area.width >= state.ui.wide_layout_columns {
-        Some(split(area)[1])
-    } else {
-        (state.my_issues.pane() == Pane::Detail).then_some(area)
-    }
-}
-
-/// The list and the detail side by side.
-fn split(area: Rect) -> [Rect; 2] {
-    Layout::horizontal([Constraint::Fill(3), Constraint::Fill(2)]).areas(area)
-}
-
-/// What every part of the screen draws from.
-struct View<'a> {
-    my_issues: &'a MyIssues,
+/// What every issue row and detail draws from.
+pub(super) struct View<'a> {
+    names: &'a Names,
     theme: &'a Theme,
     icons: icons::IconSet,
     /// Why the last edit of an issue failed, by issue id.
     row_errors: &'a BTreeMap<String, String>,
 }
 
+impl<'a> View<'a> {
+    pub(super) fn new(state: &'a State, names: &'a Names) -> Self {
+        Self {
+            names,
+            theme: &state.theme,
+            icons: state.ui.icons,
+            row_errors: &state.row_errors,
+        }
+    }
+}
+
 /// How a pane shows focus: a thick accented border beside an unfocused pane,
 /// a plain one when it is the only pane on screen.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Focus {
+pub(super) enum Focus {
     Alone,
     Focused,
     Unfocused,
 }
 
-fn pane_block(title: impl Into<Line<'static>>, focus: Focus, theme: &Theme) -> Block<'static> {
+pub(super) fn pane_block(
+    title: impl Into<Line<'static>>,
+    focus: Focus,
+    theme: &Theme,
+) -> Block<'static> {
     let block = Block::bordered().title(title);
     match focus {
         Focus::Alone => block.border_style(style::border(theme)),
@@ -96,10 +109,9 @@ enum Row<'a> {
     Issue(usize, &'a Issue),
 }
 
-fn render_list(view: &View, frame: &mut Frame, area: Rect, focus: Focus) {
-    let View {
-        my_issues, theme, ..
-    } = view;
+fn render_list(view: &View, state: &State, frame: &mut Frame, area: Rect, focus: Focus) {
+    let my_issues = &state.my_issues;
+    let theme = view.theme;
     let block = pane_block("My Issues", focus, theme);
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -118,32 +130,8 @@ fn render_list(view: &View, frame: &mut Frame, area: Rect, focus: Focus) {
             index += 1;
         }
     }
-    // The kept scroll assumes the list height perform() was given; clamp it so
-    // the focused issue shows at any height.
-    let focused_line = my_issues.focused_line();
-    let height = usize::from(inner.height);
-    let offset = my_issues
-        .scroll()
-        .min(focused_line)
-        .max((focused_line + 1).saturating_sub(height));
-
-    let id_width = my_issues
-        .groups()
-        .iter()
-        .flat_map(|group| &group.issues)
-        .map(|issue| issue.identifier.chars().count())
-        .max()
-        .unwrap_or(0);
-    let cells = Layout::horizontal([
-        Constraint::Length(1),
-        Constraint::Length(u16::try_from(id_width).unwrap_or(u16::MAX)),
-        Constraint::Fill(1),
-        Constraint::Length(13),
-        Constraint::Length(10),
-        Constraint::Length(2),
-        Constraint::Length(8),
-    ])
-    .spacing(1);
+    let offset = visible_offset(my_issues.scroll(), my_issues.focused_line(), inner);
+    let cells = row_cells(my_issues.groups().iter().flat_map(|group| &group.issues));
 
     for (line_area, row) in inner.rows().zip(rows.iter().skip(offset)) {
         match row {
@@ -158,45 +146,88 @@ fn render_list(view: &View, frame: &mut Frame, area: Rect, focus: Focus) {
             }
             Row::Issue(index, issue) => {
                 let is_focused = *index == my_issues.focused_index();
-                let [marker, identifier, title, state, priority, estimate, cycle] =
-                    cells.areas(line_area);
-                if is_focused {
-                    frame.render_widget("▸", marker);
-                }
-                frame.render_widget(Span::raw(&issue.identifier).fg(theme.muted), identifier);
-                let title_line = if view.row_errors.contains_key(&issue.id) {
-                    Line::from(vec![
-                        Span::styled("✘ ", style::error(theme)),
-                        Span::styled(issue.title.as_str(), style::error(theme)),
-                    ])
-                } else {
-                    Line::from(issue.title.as_str())
-                };
-                frame.render_widget(title_line, title);
-                frame.render_widget(state_line(view, &issue.state), state);
-                frame.render_widget(priority_line(view, issue.priority), priority);
-                frame.render_widget(
-                    Line::from(
-                        issue
-                            .estimate
-                            .filter(|_| my_issues.uses_estimates(issue))
-                            .map(|points| points.to_string())
-                            .unwrap_or_default(),
-                    )
-                    .alignment(Alignment::Right),
-                    estimate,
-                );
-                frame.render_widget(cycle_span(view, issue), cycle);
-                if is_focused {
-                    let highlight = if focus == Focus::Unfocused {
-                        Style::new().add_modifier(Modifier::BOLD)
-                    } else {
-                        theme.selection
-                    };
-                    frame.buffer_mut().set_style(line_area, highlight);
-                }
+                render_row(view, frame, line_area, &cells, issue, is_focused, focus);
             }
         }
+    }
+}
+
+/// The first list line to draw so the focused line shows in `inner`. The
+/// kept scroll assumes the list height perform() was given; it is clamped so
+/// the focused issue shows at any height.
+pub(super) fn visible_offset(scroll: usize, focused_line: usize, inner: Rect) -> usize {
+    let height = usize::from(inner.height);
+    scroll
+        .min(focused_line)
+        .max((focused_line + 1).saturating_sub(height))
+}
+
+/// The columns of an issue row, with the identifier as wide as the widest
+/// of `issues`.
+pub(super) fn row_cells<'a>(issues: impl Iterator<Item = &'a Issue>) -> Layout {
+    let id_width = issues
+        .map(|issue| issue.identifier.chars().count())
+        .max()
+        .unwrap_or(0);
+    Layout::horizontal([
+        Constraint::Length(1),
+        Constraint::Length(u16::try_from(id_width).unwrap_or(u16::MAX)),
+        Constraint::Fill(1),
+        Constraint::Length(13),
+        Constraint::Length(10),
+        Constraint::Length(2),
+        Constraint::Length(8),
+    ])
+    .spacing(1)
+}
+
+/// One issue row: marker, identifier, title, state, priority, estimate and
+/// cycle, highlighted when it is the focused issue.
+pub(super) fn render_row(
+    view: &View,
+    frame: &mut Frame,
+    line_area: Rect,
+    cells: &Layout,
+    issue: &Issue,
+    is_focused: bool,
+    focus: Focus,
+) {
+    let theme = view.theme;
+    let [marker, identifier, title, state, priority, estimate, cycle] = cells.areas(line_area);
+    if is_focused {
+        frame.render_widget("▸", marker);
+    }
+    frame.render_widget(Span::raw(&issue.identifier).fg(theme.muted), identifier);
+    let title_line = if view.row_errors.contains_key(&issue.id) {
+        Line::from(vec![
+            Span::styled("✘ ", style::error(theme)),
+            Span::styled(issue.title.as_str(), style::error(theme)),
+        ])
+    } else {
+        Line::from(issue.title.as_str())
+    };
+    frame.render_widget(title_line, title);
+    frame.render_widget(state_line(view, &issue.state), state);
+    frame.render_widget(priority_line(view, issue.priority), priority);
+    frame.render_widget(
+        Line::from(
+            issue
+                .estimate
+                .filter(|_| view.names.uses_estimates(issue))
+                .map(|points| points.to_string())
+                .unwrap_or_default(),
+        )
+        .alignment(Alignment::Right),
+        estimate,
+    );
+    frame.render_widget(cycle_span(view, issue), cycle);
+    if is_focused {
+        let highlight = if focus == Focus::Unfocused {
+            Style::new().add_modifier(Modifier::BOLD)
+        } else {
+            theme.selection
+        };
+        frame.buffer_mut().set_style(line_area, highlight);
     }
 }
 
@@ -205,7 +236,9 @@ pub fn render_issue(state: &State, issue: &Issue, frame: &mut Frame, area: Rect)
     render_detail(state, Some(issue), frame, area, Focus::Alone);
 }
 
-fn render_detail(
+/// The detail of `issue`, or an empty pane when there is none, scrolled as
+/// far as the viewer scrolled it.
+pub(super) fn render_detail(
     state: &State,
     issue: Option<&Issue>,
     frame: &mut Frame,
@@ -248,12 +281,12 @@ fn priority_line(view: &View, priority: Priority) -> Line<'static> {
 }
 
 fn cycle_span<'a>(view: &View<'a>, issue: &'a Issue) -> Span<'a> {
-    let my_issues = view.my_issues;
+    let names = view.names;
     let Some(id) = &issue.cycle_id else {
         return Span::default();
     };
-    let name = Span::raw(my_issues.cycle_name(id).unwrap_or(id));
-    if my_issues.is_in_active_cycle(issue) {
+    let name = Span::raw(names.cycle_name(id).unwrap_or(id));
+    if names.is_in_active_cycle(issue) {
         name.fg(view.theme.accent).bold()
     } else {
         name

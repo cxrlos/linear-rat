@@ -16,10 +16,10 @@ const FIELD_WIDTH: usize = 10;
 
 type Pieces = Vec<(String, Style)>;
 
-/// The issue whose detail is shown: the store's copy of the focused issue,
-/// so it is the newest one loaded.
+/// The issue whose detail is shown: the store's copy of the issue the
+/// screen has focused, so it is the newest one loaded.
 pub(super) fn issue(state: &State) -> Option<&Issue> {
-    let focused = state.my_issues.focused_issue()?;
+    let focused = state.focused_issue()?;
     Some(state.store.issue(&focused.id).unwrap_or(focused))
 }
 
