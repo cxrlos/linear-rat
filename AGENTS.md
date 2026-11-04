@@ -47,16 +47,18 @@ Done when someone reading only the issue and the PR could pick up the next piece
 - `src/main.rs`: the `lrat` binary. Parses the CLI, runs the `lrat auth` commands, or loads the config, starts logging, enters the terminal guard and runs the runtime.
 - `src/app/`: the core. `State` (screens, modal stack, keymap, My Issues), `Event` in, `update(state, event)` returning an `Update` (redraw flag and `Effect`s), `perform(state, action)`, and `App`, the driver that applies events and redraws only when asked. Tests drive `App`.
 - `src/keys/`: the action registry (`registry.rs`, the only place a key binding is written), key notation, contexts and the keymap built from the registry plus config overrides.
-- `src/config.rs`: loads `config.toml` from the XDG config path (only `[keys]` so far), with errors naming file and line.
-- `src/ui.rs`, `src/ui/`: rendering, a pure function of `State`: the layout, My Issues, the bottom bar, cheatsheet and which-key, glyphs (`icons.rs`) and colors (`style.rs`).
-- `src/runtime.rs`: the async loop. Reads terminal input and the shutdown signal, feeds events to `App` and carries out effects.
-- `src/linear/`: all Linear access. The `LinearClient` trait, the real `HttpClient`, `FakeClient`, the GraphQL documents (`graphql/`), the pinned `schema.graphql`, the domain types (`model.rs`) and the demo workspace (`demo.rs`).
+- `src/config.rs`: loads `config.toml` from the XDG config path (`[keys]`, `[ui]`, `[theme]`, `[sync]`, `[analytics]`), each section falling back to its defaults on its own, with errors and unknown-key warnings naming file and line. The format is in `docs/config.md`.
+- `src/ui.rs`, `src/ui/`: rendering, a pure function of `State`: the layout, My Issues, the loading message and error screens (`error.rs`), the bottom bar, cheatsheet and which-key, themes (`theme.rs`, built-ins under `themes/`), icon sets (`icons.rs`) and the styles drawn from the theme (`style.rs`).
+- `src/runtime.rs`: the async loop. Reads terminal input and the shutdown signal, feeds events to `App` and carries out effects: loads through the Linear client, copying and opening URLs.
+- `src/clipboard.rs`: copying through OSC 52, so it works over SSH; inside tmux it checks `set-clipboard`.
+- `src/browser.rs`: opens a URL with `xdg-open` or `open`, detached from the terminal.
+- `src/linear/`: all Linear access. The `LinearClient` trait, the real `HttpClient` with pagination, the budget governor (`governor.rs`, rate-limit and complexity headers, `Retry-After`), `FakeClient`, the GraphQL documents (`graphql/`), the pinned `schema.graphql`, the domain types (`model.rs`) and the demo workspace (`demo.rs`).
 - `src/auth/`: the redacting API key type, key resolution (`LINEAR_API_KEY`, then the OS keyring) and the workspace file that names the keyring entry.
 - `src/analytics/`: the pure analytics calculator.
 - `src/terminal.rs`: the terminal guard (raw mode, alternate screen, panic hook) and the SIGINT/SIGTERM/SIGHUP shutdown signal.
 - `src/logging.rs`: `tracing` to a daily file under `$XDG_STATE_HOME/lrat/`, level from `LRAT_LOG`.
 - `src/cli.rs`: clap flags and the `auth` subcommands.
-- `tests/`: app-driver tests (`app.rs`, `keys.rs`, `runtime.rs`) and their insta snapshots, the demo data (`demo.rs`), auth and the CLI (`auth.rs`, `cli.rs`), the client against a fake server (`linear_client.rs`), GraphQL validation (`graphql_schema.rs`), analytics (`analytics.rs`) and shutdown signals (`signals.rs`).
+- `tests/`: app-driver tests (`app.rs`, `keys.rs`, `loading.rs`, `copy_and_open.rs`, `runtime.rs`) and their insta snapshots, the demo data (`demo.rs`), config and themes (`config.rs`, `theme.rs`), auth and the CLI (`auth.rs`, `cli.rs`), the client against a fake server (`linear_client.rs`, `assigned_issues.rs`), GraphQL validation (`graphql_schema.rs`), analytics (`analytics.rs`) and shutdown signals (`signals.rs`).
 - `examples/force_panic.rs`: panics inside the guard, to check the terminal is restored.
 
 ## Commands
