@@ -25,7 +25,7 @@ pub fn render_edit(state: &State, picker: &EditPicker, frame: &mut Frame, area: 
         Edit::Priority(priority) => {
             Some(Span::raw(state.ui.icons.priority(*priority)).fg(state.theme.priority(*priority)))
         }
-        Edit::Assignee(_) => None,
+        Edit::Assignee(_) | Edit::Labels(_) | Edit::Estimate(_) => None,
     };
     render(state, &picker.title(), &picker.list, glyph, frame, area);
 }
@@ -81,6 +81,14 @@ fn render<T>(
                 format!("{key:<key_width$} "),
                 style::accent(theme),
             )];
+            if picker.is_multi() {
+                let mark = if picker.is_marked(*index) {
+                    "[x] "
+                } else {
+                    "[ ] "
+                };
+                spans.push(Span::styled(mark, style::accent(theme)));
+            }
             if let Some(glyph) = glyph(&entry.value) {
                 spans.push(glyph);
                 spans.push(Span::raw(" "));
@@ -107,7 +115,7 @@ fn render<T>(
         None => None,
     };
 
-    let bottom = bottom_keys(state);
+    let bottom = bottom_keys(state, picker.is_multi());
     let width = rows
         .iter()
         .chain(note.iter())
@@ -141,16 +149,26 @@ fn render<T>(
 }
 
 /// The keys that select, choose and close, as
-/// ` Down/Up select  Enter choose  Esc close `. Keys the filter takes as
-/// text are left out.
-fn bottom_keys(state: &State) -> Line<'static> {
-    let items: [(&[Action], &str); 3] = [
-        (&[Action::ScrollDown, Action::ScrollUp], "select"),
-        (&[Action::Accept], "choose"),
-        (&[Action::Close], "close"),
-    ];
+/// ` Down/Up select  Enter choose  Esc close `, with the key that toggles an
+/// entry in a multi-select picker. Keys the filter takes as text are left
+/// out.
+fn bottom_keys(state: &State, multi: bool) -> Line<'static> {
+    let items: &[(&[Action], &str)] = if multi {
+        &[
+            (&[Action::ScrollDown, Action::ScrollUp], "select"),
+            (&[Action::ToggleEntry], "toggle"),
+            (&[Action::Accept], "save"),
+            (&[Action::Close], "close"),
+        ]
+    } else {
+        &[
+            (&[Action::ScrollDown, Action::ScrollUp], "select"),
+            (&[Action::Accept], "choose"),
+            (&[Action::Close], "close"),
+        ]
+    };
     let mut spans = Vec::new();
-    for (actions, word) in items {
+    for &(actions, word) in items {
         let keys: Vec<String> = actions
             .iter()
             .filter_map(|&action| {

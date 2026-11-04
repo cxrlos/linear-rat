@@ -2,7 +2,7 @@ use crossterm::event::KeyEvent;
 use jiff::Timestamp;
 
 use super::{LoadError, SyncFailure, Write};
-use crate::linear::model::{Issue, Member, Team, WorkflowState};
+use crate::linear::model::{Issue, Label, Member, Team, WorkflowState};
 use crate::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, SearchResults, TeamChanges,
     TeamIssuesPage, TeamOptions, TeamQuery,
@@ -96,6 +96,12 @@ pub enum Event {
     TeamMembersLoaded {
         team_id: String,
         result: Result<Vec<Member>, String>,
+    },
+    /// The result of [`Effect::LoadTeamLabels`](super::Effect::LoadTeamLabels),
+    /// or why it failed.
+    TeamLabelsLoaded {
+        team_id: String,
+        result: Result<Vec<Label>, String>,
     },
     /// Linear's answer to [`Effect::UpdateIssue`](super::Effect::UpdateIssue):
     /// the issue as it stored it, or why it rejected the edit.

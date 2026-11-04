@@ -68,6 +68,13 @@ pub trait LinearClient {
         team_id: &str,
     ) -> impl Future<Output = Result<Vec<Member>, ClientError>> + Send;
 
+    /// Every label an issue of the team with id `team_id` can carry: the
+    /// team's own and the workspace's, without label groups.
+    fn team_labels(
+        &self,
+        team_id: &str,
+    ) -> impl Future<Output = Result<Vec<Label>, ClientError>> + Send;
+
     /// Sends one `issueUpdate` for the issue with id `issue_id` and returns
     /// the issue as Linear stored it.
     fn update_issue(
@@ -157,6 +164,13 @@ pub struct IssueUpdate {
     /// The new priority, or `None` to leave it. [`Priority::None`] is a value
     /// like any other, not a clear.
     pub priority: Option<Priority>,
+    /// The new estimate in points, as Linear's `Int`. T-shirt sizes are
+    /// points too (XS 1, S 2, M 3, L 5, XL 8, XXL 13, XXXL 21).
+    pub estimate: Patch<u32>,
+    /// Labels to add, leaving the issue's other labels as they are.
+    pub added_label_ids: Vec<String>,
+    /// Labels to remove, leaving the issue's other labels as they are.
+    pub removed_label_ids: Vec<String>,
 }
 
 /// A change to a field that can be empty: leave it, empty it, or set it.
@@ -469,6 +483,35 @@ fn demo_update(
     if let Some(priority) = update.priority {
         issue.priority = priority;
     }
+    match update.estimate {
+        Patch::Unchanged => {}
+        Patch::Clear => issue.estimate = None,
+        Patch::Set(points) => issue.estimate = Some(f64::from(points)),
+    }
+    for id in update
+        .added_label_ids
+        .iter()
+        .chain(&update.removed_label_ids)
+    {
+        let usable = data.labels.iter().any(|label| {
+            label.id == *id
+                && label
+                    .team_id
+                    .as_ref()
+                    .is_none_or(|team_id| *team_id == issue.team_id)
+        });
+        if !usable {
+            return Err(not_found("label", id));
+        }
+    }
+    issue
+        .label_ids
+        .retain(|id| !update.removed_label_ids.contains(id));
+    for id in &update.added_label_ids {
+        if !issue.label_ids.contains(id) {
+            issue.label_ids.push(id.clone());
+        }
+    }
     issue.updated_at += SignedDuration::from_secs(1);
     Ok(issue)
 }
@@ -555,6 +598,10 @@ impl LinearClient for FakeClient {
             .into_iter()
             .filter(|member| ids.contains(&member.id))
             .collect())
+    }
+
+    async fn team_labels(&self, team_id: &str) -> Result<Vec<Label>, ClientError> {
+        Ok(demo::team_options(&demo::workspace(), team_id).labels)
     }
 
     async fn update_issue(

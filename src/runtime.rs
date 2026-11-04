@@ -226,6 +226,17 @@ where
             }));
             Ok(())
         }
+        Effect::LoadTeamLabels { team_id } => {
+            let client = reach.client;
+            in_flight.push(Box::pin(async move {
+                let result = match client {
+                    Some(client) => client.team_labels(&team_id).await.map_err(message),
+                    None => Err(NO_CLIENT.to_owned()),
+                };
+                Event::TeamLabelsLoaded { team_id, result }
+            }));
+            Ok(())
+        }
         Effect::UpdateIssue(write) => {
             in_flight.push(Box::pin(update_issue(reach.client, write)));
             Ok(())
@@ -394,7 +405,7 @@ fn message(error: ClientError) -> String {
 async fn update_issue<C: LinearClient>(client: Option<&C>, write: Write) -> Event {
     let result = match client {
         Some(client) => client
-            .update_issue(&write.issue_id, &write.edit.update())
+            .update_issue(&write.issue_id, &write.update())
             .await
             .map(Box::new)
             .map_err(message),

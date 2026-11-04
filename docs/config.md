@@ -81,7 +81,7 @@ Every Base16 built-in theme keeps a contrast ratio of at least 4.5:1 for text an
 
 One table per context: `global`, `list`, `team-issues` (the Team Issues list, which also takes the `list` keys), `detail`, `overlay` and `analytics`. In each, an action's id maps to its keys in vim notation (`"j"`, `"gg"`, `"<C-d>"`, `"<S-Tab>"`, `"<F1>"`). The `?` cheatsheet lists every action.
 
-While an overlay has a text field, as the pickers, the palette and the search query do, a character typed without Ctrl or Alt goes into the field and Backspace deletes, whatever they are bound to. The one exception is a picker's number keys (`pick-1` to `pick-9`), which pick an entry while the filter leaves that many. Keys with Ctrl or Alt and named keys such as `<Enter>`, `<Down>` and `<Esc>` still run their `overlay` actions.
+While an overlay has a text field, as the pickers, the palette and the search query do, a character typed without Ctrl or Alt goes into the field and Backspace deletes, whatever they are bound to. The one exception is a picker's number keys (`pick-1` to `pick-9`), which pick an entry while the filter leaves that many (in the label picker, which marks several entries, they toggle it, as `toggle-entry` (`<Tab>`) does, and `accept` saves the marked labels). Keys with Ctrl or Alt and named keys such as `<Enter>`, `<Down>` and `<Esc>` still run their `overlay` actions.
 
 ```toml
 [keys.global]

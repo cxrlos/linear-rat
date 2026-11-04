@@ -1,14 +1,15 @@
 use std::future::{self, Future};
 use std::io;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use crossterm::event::{Event as TerminalEvent, KeyCode, KeyEvent, KeyModifiers};
 use futures_util::stream::{self, Stream, StreamExt};
 use jiff::Timestamp;
-use linear_rat::app::{App, State};
+use linear_rat::app::{App, Event, State};
 use linear_rat::auth::KeySource;
-use linear_rat::linear::model::{Issue, Member, Team, Viewer, WorkflowState, Workspace};
+use linear_rat::linear::model::{Issue, Label, Member, Team, Viewer, WorkflowState, Workspace};
 use linear_rat::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, FakeClient, IssueDetail,
     IssueUpdate, LinearClient, SearchResults, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
@@ -100,6 +101,10 @@ impl LinearClient for RejectingClient {
     }
 
     async fn team_members(&self, _team_id: &str) -> Result<Vec<Member>, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn team_labels(&self, _team_id: &str) -> Result<Vec<Label>, ClientError> {
         Err(ClientError::InvalidKey)
     }
 
@@ -226,6 +231,9 @@ async fn q_quits_while_the_load_is_still_in_flight() {
         async fn team_members(&self, _: &str) -> Result<Vec<Member>, ClientError> {
             future::pending().await
         }
+        async fn team_labels(&self, _: &str) -> Result<Vec<Label>, ClientError> {
+            future::pending().await
+        }
         async fn update_issue(&self, _: &str, _: &IssueUpdate) -> Result<Issue, ClientError> {
             future::pending().await
         }
@@ -272,10 +280,12 @@ async fn q_quits_while_the_load_is_still_in_flight() {
     assert!(matches!(result, Ok(Ok(()))), "{result:?}");
 }
 
-/// The demo workspace, counting the delta polls asked of it.
+/// The demo workspace, counting the delta polls asked of it and keeping the
+/// edits sent to it.
 #[derive(Default)]
 struct CountingClient {
     deltas: AtomicUsize,
+    updates: Mutex<Vec<IssueUpdate>>,
 }
 
 impl LinearClient for CountingClient {
@@ -302,11 +312,17 @@ impl LinearClient for CountingClient {
     async fn team_members(&self, team_id: &str) -> Result<Vec<Member>, ClientError> {
         FakeClient.team_members(team_id).await
     }
+    async fn team_labels(&self, team_id: &str) -> Result<Vec<Label>, ClientError> {
+        FakeClient.team_labels(team_id).await
+    }
     async fn update_issue(
         &self,
         issue_id: &str,
         update: &IssueUpdate,
     ) -> Result<Issue, ClientError> {
+        if let Ok(mut updates) = self.updates.lock() {
+            updates.push(update.clone());
+        }
         FakeClient.update_issue(issue_id, update).await
     }
     async fn issue_detail(
@@ -421,6 +437,48 @@ async fn an_edit_linear_rejects_is_rolled_back_with_the_reason() {
         shown.contains("Could not change the priority of DES-34: Linear rejected the API key"),
         "{shown}"
     );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_label_edit_sends_only_the_labels_added_and_removed() {
+    let client = CountingClient::default();
+    let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+    app.handle(Event::Key(KeyEvent::new(
+        KeyCode::Char('L'),
+        KeyModifiers::NONE,
+    )))
+    .unwrap();
+    app.handle(Event::TeamLabelsLoaded {
+        team_id: "team-des".to_owned(),
+        result: Ok(demo::team_options(&demo::workspace(), "team-des").labels),
+    })
+    .unwrap();
+
+    // 1 marks brand and 4 unmarks improvement, the label DES-34 carries.
+    let keys = vec![
+        press('1'),
+        press('4'),
+        Ok(TerminalEvent::Key(KeyEvent::new(
+            KeyCode::Enter,
+            KeyModifiers::NONE,
+        ))),
+    ];
+    let running = runtime::run(
+        &mut app,
+        Some(&client),
+        None,
+        input(keys),
+        future::pending(),
+    );
+    let stopped = tokio::time::timeout(Duration::from_millis(200), running).await;
+
+    assert!(stopped.is_err(), "the runtime stopped: {stopped:?}");
+    let updates = client.updates.lock().unwrap();
+    let [update] = updates.as_slice() else {
+        panic!("expected one edit, got {updates:?}");
+    };
+    assert_eq!(update.added_label_ids, ["team-des-label-brand"]);
+    assert_eq!(update.removed_label_ids, ["label-improvement"]);
 }
 
 #[tokio::test]

@@ -232,6 +232,24 @@ pub static ACTIONS: &[ActionSpec] = &[
         available: has_focused_issue,
     },
     ActionSpec {
+        action: Action::Edit(Editable::Labels),
+        id: "edit-labels",
+        description: "Add or remove labels",
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('L')]],
+        available: has_focused_issue,
+    },
+    ActionSpec {
+        action: Action::Edit(Editable::Estimate),
+        id: "edit-estimate",
+        description: "Change the estimate",
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('e')]],
+        available: app::focused_team_estimates,
+    },
+    ActionSpec {
         action: Action::PickNumber(1),
         id: "pick-1",
         description: "Pick entry 1 of the list",
@@ -402,6 +420,18 @@ pub static ACTIONS: &[ActionSpec] = &[
         available: can_scroll_up,
     },
     ActionSpec {
+        action: Action::ToggleEntry,
+        id: "toggle-entry",
+        description: "Mark or unmark the highlighted entry",
+        hint: None,
+        contexts: OVERLAY,
+        default_keys: &[&[Key::named(KeyCode::Tab)]],
+        available: |state| {
+            picker(state)
+                .is_some_and(|picker| picker.list.is_multi() && picker.list.selected().is_some())
+        },
+    },
+    ActionSpec {
         action: Action::Accept,
         id: "accept",
         description: "Choose the highlighted entry",
@@ -564,7 +594,7 @@ fn can_scroll_up(state: &State) -> bool {
 fn can_accept(state: &State) -> bool {
     match state.modals.top() {
         Some(Modal::Choice(choice)) => choice.cursor < choice.entries.len(),
-        Some(Modal::Picker(picker)) => picker.list.selected().is_some(),
+        Some(Modal::Picker(picker)) => picker.list.is_multi() || picker.list.selected().is_some(),
         Some(Modal::Palette(palette)) => {
             palette.selected < app::palette_matches(state, &palette.query).len()
         }

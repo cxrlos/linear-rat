@@ -38,6 +38,10 @@ pub struct Store {
     /// The ids of a team's members, by team id, once loaded for a picker
     /// or with the team's filter options.
     team_members: BTreeMap<String, Vec<String>>,
+    /// The ids of the labels a team's issues can carry (its own and the
+    /// workspace's), by team id, once loaded for a label picker.
+    #[serde(default)]
+    team_labels: BTreeMap<String, Vec<String>>,
     /// Workflow state history by issue id, oldest first, as the detail
     /// loaded it. Kept apart from the issues so an upsert from a list,
     /// which carries no history, does not drop it.
@@ -292,6 +296,21 @@ impl Store {
         by_id(&mut self.members, members, |member| &member.id);
         let ids = members.iter().map(|member| member.id.clone()).collect();
         self.team_members.insert(team_id.to_owned(), ids);
+    }
+
+    /// Replaces the labels team `team_id`'s issues can carry, and stores
+    /// each label by id.
+    pub fn set_team_labels(&mut self, team_id: &str, labels: &[Label]) {
+        by_id(&mut self.labels, labels, |label| &label.id);
+        let ids = labels.iter().map(|label| label.id.clone()).collect();
+        self.team_labels.insert(team_id.to_owned(), ids);
+    }
+
+    /// The labels team `team_id`'s issues can carry, if they have been
+    /// loaded.
+    pub fn team_labels(&self, team_id: &str) -> Option<Vec<&Label>> {
+        let ids = self.team_labels.get(team_id)?;
+        Some(ids.iter().filter_map(|id| self.labels.get(id)).collect())
     }
 
     /// Shows `edit` on the stored issue before Linear confirms it. The

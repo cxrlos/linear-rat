@@ -136,6 +136,16 @@ fn apply(state: &mut State, event: Event) -> Update {
             };
             edit::loaded(state, Editable::Assignee, &team_id, failure)
         }
+        Event::TeamLabelsLoaded { team_id, result } => {
+            let failure = match result {
+                Ok(labels) => {
+                    state.store.set_team_labels(&team_id, &labels);
+                    None
+                }
+                Err(error) => Some(error),
+            };
+            edit::loaded(state, Editable::Labels, &team_id, failure)
+        }
         Event::IssueUpdated { write, result } => edit::finished(state, &write, result),
     }
 }
@@ -349,6 +359,7 @@ pub fn perform(state: &mut State, action: Action) -> Update {
         },
         Action::Edit(field) => edit::open(state, field),
         Action::PickNumber(n) => edit::choose(state, Some(usize::from(n))),
+        Action::ToggleEntry => edit::toggle(state, None),
         _ => Update::default(),
     }
 }

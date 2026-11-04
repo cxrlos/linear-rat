@@ -13,7 +13,7 @@ use jiff::Timestamp;
 use linear_rat::auth::{
     self, ApiKey, AuthError, Credentials, InvalidApiKey, KeyStore, KeyringError, WorkspaceFile,
 };
-use linear_rat::linear::model::{Issue, Member, Team, Viewer, WorkflowState, Workspace};
+use linear_rat::linear::model::{Issue, Label, Member, Team, Viewer, WorkflowState, Workspace};
 use linear_rat::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, FakeClient, IssueDetail,
     IssueUpdate, LinearClient, SearchResults, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
@@ -139,6 +139,10 @@ impl LinearClient for RejectingClient {
     }
 
     async fn team_members(&self, _team_id: &str) -> Result<Vec<Member>, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn team_labels(&self, _team_id: &str) -> Result<Vec<Label>, ClientError> {
         Err(ClientError::InvalidKey)
     }
 

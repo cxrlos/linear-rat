@@ -1,0 +1,26 @@
+# budget: 320
+# One page of the labels an issue of one team can carry: the team's own and
+# the workspace's. Label groups are left out, since an issue cannot carry a
+# group itself. The client follows `endCursor` until `hasNextPage` is false.
+query TeamLabels($teamId: ID!, $after: String) {
+  issueLabels(
+    first: 100
+    after: $after
+    filter: {
+      isGroup: { eq: false }
+      or: [{ team: { id: { eq: $teamId } } }, { team: { null: true } }]
+    }
+  ) {
+    nodes {
+      id
+      name
+      team {
+        id
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}

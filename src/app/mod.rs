@@ -25,7 +25,7 @@ use ratatui::backend::Backend;
 pub use action::{Action, Copyable};
 pub use analytics_screen::AnalyticsScreen;
 pub use detail::{Detail, DetailLoad};
-pub use edit::{Edit, EditPicker, Editable, Write};
+pub use edit::{Edit, EditPicker, Editable, Write, estimate_scale, focused_team_estimates};
 pub use effect::Effect;
 pub use event::Event;
 pub use load::{Load, LoadError};

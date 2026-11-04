@@ -63,6 +63,11 @@ pub enum Effect {
     LoadTeamMembers {
         team_id: String,
     },
+    /// Load the labels a team's issues can carry; the result comes back as
+    /// [`Event::TeamLabelsLoaded`](super::Event::TeamLabelsLoaded).
+    LoadTeamLabels {
+        team_id: String,
+    },
     /// Send one `issueUpdate` making [`Write::edit`]; the result comes back
     /// as [`Event::IssueUpdated`](super::Event::IssueUpdated).
     UpdateIssue(Write),

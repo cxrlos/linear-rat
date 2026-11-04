@@ -121,7 +121,7 @@ async fn a_state_and_an_assignee_are_sent_by_id() {
     let update = IssueUpdate {
         state_id: Some("state-review".to_owned()),
         assignee_id: Patch::Set("member-ada".to_owned()),
-        priority: None,
+        ..IssueUpdate::default()
     };
 
     client_for(&server)
@@ -251,4 +251,100 @@ async fn team_members_follow_every_page() {
 
     let ids: Vec<&str> = members.iter().map(|m| m.id.as_str()).collect();
     assert_eq!(ids, ["member-ada", "member-jun"]);
+}
+
+#[tokio::test]
+async fn labels_go_as_the_added_and_removed_ids_only() {
+    let server = server_answering(updated()).await;
+    let update = IssueUpdate {
+        added_label_ids: vec!["label-bug".to_owned()],
+        removed_label_ids: vec!["label-feature".to_owned(), "label-ux".to_owned()],
+        ..IssueUpdate::default()
+    };
+
+    client_for(&server)
+        .update_issue("issue-1", &update)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        sent_variables(&server).await,
+        json!({
+            "id": "issue-1",
+            "input": {
+                "addedLabelIds": ["label-bug"],
+                "removedLabelIds": ["label-feature", "label-ux"]
+            }
+        })
+    );
+}
+
+#[tokio::test]
+async fn an_estimate_is_sent_as_whole_points_and_cleared_as_null() {
+    let server = server_answering(updated()).await;
+    let client = client_for(&server);
+    for estimate in [Patch::Set(5), Patch::Clear] {
+        let update = IssueUpdate {
+            estimate,
+            ..IssueUpdate::default()
+        };
+        client.update_issue("issue-1", &update).await.unwrap();
+    }
+
+    let requests = server.received_requests().await.unwrap();
+    let inputs: Vec<Value> = requests
+        .iter()
+        .map(|request| request.body_json::<Value>().unwrap()["variables"]["input"].clone())
+        .collect();
+    assert_eq!(
+        inputs,
+        [json!({ "estimate": 5 }), json!({ "estimate": null })]
+    );
+}
+
+#[tokio::test]
+async fn team_labels_follow_every_page_with_the_workspace_labels() {
+    let server = MockServer::start().await;
+    let page = |id: &str, team: Value, next: Option<&str>| {
+        json!({ "data": { "issueLabels": {
+            "nodes": [{ "id": id, "name": id, "team": team }],
+            "pageInfo": { "hasNextPage": next.is_some(), "endCursor": next }
+        } } })
+    };
+    Mock::given(method("POST"))
+        .and(wiremock::matchers::body_partial_json(
+            json!({ "variables": { "after": null, "teamId": "team-eng" } }),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(page(
+            "label-backend",
+            json!({ "id": "team-eng" }),
+            Some("c1"),
+        )))
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(wiremock::matchers::body_partial_json(
+            json!({ "variables": { "after": "c1" } }),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(page(
+            "label-bug",
+            Value::Null,
+            None,
+        )))
+        .mount(&server)
+        .await;
+
+    let labels = client_for(&server).team_labels("team-eng").await.unwrap();
+
+    let labels: Vec<(&str, Option<&str>)> = labels
+        .iter()
+        .map(|label| (label.id.as_str(), label.team_id.as_deref()))
+        .collect();
+    assert_eq!(
+        labels,
+        [("label-backend", Some("team-eng")), ("label-bug", None)]
+    );
+    let requests = server.received_requests().await.unwrap();
+    let body: Value = requests[0].body_json().unwrap();
+    assert!(body["query"].as_str().unwrap().contains("query TeamLabels"));
 }

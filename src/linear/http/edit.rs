@@ -1,16 +1,17 @@
-//! What the pickers load and what an edit sends: a team's workflow states
-//! and members, and one `issueUpdate`.
+//! What the pickers load and what an edit sends: a team's workflow states,
+//! members and labels, and one `issueUpdate`.
 
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
-use super::assigned::{Connection, IssueNode, PersonNode, StateNode};
+use super::assigned::{Connection, IssueNode, LabelsPage, PersonNode, StateNode};
 use super::{HttpClient, Urgency};
-use crate::linear::model::{Issue, Member, Priority, WorkflowState};
+use crate::linear::model::{Issue, Label, Member, Priority, WorkflowState};
 use crate::linear::{ClientError, IssueUpdate, Patch, Response};
 
 const TEAM_STATES: &str = include_str!("../graphql/team_states.graphql");
 const TEAM_MEMBERS: &str = include_str!("../graphql/team_members.graphql");
+const TEAM_LABELS: &str = include_str!("../graphql/team_labels.graphql");
 const ISSUE_UPDATE: &str = include_str!("../graphql/issue_update.graphql");
 
 pub(super) async fn workflow_states(
@@ -48,6 +49,25 @@ pub(super) async fn team_members(
         .into_iter()
         .flat_map(|page| page.team.members.nodes)
         .map(PersonNode::into_member)
+        .collect())
+}
+
+pub(super) async fn team_labels(
+    client: &HttpClient,
+    team_id: &str,
+) -> Result<Vec<Label>, ClientError> {
+    let Response { data: pages, .. } = client
+        .all_pages(
+            TEAM_LABELS,
+            json!({ "teamId": team_id }),
+            Urgency::Urgent,
+            |page: &LabelsPage| &page.issue_labels.page_info,
+        )
+        .await?;
+    Ok(pages
+        .into_iter()
+        .flat_map(|page| page.issue_labels.nodes)
+        .map(Label::from)
         .collect())
 }
 
@@ -90,6 +110,24 @@ fn input(update: &IssueUpdate) -> Value {
     }
     if let Some(priority) = update.priority {
         input.insert("priority".to_owned(), json!(priority_number(priority)));
+    }
+    match update.estimate {
+        Patch::Unchanged => {}
+        Patch::Clear => {
+            input.insert("estimate".to_owned(), Value::Null);
+        }
+        Patch::Set(points) => {
+            input.insert("estimate".to_owned(), json!(points));
+        }
+    }
+    if !update.added_label_ids.is_empty() {
+        input.insert("addedLabelIds".to_owned(), json!(update.added_label_ids));
+    }
+    if !update.removed_label_ids.is_empty() {
+        input.insert(
+            "removedLabelIds".to_owned(),
+            json!(update.removed_label_ids),
+        );
     }
     Value::Object(input)
 }

@@ -42,6 +42,8 @@ pub enum Action {
     /// Close a picker on the entry with this number, from 1 to 9, counted
     /// among the entries the filter leaves.
     PickNumber(u8),
+    /// Mark or unmark the highlighted entry of a multi-select picker.
+    ToggleEntry,
     /// Pick another of the viewer's teams for Team Issues.
     SwitchTeam,
     /// Pick the value Team Issues filters this field by.
