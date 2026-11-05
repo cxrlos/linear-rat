@@ -2,5 +2,5 @@
 source: tests/keys.rs
 expression: "format!(\"{}\\n{}\", row(&app, 22), row(&app, 23))"
 ---
- Move │ j down     │ k up   │ gg top    │ G bottom  │ C-d/C-u page │ h/l pane   
- Do   │ Enter open │ y yank │ o browser │ Esc close │ ? keys       │ q quit
+ Move │ j down     │ k up   │ gg top  │ G bottom  │ C-d/C-u page │ h/l pane     
+ Do   │ Enter open │ y yank │ o links │ Esc close │ ? keys       │ q quit

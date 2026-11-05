@@ -60,5 +60,5 @@ expression: app.backend()
 "│                                                                                                                      │┃                                                                              ┃"
 "│                                                                                                                      │┃                                                                              ┃"
 "└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛"
-" Move │ j down │ k up      │ gg top    │ G bottom │ C-d/C-u page │ h/l pane                                                                                                                             "
-" Do   │ y yank │ o browser │ Esc close │ ? keys   │ q quit                                                                                                                                              "
+" Move │ j down │ k up    │ gg top    │ G bottom │ C-d/C-u page │ h/l pane                                                                                                                               "
+" Do   │ y yank │ o links │ Esc close │ ? keys   │ q quit                                                                                                                                                "

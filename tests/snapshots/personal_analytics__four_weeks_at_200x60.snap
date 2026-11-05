@@ -4,7 +4,7 @@ expression: "with_range(200, 60, \"[\").backend()"
 ---
 " [1] My Issues │ [2] Team Issues │ [3] Analytics                                                                                                                                                        "
 "┌Analytics─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐"
-"│Personal   Range [4 weeks] 12 weeks  26 weeks                                                                                                                                                         │"
+"│v [Personal] Team    Range [4 weeks] 12 weeks  26 weeks                                                                                                                                               │"
 "│                                                                                                                                                                                                      │"
 "│Created vs completed                                                                                                         In progress  9                                                           │"
 "│Week        W42 W43 W44 W45  Total                                                                                           ENG-22 Store the last sync watermark per device                       58d│"

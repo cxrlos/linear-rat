@@ -199,7 +199,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::OpenLinks(LinkSet::Issue),
         id: "open-in-browser",
         description: "Open the issue or a pull request",
-        hint: does("browser"),
+        hint: does("links"),
         contexts: PANES,
         default_keys: &[&[Key::char('o')]],
         available: has_focused_issue,

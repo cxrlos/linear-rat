@@ -24,5 +24,5 @@ expression: app.backend()
 "│  ENG-63 Precompute nightly cellar report ◇ Triage      ▮▯▯ Low     8         │"
 "│▸ DES-36 Map legend for shelf temperature ◇ Triage      ··· None              │"
 "└──────────────────────────────────────────────────────────────────────────────┘"
-" Move │ j down     │ k up   │ gg top    │ G bottom  │ C-d/C-u page │ h/l pane   "
-" Do   │ Enter open │ y yank │ o browser │ Esc close │ ? keys       │ q quit     "
+" Move │ j down     │ k up   │ gg top  │ G bottom  │ C-d/C-u page │ h/l pane     "
+" Do   │ Enter open │ y yank │ o links │ Esc close │ ? keys       │ q quit       "

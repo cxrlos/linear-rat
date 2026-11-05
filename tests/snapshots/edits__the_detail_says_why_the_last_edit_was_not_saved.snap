@@ -60,5 +60,5 @@ expression: app.backend()
 "┃                                                                                                                      ┃│                                                                              │"
 "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛└──────────────────────────────────────────────────────────────────────────────┘"
 "Could not change the priority of DES-34: Linear returned errors: Entity not found (INVALID_INPUT)                                                                                                       "
-" Move │ j down     │ k up   │ gg top    │ G bottom  │ C-d/C-u page │ h/l pane                                                                                                                           "
-" Do   │ Enter open │ y yank │ o browser │ Esc close │ ? keys       │ q quit                                                                                                                             "
+" Move │ j down     │ k up   │ gg top  │ G bottom  │ C-d/C-u page │ h/l pane                                                                                                                             "
+" Do   │ Enter open │ y yank │ o links │ Esc close │ ? keys       │ q quit                                                                                                                               "

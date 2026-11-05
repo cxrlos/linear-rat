@@ -74,11 +74,11 @@ fn the_bottom_bar_lines_up_moves_and_actions_in_two_rows() {
 
     assert_eq!(
         row(&app, 22).trim_end(),
-        " Move │ j down     │ k up   │ gg top    │ G bottom  │ C-d/C-u page │ h/l pane"
+        " Move │ j down     │ k up   │ gg top  │ G bottom  │ C-d/C-u page │ h/l pane"
     );
     assert_eq!(
         row(&app, 23).trim_end(),
-        " Do   │ Enter open │ y yank │ o browser │ Esc close │ ? keys       │ q quit"
+        " Do   │ Enter open │ y yank │ o links │ Esc close │ ? keys       │ q quit"
     );
 }
 
@@ -97,7 +97,7 @@ fn a_bottom_bar_too_wide_for_columns_lists_each_row_after_its_label() {
     );
     assert_eq!(
         row(&app, 23).trim_end(),
-        " Do   │ Enter open  y yank  o browser  Esc close  ? keys  q quit"
+        " Do   │ Enter open  y yank  o links  Esc close  ? keys  q quit"
     );
 }
 

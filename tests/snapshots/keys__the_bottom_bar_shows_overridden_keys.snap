@@ -3,4 +3,4 @@ source: tests/keys.rs
 expression: "format!(\"{}\\n{}\", row(&app, 22), row(&app, 23))"
 ---
  Move │ n down     │ G bottom │ C-d/C-u page │ h/l pane                         
- Do   │ Enter open │ y yank   │ o browser    │ Esc close │ ? keys │ Q quit
+ Do   │ Enter open │ y yank   │ o links      │ Esc close │ ? keys │ Q quit

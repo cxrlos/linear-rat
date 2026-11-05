@@ -4,7 +4,7 @@ expression: "with_range(80, 24, \"[\").backend()"
 ---
 " [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
 "┌Analytics─────────────────────────────────────────────────────────────────────┐"
-"│Personal   Range [4 weeks] 12 weeks  26 weeks                                 │"
+"│v [Personal] Team    Range [4 weeks] 12 weeks  26 weeks                       │"
 "│                                                                              │"
 "│Created vs completed                                                          │"
 "│Week        W42 W43 W44 W45  Total                                            │"
