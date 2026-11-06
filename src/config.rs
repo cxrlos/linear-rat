@@ -100,8 +100,8 @@ impl Default for UiSettings {
     }
 }
 
-/// `[sync]`: how lrat keeps its data fresh. The poll reads all but `live`,
-/// which nothing reads until live updates land.
+/// `[sync]`: how lrat keeps its data fresh: the poll intervals and pause,
+/// and whether live updates run alongside the poll.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SyncSettings {
     /// `active-poll-seconds`: between polls while the viewer is active, 15

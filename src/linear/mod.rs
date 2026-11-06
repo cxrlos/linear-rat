@@ -13,11 +13,12 @@ use std::cmp::Reverse;
 use std::collections::BTreeMap;
 use std::future::Future;
 
+use futures_util::Stream;
 use jiff::{SignedDuration, Timestamp};
 
 pub use error::{ClientError, GraphQlError, Response};
 pub use governor::{SystemTimer, Timer, Urgency};
-pub use http::{ClientConfig, HttpClient};
+pub use http::{ClientConfig, Dial, HttpClient, LIVE_ENDPOINT, LiveConfig, Pipe};
 use model::{
     Attachment, Comment, Cycle, Issue, Label, Member, Priority, Project, StateSpan, StateType,
     Team, Viewer, WorkflowState, Workspace,
@@ -163,6 +164,29 @@ pub trait LinearClient {
         team_id: &str,
         window: AnalyticsWindow,
     ) -> impl Future<Output = Result<TeamAnalyticsIssues, ClientError>> + Send;
+
+    /// Live events from Linear's websocket for the issues of `team_ids` and
+    /// every new comment, for as long as the stream is polled. It reconnects
+    /// by itself after any disconnect and never ends. Without a live
+    /// connection, as in the fake client, it never yields.
+    fn live_events(&self, team_ids: Vec<String>) -> impl Stream<Item = LiveEvent> {
+        let _ = team_ids;
+        futures_util::stream::pending()
+    }
+}
+
+/// Something Linear's websocket delivered.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LiveEvent {
+    /// A connection was acknowledged, after the first connect or a
+    /// reconnect. Anything that changed while there was none is missed, so
+    /// a delta poll catches up.
+    Connected,
+    /// An issue was created or updated. `newest` is `None`: a live event
+    /// never moves a team's watermark, which only a poll may move.
+    Issue(TeamChanges),
+    /// A comment was added to an issue.
+    Comment(PostedComment),
 }
 
 /// A comment Linear has stored, and its author.

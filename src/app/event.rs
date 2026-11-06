@@ -4,8 +4,8 @@ use jiff::Timestamp;
 use super::{LoadError, NewComment, NewIssue, SyncFailure, Write, Writing};
 use crate::linear::model::{Issue, Label, Member, Team, WorkflowState};
 use crate::linear::{
-    AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, PostedComment, SearchResults,
-    TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
+    AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, LiveEvent, PostedComment,
+    SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
 };
 
 /// Something that happened, fed to [`update`](super::update).
@@ -97,6 +97,8 @@ pub enum Event {
     },
     /// A poll is starting while Linear's rate limit holds requests back.
     Throttled,
+    /// A delivery from the websocket of [`Effect::GoLive`](super::Effect::GoLive).
+    Live(LiveEvent),
     /// The result of
     /// [`Effect::LoadWorkflowStates`](super::Effect::LoadWorkflowStates), or
     /// why it failed.

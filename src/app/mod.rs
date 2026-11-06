@@ -44,7 +44,8 @@ pub use search::{Phase, Search};
 pub use state::{Screen, State};
 pub use store::Store;
 pub use sync::{
-    IDLE_AFTER, Indicator, OVERLAP, RECONCILE_EVERY, SyncFailure, SyncStatus, TeamPoll,
+    IDLE_AFTER, Indicator, LIVE_POLL_AFTER, OVERLAP, RECONCILE_EVERY, SyncFailure, SyncStatus,
+    TeamPoll,
 };
 pub use team_issues::{FilterField, Progress, TeamIssues, can_load_more, filter_label};
 pub use update::{Update, perform, update};

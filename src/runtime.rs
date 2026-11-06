@@ -1,6 +1,7 @@
 //! The runtime loop: turns terminal input and the passing of time into
 //! events, feeds them to the app and carries out the effects it asks for.
 
+use std::cell::Cell;
 use std::future::Future;
 use std::io;
 use std::ops::ControlFlow;
@@ -18,7 +19,7 @@ use tokio::time::{Instant, MissedTickBehavior};
 use crate::app::{
     App, Effect, Event, LoadError, NewComment, NewIssue, SyncFailure, TeamPoll, Write,
 };
-use crate::linear::{AnalyticsWindow, ClientError, LinearClient, Urgency};
+use crate::linear::{AnalyticsWindow, ClientError, LinearClient, LiveEvent, Urgency};
 use crate::snapshot::SnapshotCache;
 use crate::{browser, clipboard, terminal};
 
@@ -32,12 +33,17 @@ type Pending<'a> = Pin<Box<dyn Future<Output = Event> + 'a>>;
 /// order; each result comes back as an event.
 type InFlight<'a> = FuturesUnordered<Pending<'a>>;
 
+/// Live events from Linear's websocket, once the app has gone live.
+type Live<'a> = Pin<Box<dyn Stream<Item = LiveEvent> + 'a>>;
+
 /// What effects reach beyond the app: Linear through `client`, which is
 /// `None` when there is no usable API key (the app then already shows why),
-/// and the snapshot cache, which is `None` under `--demo`.
+/// the snapshot cache, which is `None` under `--demo`, and the live events
+/// once [`Effect::GoLive`] has opened them.
 struct Reach<'a, C> {
     client: Option<&'a C>,
     snapshots: Option<&'a SnapshotCache>,
+    live: Cell<Option<Live<'a>>>,
 }
 
 /// Runs until the app asks to quit, `shutdown` resolves, or terminal input
@@ -58,7 +64,11 @@ where
     I: Stream<Item = io::Result<TerminalEvent>> + Unpin,
     S: Future<Output = ()>,
 {
-    let reach = Reach { client, snapshots };
+    let reach = Reach {
+        client,
+        snapshots,
+        live: Cell::new(None),
+    };
     let result = run_loop(app, &reach, input, shutdown).await;
     save_snapshot(app, &reach);
     result
@@ -89,18 +99,31 @@ where
         {
             return Ok(());
         }
+        // Out of `reach` while waiting, so effects can open it meanwhile;
+        // put back before the next event is fed.
+        let mut live = reach.live.take();
         next = tokio::select! {
             () = &mut shutdown => {
                 tracing::info!("shutdown signal received");
                 return Ok(());
             }
             Some(event) = in_flight.next(), if !in_flight.is_empty() => Some(event),
+            Some(event) = next_live(&mut live) => Some(Event::Live(event)),
             terminal_event = input.next() => match terminal_event {
                 Some(event) => from_terminal(event.context("reading terminal input")?),
                 None => return Ok(()),
             },
             _ = ticks.tick() => Some(Event::Tick(clock.now())),
         };
+        reach.live.set(live);
+    }
+}
+
+/// The next live event, or never without live events.
+async fn next_live(live: &mut Option<Live<'_>>) -> Option<LiveEvent> {
+    match live {
+        Some(live) => live.next().await,
+        None => std::future::pending().await,
     }
 }
 
@@ -211,6 +234,17 @@ where
         }
         Effect::SaveSnapshot => {
             save_snapshot_in_background(app, reach);
+            Ok(())
+        }
+        Effect::GoLive(team_ids) => {
+            let live = reach.live.take();
+            match (live, reach.client) {
+                (None, Some(client)) => {
+                    tracing::info!(teams = team_ids.len(), "opening live updates");
+                    reach.live.set(Some(Box::pin(client.live_events(team_ids))));
+                }
+                (live, _) => reach.live.set(live),
+            }
             Ok(())
         }
         Effect::LoadWorkflowStates { team_id } => {
@@ -653,6 +687,7 @@ mod tests {
         let reach = Reach {
             client: None::<&FakeClient>,
             snapshots: None,
+            live: Cell::new(None),
         };
         execute(app, effect, &reach, &mut in_flight, outside).unwrap()
     }
@@ -711,6 +746,7 @@ mod tests {
             let reach = Reach {
                 client: Some(&FakeClient),
                 snapshots: None,
+                live: Cell::new(None),
             };
             for effect in [Effect::LoadMyIssues, Effect::Poll(Vec::new())] {
                 let flow = execute(
@@ -736,6 +772,7 @@ mod tests {
         let reach = Reach {
             client: Some(&FakeClient),
             snapshots: None,
+            live: Cell::new(None),
         };
         let flow = execute(
             &mut app,
@@ -794,6 +831,7 @@ mod tests {
         let reach = Reach {
             client: Some(&FakeClient),
             snapshots: None,
+            live: Cell::new(None),
         };
         let frames = app.frames_drawn();
 
@@ -820,6 +858,7 @@ mod tests {
         let reach = Reach {
             client: Some(&FakeClient),
             snapshots: None,
+            live: Cell::new(None),
         };
 
         let flow = execute(&mut app, effect, &reach, &mut in_flight, &mut outside).unwrap();

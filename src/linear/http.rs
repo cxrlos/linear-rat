@@ -7,6 +7,7 @@ mod changes;
 mod create;
 mod detail;
 mod edit;
+mod live;
 mod search;
 mod team;
 mod team_analytics;
@@ -27,10 +28,12 @@ use super::model::{Issue, Label, Member, Team, Viewer, WorkflowState, Workspace}
 use super::search_bucket::SearchBucket;
 use super::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, GraphQlError, IssueCreate,
-    IssueDetail, IssueUpdate, LinearClient, PostedComment, Response, SearchResults,
+    IssueDetail, IssueUpdate, LinearClient, LiveEvent, PostedComment, Response, SearchResults,
     TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
 };
 use crate::auth::ApiKey;
+
+pub use live::{Dial, LIVE_ENDPOINT, LiveConfig, Pipe};
 
 /// Linear's GraphQL endpoint.
 pub const ENDPOINT: &str = "https://api.linear.app/graphql";
@@ -73,6 +76,7 @@ pub struct HttpClient {
     governor: Arc<Mutex<Governor>>,
     search_bucket: Arc<Mutex<SearchBucket>>,
     timer: Arc<dyn Timer>,
+    live: LiveConfig,
 }
 
 impl HttpClient {
@@ -99,6 +103,7 @@ impl HttpClient {
             governor: Arc::default(),
             search_bucket: Arc::default(),
             timer: Arc::new(SystemTimer),
+            live: LiveConfig::default(),
         })
     }
 
@@ -106,6 +111,12 @@ impl HttpClient {
     /// system clock.
     pub fn with_timer(self, timer: Arc<dyn Timer>) -> Self {
         Self { timer, ..self }
+    }
+
+    /// This client opening live updates as `live` says, instead of on
+    /// Linear's websocket with the default timeouts.
+    pub fn with_live(self, live: LiveConfig) -> Self {
+        Self { live, ..self }
     }
 
     /// Sends one GraphQL `document` with `variables`, as a request the viewer
@@ -290,6 +301,10 @@ impl HttpClient {
 }
 
 impl LinearClient for HttpClient {
+    fn live_events(&self, team_ids: Vec<String>) -> impl futures_util::Stream<Item = LiveEvent> {
+        live::events(self, team_ids)
+    }
+
     async fn viewer(&self) -> Result<(Viewer, Workspace), ClientError> {
         let response: Response<ViewerData> = self.execute(VIEWER, json!({})).await?;
         for error in &response.errors {

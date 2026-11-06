@@ -25,7 +25,7 @@ anyhow = "1.0.104"
 clap = { version = "4.6.7", features = ["derive"] }
 crossterm = { version = "0.29.0", features = ["event-stream"] }
 etcetera = "0.11.0"
-futures-util = { version = "0.3.34", default-features = false, features = ["alloc"] }
+futures-util = { version = "0.3.34", default-features = false, features = ["alloc", "sink"] }
 jiff = { version = "0.2.38", features = ["serde"] }
 pulldown-cmark = { version = "0.13.4", default-features = false }
 keyring-core = "1.0.1"
@@ -36,13 +36,14 @@ rpassword = "7.5.4"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 thiserror = "2.0.21"
-tokio = { version = "1.53.3", features = ["macros", "rt", "signal", "time"] }
+tokio = { version = "1.53.3", features = ["macros", "net", "rt", "signal", "time"] }
 toml = { version = "1.1.8", default-features = false, features = ["std", "parse"] }
 toml_parser = { version = "1.1.5", default-features = false, features = ["std"] }
 tracing = "0.1.44"
 tracing-appender = "0.2.5"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 unicode-width = "0.2.2"
+tokio-tungstenite = { version = "0.30.0", default-features = false, features = ["rustls-tls-native-roots"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 apple-native-keyring-store = { version = "1.0.2", features = ["keychain"] }
@@ -53,7 +54,7 @@ dbus-secret-service-keyring-store = { version = "1.0.1", features = ["crypto-rus
 [dev-dependencies]
 apollo-compiler = "1.33.1"
 insta = "1.49.0"
-tokio = { version = "1.53.3", features = ["net", "test-util"] }
+tokio = { version = "1.53.3", features = ["io-util", "net", "sync", "test-util"] }
 wiremock = "0.6.5"
 
 [lints.clippy]

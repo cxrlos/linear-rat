@@ -8,7 +8,7 @@ use jiff::{SignedDuration, Timestamp};
 
 use super::{Effect, Load, LoadError, State, Update};
 use crate::config::SyncSettings;
-use crate::linear::{AssignedIssues, ClientError, TeamChanges};
+use crate::linear::{AssignedIssues, ClientError, LiveEvent, TeamChanges};
 
 /// How far before a team's watermark each poll reaches back, so a change
 /// that Linear stamped a little late is not missed.
@@ -16,6 +16,10 @@ pub const OVERLAP: SignedDuration = SignedDuration::from_mins(2);
 
 /// Without a key press for this long, the viewer is idle and polls slow down.
 pub const IDLE_AFTER: SignedDuration = SignedDuration::from_mins(2);
+
+/// How long after the latest live event a delta poll follows it, to fetch
+/// what the event did not carry and check it against Linear.
+pub const LIVE_POLL_AFTER: SignedDuration = SignedDuration::from_secs(5);
 
 /// How often the store's issues are checked for ones that disappeared.
 pub const RECONCILE_EVERY: SignedDuration = SignedDuration::from_hours(3);
@@ -72,6 +76,12 @@ pub struct SyncStatus {
     /// snapshot. Nothing polls until it confirms the viewer and workspace.
     refresh: Refresh,
     problem: Option<SyncFailure>,
+    /// The websocket was asked for, with `sync.live` on.
+    live: bool,
+    /// A live connection opened; a poll catches up on what it missed.
+    catch_up: bool,
+    /// When the poll that follows the latest live event is due.
+    live_poll_at: Option<Timestamp>,
 }
 
 /// Where this session's load of My Issues stands while the snapshot shows.
@@ -100,6 +110,9 @@ impl Default for SyncStatus {
             reconciling: false,
             refresh: Refresh::Done,
             problem: None,
+            live: false,
+            catch_up: false,
+            live_poll_at: None,
         }
     }
 }
@@ -185,6 +198,8 @@ impl SyncStatus {
         })
     }
 
+    /// Due a poll interval after the last poll, or sooner when live updates
+    /// ask for one; never while one is in flight or polling is paused.
     fn poll_due(&self, settings: &SyncSettings) -> bool {
         let Some(now) = self.now else {
             return false;
@@ -192,8 +207,12 @@ impl SyncStatus {
         let Some(interval) = self.poll_interval(settings) else {
             return false;
         };
-        !self.polling
-            && self.last_polled.is_none_or(|polled| {
+        if self.polling {
+            return false;
+        }
+        self.catch_up
+            || self.live_poll_at.is_some_and(|at| now >= at)
+            || self.last_polled.is_none_or(|polled| {
                 SignedDuration::try_from(interval)
                     .is_ok_and(|interval| now.duration_since(polled) >= interval)
             })
@@ -242,7 +261,8 @@ fn can_sync(state: &State) -> bool {
 }
 
 /// The load, poll or reconciliation that is due now, if any, marked as
-/// started.
+/// started, after the websocket the first time sync can start with
+/// `sync.live` on.
 pub(super) fn due(state: &mut State) -> Vec<Effect> {
     if state.sync_status.load_retry_due(&state.sync) {
         return vec![retry_load(state)];
@@ -250,6 +270,18 @@ pub(super) fn due(state: &mut State) -> Vec<Effect> {
     if !can_sync(state) {
         return Vec::new();
     }
+    let mut effects = Vec::new();
+    if state.sync.live && !state.sync_status.live {
+        state.sync_status.live = true;
+        effects.push(Effect::GoLive(
+            state.store.teams().map(|team| team.id.clone()).collect(),
+        ));
+    }
+    effects.extend(due_sync(state));
+    effects
+}
+
+fn due_sync(state: &mut State) -> Vec<Effect> {
     if state.sync_status.poll_due(&state.sync) {
         return vec![start_poll(state)];
     }
@@ -301,7 +333,10 @@ fn retry_load(state: &mut State) -> Effect {
 }
 
 fn start_poll(state: &mut State) -> Effect {
-    state.sync_status.polling = true;
+    let status = &mut state.sync_status;
+    status.polling = true;
+    status.catch_up = false;
+    status.live_poll_at = None;
     let teams = state
         .store
         .teams()
@@ -402,6 +437,44 @@ pub(super) fn polled(
         redraw: changed || indicator_changed,
         effects,
     }
+}
+
+/// Applies a live event: an issue merges through the same newer-wins path
+/// as a poll, without moving a watermark, and a comment joins the comments
+/// already loaded. An issue event that changed the store schedules a delta
+/// poll [`LIVE_POLL_AFTER`] after the latest one; a comment schedules none,
+/// since a delta poll fetches no comments. A new connection asks for a poll
+/// at once, to catch up.
+pub(super) fn live(state: &mut State, event: LiveEvent) -> Update {
+    let status = &mut state.sync_status;
+    let redraw = match event {
+        LiveEvent::Connected => {
+            status.catch_up = true;
+            false
+        }
+        LiveEvent::Issue(changes) => {
+            let changed = state.store.apply(&changes);
+            if changed {
+                status.live_poll_at = status
+                    .now
+                    .and_then(|now| now.checked_add(LIVE_POLL_AFTER).ok());
+                state.rebuild_my_issues();
+            }
+            changed
+        }
+        LiveEvent::Comment(posted) => {
+            let issue_id = posted.comment.issue_id.clone();
+            let before = state.store.comments(&issue_id).map(<[_]>::len);
+            state.store.add_comment(posted);
+            state.store.comments(&issue_id).map(<[_]>::len) != before
+        }
+    };
+    let mut effects = Vec::new();
+    if redraw {
+        effects.push(Effect::SaveSnapshot);
+    }
+    effects.extend(due(state));
+    Update { redraw, effects }
 }
 
 /// Drops what the reconciliation found gone, and records how it went.

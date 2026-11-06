@@ -61,6 +61,7 @@ fn apply(state: &mut State, event: Event) -> Update {
         Event::Polled { changes, failure } => sync::polled(state, &changes, failure),
         Event::Reconciled { checked, result } => sync::reconciled(state, &checked, result),
         Event::Throttled => sync::throttled(state),
+        Event::Live(event) => sync::live(state, event),
         Event::SearchDone { term, result } => {
             search::finish(state, &term, result);
             Update::redraw()

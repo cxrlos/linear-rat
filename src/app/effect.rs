@@ -64,6 +64,11 @@ pub enum Effect {
     Reconcile(Vec<String>),
     /// Write the store to the snapshot cache.
     SaveSnapshot,
+    /// Open Linear's websocket for the issues of these team ids and keep it
+    /// open; each delivery comes back as
+    /// [`Event::Live`](super::Event::Live). Asked for once, and only with
+    /// `sync.live` on.
+    GoLive(Vec<String>),
     /// Load a team's workflow states; the result comes back as
     /// [`Event::WorkflowStatesLoaded`](super::Event::WorkflowStatesLoaded).
     LoadWorkflowStates {

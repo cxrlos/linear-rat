@@ -1,0 +1,17 @@
+# budget: 5
+# Every comment added in the workspace, with what the comments query reads,
+# for live updates. Linear offers no filter here, so comments on anything but
+# an issue are dropped by the client.
+subscription CommentCreatedLive {
+  commentCreated {
+    id
+    body
+    createdAt
+    issueId
+    user {
+      id
+      name
+      displayName
+    }
+  }
+}

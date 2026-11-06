@@ -12,8 +12,8 @@ use linear_rat::auth::KeySource;
 use linear_rat::linear::model::{Issue, Label, Member, Team, Viewer, WorkflowState, Workspace};
 use linear_rat::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, FakeClient, IssueDetail,
-    IssueUpdate, LinearClient, SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage,
-    TeamOptions, TeamQuery, Urgency, demo,
+    IssueUpdate, LinearClient, LiveEvent, SearchResults, TeamAnalyticsIssues, TeamChanges,
+    TeamIssuesPage, TeamOptions, TeamQuery, Urgency, demo,
 };
 use linear_rat::runtime;
 use linear_rat::snapshot::SnapshotCache;
@@ -335,14 +335,28 @@ async fn q_quits_while_the_load_is_still_in_flight() {
 }
 
 /// The demo workspace, counting the delta polls asked of it and keeping the
-/// edits sent to it.
+/// edits sent to it. Live, it records the teams it went live for and
+/// delivers `live` half a second later, as a socket takes a moment to
+/// connect, so the first poll is done before `Connected` arrives.
 #[derive(Default)]
 struct CountingClient {
     deltas: AtomicUsize,
     updates: Mutex<Vec<IssueUpdate>>,
+    live: Vec<LiveEvent>,
+    went_live: Mutex<Vec<Vec<String>>>,
 }
 
 impl LinearClient for CountingClient {
+    fn live_events(&self, team_ids: Vec<String>) -> impl Stream<Item = LiveEvent> {
+        if let Ok(mut went_live) = self.went_live.lock() {
+            went_live.push(team_ids);
+        }
+        let live = self.live.clone();
+        stream::once(tokio::time::sleep(Duration::from_millis(500)))
+            .flat_map(move |()| stream::iter(live.clone()))
+            .chain(stream::pending())
+    }
+
     async fn viewer(&self) -> Result<(Viewer, Workspace), ClientError> {
         FakeClient.viewer().await
     }
@@ -458,6 +472,83 @@ async fn polls_every_team_after_the_load_and_then_every_active_interval() {
     assert!(stopped.is_err(), "the runtime stopped: {stopped:?}");
     let deltas = client.deltas.load(Ordering::SeqCst);
     assert_eq!(deltas, 3 * teams, "polls at 0s, 15s and 30s");
+}
+
+/// Runs the demo load with `sync.live` set against `client` for a second
+/// and a half, and hands back what it shows.
+async fn run_live(client: &CountingClient, live: bool) -> String {
+    let mut state = State::loading(None);
+    state.sync.live = live;
+    let mut app = App::new(TestBackend::new(80, 24), state).unwrap();
+    let running = runtime::run(
+        &mut app,
+        Some(client),
+        None,
+        input(Vec::new()),
+        future::pending(),
+    );
+    let stopped = tokio::time::timeout(Duration::from_millis(1500), running).await;
+    assert!(stopped.is_err(), "the runtime stopped: {stopped:?}");
+    let buffer = app.backend().buffer();
+    let width = usize::from(buffer.area.width);
+    buffer
+        .content()
+        .chunks(width)
+        .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[tokio::test(start_paused = true)]
+async fn with_live_off_nothing_goes_live() {
+    let client = CountingClient::default();
+
+    run_live(&client, false).await;
+
+    assert!(client.went_live.lock().unwrap().is_empty());
+    assert_eq!(
+        client.deltas.load(Ordering::SeqCst),
+        demo::workspace().teams.len()
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn live_events_reach_the_screen_and_a_connection_polls_to_catch_up() {
+    let mut issue = AssignedIssues::demo().issues[0].clone();
+    issue.title = "Renamed while live".to_owned();
+    issue.updated_at = issue
+        .updated_at
+        .checked_add(jiff::SignedDuration::from_hours(24))
+        .unwrap();
+    let client = CountingClient {
+        live: vec![
+            LiveEvent::Connected,
+            LiveEvent::Issue(TeamChanges {
+                team_id: issue.team_id.clone(),
+                issues: vec![issue],
+                trashed: Vec::new(),
+                cycles: Vec::new(),
+                labels: Vec::new(),
+                members: Vec::new(),
+                teams: Vec::new(),
+                newest: None,
+                as_of: demo::NOW,
+            }),
+        ],
+        ..CountingClient::default()
+    };
+
+    let shown = run_live(&client, true).await;
+
+    let teams = demo::workspace().teams.len();
+    assert_eq!(client.went_live.lock().unwrap().len(), 1);
+    assert_eq!(client.went_live.lock().unwrap()[0].len(), teams);
+    assert_eq!(
+        client.deltas.load(Ordering::SeqCst),
+        2 * teams,
+        "the first poll, then the catch-up"
+    );
+    assert!(shown.contains("Renamed while live"), "{shown}");
 }
 
 #[tokio::test(start_paused = true)]
