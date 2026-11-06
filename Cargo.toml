@@ -9,6 +9,9 @@ homepage = "https://github.com/cxrlos/linear-rat"
 license = "MIT OR Apache-2.0"
 keywords = ["linear", "tui", "terminal", "ratatui", "issue-tracker"]
 categories = ["command-line-utilities"]
+readme = "README.md"
+# The README links the GIF by URL, so the crate needs neither it nor its tape.
+exclude = ["docs/demo.gif", "docs/demo.tape"]
 
 [[bin]]
 name = "lrat"

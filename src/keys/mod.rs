@@ -4,10 +4,12 @@
 
 mod key;
 mod keymap;
+mod reference;
 mod registry;
 
 pub use key::{Key, KeySequence, ParseKeyError};
 pub use keymap::{Change, Keymap, Override, Resolution, Target};
+pub use reference::keymap_reference;
 pub use registry::{ACTIONS, ActionSpec, Hint, HintRow, by_id, spec};
 
 use crate::app::{Load, Modal, Pane, Screen, State};
