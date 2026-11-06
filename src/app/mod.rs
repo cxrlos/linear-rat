@@ -36,7 +36,7 @@ pub use effect::Effect;
 pub use event::Event;
 pub use links::{Link, LinkSet, Links};
 pub use load::{Load, LoadError};
-pub use modal::{Choice, ChoiceEntry, Modal, ModalStack, Purpose};
+pub use modal::{Choice, Modal, ModalStack, Purpose};
 pub use my_issues::{Group, MyIssues, Pane};
 pub use names::Names;
 pub use palette::{Palette, PaletteEntry, palette_matches};

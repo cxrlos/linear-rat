@@ -301,7 +301,7 @@ async fn the_team_switcher_lists_the_viewers_teams_and_switching_reloads() {
     press(&mut app, "t");
     assert_snapshot!("team_switcher", app.backend());
 
-    let effects = press(&mut app, "j\n");
+    let effects = press(&mut app, "2");
     let des = query("team-des", TeamFilter::default());
     assert_eq!(
         effects,
@@ -325,6 +325,40 @@ async fn the_team_switcher_lists_the_viewers_teams_and_switching_reloads() {
 }
 
 #[tokio::test]
+async fn typing_narrows_the_team_switcher_and_enter_switches_to_what_is_left() {
+    let mut app = team_issues(80, 24).await;
+
+    press(&mut app, "tops");
+    assert!(
+        screen(&app)
+            .iter()
+            .any(|row| row.contains("OPS Operations"))
+    );
+    assert!(!screen(&app).iter().any(|row| row.contains("DES Design")));
+    let effects = press(&mut app, "\n");
+
+    assert_eq!(
+        effects.first(),
+        Some(&Effect::LoadTeamOptions("team-ops".to_owned()))
+    );
+}
+
+#[tokio::test]
+async fn typing_narrows_a_filter_and_a_number_picks_among_what_is_left() {
+    let mut app = team_issues(80, 24).await;
+
+    // "in" leaves In Progress then In Review; Any and the rest are hidden.
+    let effects = press(&mut app, "fsin2");
+    settle(&mut app, effects).await;
+
+    assert!(
+        header(&app).ends_with("Filters State In Review"),
+        "{}",
+        header(&app)
+    );
+}
+
+#[tokio::test]
 async fn picking_the_team_already_shown_reloads_nothing() {
     let mut app = team_issues(80, 24).await;
 
@@ -335,7 +369,7 @@ async fn picking_the_team_already_shown_reloads_nothing() {
 #[tokio::test]
 async fn an_answer_for_a_team_no_longer_shown_is_dropped() {
     let mut app = team_issues(80, 24).await;
-    press(&mut app, "tj\n");
+    press(&mut app, "t2");
     let stale = FakeClient.team_issues(&eng(), None).await.unwrap();
 
     app.handle(Event::TeamIssuesLoaded {
@@ -357,7 +391,7 @@ async fn an_answer_for_a_team_no_longer_shown_is_dropped() {
 /// Picks the first value after "Any" for the filter under `key`, and
 /// returns the effects and the header once they have settled.
 async fn filter_by_first(app: &mut App<TestBackend>, key: char) -> Vec<Effect> {
-    let effects = press(app, &format!("f{key}j\n"));
+    let effects = press(app, &format!("f{key}2"));
     settle(app, effects.clone()).await;
     effects
 }
@@ -388,7 +422,7 @@ async fn each_filter_narrows_the_list_and_can_be_cleared() {
             header(&app)
         );
 
-        let effects = press(&mut app, &format!("f{key}k\n"));
+        let effects = press(&mut app, &format!("f{key}1"));
         assert_eq!(
             effects.first(),
             Some(&Effect::LoadTeamIssues {
@@ -416,10 +450,10 @@ async fn the_state_filter_lists_the_teams_workflow_states_after_any() {
 async fn filters_combine_and_show_in_the_header() {
     let mut app = team_issues(80, 24).await;
 
-    // In Progress is the fourth state after Any; bug the first label.
-    let effects = press(&mut app, "fsjjjj\n");
+    // In Progress is the fifth entry, after Any.
+    let effects = press(&mut app, "fs5");
     settle(&mut app, effects).await;
-    let effects = press(&mut app, "flj\n");
+    let effects = press(&mut app, "flbackend\n");
     settle(&mut app, effects).await;
 
     assert!(
@@ -449,7 +483,7 @@ async fn filters_too_long_for_the_header_shrink_to_their_fields_then_a_count() {
 async fn a_filtered_list_on_a_wide_terminal() {
     let mut app = team_issues(200, 60).await;
 
-    let effects = press(&mut app, "fsjjjj\n");
+    let effects = press(&mut app, "fs5");
     settle(&mut app, effects).await;
 
     assert_snapshot!(app.backend());
@@ -458,7 +492,7 @@ async fn a_filtered_list_on_a_wide_terminal() {
 #[tokio::test]
 async fn a_filter_nothing_matches_says_so() {
     let mut app = team_issues(80, 24).await;
-    let effects = press(&mut app, "fsj\n");
+    let effects = press(&mut app, "fs2");
     let Some(Effect::LoadTeamIssues { query, .. }) = effects.first().cloned() else {
         panic!("{effects:?}");
     };
@@ -611,8 +645,8 @@ async fn the_team_issues_keys_can_be_remapped_in_their_own_context() {
 async fn a_later_page_asked_for_before_switching_away_and_back_is_dropped() {
     let mut app = team_issues(80, 24).await;
     press(&mut app, "m");
-    press(&mut app, "tj\n");
-    press(&mut app, "tk\n");
+    press(&mut app, "t2");
+    press(&mut app, "t1");
     let stale = FakeClient.team_issues(&eng(), Some("50")).await.unwrap();
 
     app.handle(Event::TeamIssuesLoaded {

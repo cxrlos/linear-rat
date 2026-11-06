@@ -1,6 +1,7 @@
 use super::create::CreateForm;
 use super::edit::EditPicker;
 use super::links::Links;
+use super::picker::Picker;
 use super::{FilterField, Palette, Phase, Search};
 use crate::keys::Key;
 
@@ -23,7 +24,7 @@ pub enum Modal {
     Palette(Palette),
     /// Search every issue in the workspace on Linear.
     Search(Search),
-    /// A list to pick one entry from.
+    /// A list to pick a team or a filter value from.
     Choice(Choice),
     /// A list of an issue's links to open one of.
     Links(Links),
@@ -35,9 +36,13 @@ impl Modal {
     /// Whether typed keys go to a text field rather than the keymap now.
     pub fn takes_text(&self) -> bool {
         match self {
-            Modal::Picker(_) | Modal::Palette(_) | Modal::Links(_) | Modal::Create(_) => true,
+            Modal::Picker(_)
+            | Modal::Palette(_)
+            | Modal::Links(_)
+            | Modal::Create(_)
+            | Modal::Choice(_) => true,
             Modal::Search(search) => !matches!(search.phase, Phase::Searching { .. }),
-            Modal::Cheatsheet { .. } | Modal::WhichKey { .. } | Modal::Choice(_) => false,
+            Modal::Cheatsheet { .. } | Modal::WhichKey { .. } => false,
         }
     }
 
@@ -48,24 +53,24 @@ impl Modal {
         match self {
             Modal::Picker(picker) => Some(picker.list.query_mut()),
             Modal::Links(links) => Some(links.list.query_mut()),
+            Modal::Choice(choice) => Some(choice.list.query_mut()),
             Modal::Palette(palette) => {
                 palette.selected = 0;
                 Some(&mut palette.query)
             }
             Modal::Search(search) => search.text_field(),
             Modal::Create(form) => form.text_field(),
-            Modal::Cheatsheet { .. } | Modal::WhichKey { .. } | Modal::Choice(_) => None,
+            Modal::Cheatsheet { .. } | Modal::WhichKey { .. } => None,
         }
     }
 }
 
-/// A list to pick one entry from, such as the team switcher, with the entry
-/// the cursor is on.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// A picker of teams or filter values, and what choosing one does. An entry
+/// holds the id it picks, `None` for "Any", which clears a filter.
+#[derive(Debug, Clone, PartialEq)]
 pub struct Choice {
     pub purpose: Purpose,
-    pub entries: Vec<ChoiceEntry>,
-    pub cursor: usize,
+    pub list: Picker<Option<String>>,
 }
 
 /// What picking an entry of a [`Choice`] does.
@@ -79,20 +84,21 @@ pub enum Purpose {
     AnalyticsTeam,
 }
 
-/// One entry of a [`Choice`]: the id it picks and what it shows.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChoiceEntry {
-    /// `None` for "Any", which clears a filter.
-    pub id: Option<String>,
-    pub label: String,
-}
-
 impl Choice {
     /// What the popup is titled.
     pub fn title(&self) -> String {
         match self.purpose {
             Purpose::Team | Purpose::AnalyticsTeam => "Team".to_owned(),
             Purpose::Filter(field) => format!("Filter by {}", field.name().to_lowercase()),
+        }
+    }
+
+    /// The id of the selected entry, or of the `nth` visible one when
+    /// given, counting from 1. `None` when there is no such entry.
+    pub fn chosen(&self, nth: Option<usize>) -> Option<&Option<String>> {
+        match nth {
+            Some(n) => self.list.nth(n),
+            None => self.list.selected(),
         }
     }
 }

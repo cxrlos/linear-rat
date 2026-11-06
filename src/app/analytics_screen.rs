@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use jiff::Timestamp;
 use jiff::tz::TimeZone;
 
-use super::modal::{Choice, ChoiceEntry, Purpose};
+use super::modal::{Choice, Purpose};
 use super::{Effect, Modal, State, Update};
 use crate::analytics::{Period, WeekRange};
 use crate::linear::model::Team;
@@ -288,40 +288,22 @@ pub(super) fn toggle_view(state: &mut State) -> Update {
     }
 }
 
-/// The team switcher of the Team view, its cursor on the team shown.
+/// The team switcher of the Team view, the team shown selected.
 pub(super) fn team_choice(state: &State) -> Option<Choice> {
-    let entries: Vec<ChoiceEntry> = state
-        .store
-        .viewer_teams()
-        .map(|team| ChoiceEntry {
-            id: Some(team.id.clone()),
-            label: format!("{} {}", team.key, team.name),
-        })
-        .collect();
-    if entries.is_empty() {
-        return None;
-    }
     let shown = state.analytics_team().map(|team| &team.id);
-    Some(Choice {
-        purpose: Purpose::AnalyticsTeam,
-        cursor: entries
-            .iter()
-            .position(|entry| entry.id.as_ref() == shown)
-            .unwrap_or(0),
-        entries,
-    })
+    super::team_issues::team_switcher(state, Purpose::AnalyticsTeam, shown)
 }
 
-/// Closes the team switcher on top and shows the team under its cursor from
-/// the top, asking for what that team is missing.
-pub(super) fn pick_team(state: &mut State) -> Update {
+/// Closes the team switcher on top on its selected team, or the `nth`
+/// visible one when given, and shows that team from the top, asking for
+/// what it is missing. Nothing happens when there is no such team.
+pub(super) fn pick_team(state: &mut State, nth: Option<usize>) -> Update {
     let Some(Modal::Choice(choice)) = state.modals.top() else {
         return Update::default();
     };
-    let picked = choice
-        .entries
-        .get(choice.cursor)
-        .and_then(|entry| entry.id.clone());
+    let Some(picked) = choice.chosen(nth).cloned() else {
+        return Update::default();
+    };
     state.modals.pop();
     let shown = state.analytics_team().map(|team| team.id.clone());
     let Some(team_id) = picked.filter(|id| Some(id) != shown.as_ref()) else {

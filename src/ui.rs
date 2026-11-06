@@ -2,7 +2,6 @@
 
 mod analytics;
 mod cheatsheet;
-mod choice;
 mod detail;
 mod error;
 mod hints;
@@ -74,7 +73,7 @@ pub fn render(state: &State, frame: &mut Frame) {
             Modal::Links(links) => picker::render_links(state, links, frame, body_area),
             Modal::Palette(palette) => palette::render(state, palette, frame, body_area),
             Modal::Search(search) => search::render(state, search, frame, body_area),
-            Modal::Choice(choice) => choice::render(state, choice, frame, body_area),
+            Modal::Choice(choice) => picker::render_choice(state, choice, frame, body_area),
             Modal::Create(form) => picker::render_create(state, form, frame, body_area),
         }
     }

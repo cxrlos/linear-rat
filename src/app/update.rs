@@ -273,15 +273,7 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             Some(Modal::Create(_)) => create::accept(state, None),
             Some(Modal::Palette(_)) => palette::accept(state),
             Some(Modal::Search(_)) => search::accept(state),
-            Some(Modal::Choice(choice)) if choice.purpose == Purpose::AnalyticsTeam => {
-                let update = analytics_screen::pick_team(state);
-                clamp_analytics_scroll(state);
-                update
-            }
-            Some(Modal::Choice(_)) => Update {
-                redraw: true,
-                effects: team_issues::pick(state),
-            },
+            Some(Modal::Choice(_)) => choose(state, None),
             _ => Update::default(),
         },
         Action::Close if state.modals.pop().is_some() => Update::redraw(),
@@ -377,7 +369,7 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             Some(Modal::Picker(_)) => edit::select(state, step(action)),
             Some(Modal::Links(_)) => links::select(state, step(action)),
             Some(Modal::Create(_)) => create::select(state, step(action)),
-            Some(Modal::Choice(_)) => move_choice(state, action),
+            Some(Modal::Choice(_)) => select_choice(state, step(action)),
             Some(Modal::Palette(_)) => palette::step(state, action),
             Some(Modal::Search(_)) => Update::default(),
             None if state.screen == Screen::Analytics => {
@@ -419,6 +411,7 @@ pub fn perform(state: &mut State, action: Action) -> Update {
         Action::Edit(field) => edit::open(state, field),
         Action::PickNumber(n) => match state.modals.top() {
             Some(Modal::Links(_)) => links::choose(state, Some(usize::from(n))),
+            Some(Modal::Choice(_)) => choose(state, Some(usize::from(n))),
             Some(Modal::Create(_)) => create::accept(state, Some(usize::from(n))),
             _ => edit::choose(state, Some(usize::from(n))),
         },
@@ -445,19 +438,32 @@ fn open_choice(state: &mut State, choice: Option<super::Choice>) -> Update {
     }
 }
 
-/// Moves the cursor of the open choice one entry, staying on the list.
-fn move_choice(state: &mut State, action: Action) -> Update {
-    let Some(Modal::Choice(choice)) = state.modals.top_mut() else {
+/// Moves the selection of the team switcher or filter on top by `step`.
+fn select_choice(state: &mut State, step: isize) -> Update {
+    match state.modals.top_mut() {
+        Some(Modal::Choice(choice)) => Update {
+            redraw: choice.list.select_by(step),
+            effects: Vec::new(),
+        },
+        _ => Update::default(),
+    }
+}
+
+/// Chooses the selected entry of the team switcher or filter on top, or
+/// the `nth` visible one when given.
+fn choose(state: &mut State, nth: Option<usize>) -> Update {
+    let Some(Modal::Choice(choice)) = state.modals.top() else {
         return Update::default();
     };
-    let before = choice.cursor;
-    choice.cursor = match action {
-        Action::ScrollDown => (choice.cursor + 1).min(choice.entries.len().saturating_sub(1)),
-        _ => choice.cursor.saturating_sub(1),
-    };
-    Update {
-        redraw: choice.cursor != before,
-        effects: Vec::new(),
+    if choice.purpose == Purpose::AnalyticsTeam {
+        let update = analytics_screen::pick_team(state, nth);
+        clamp_analytics_scroll(state);
+        update
+    } else {
+        team_issues::pick(state, nth).map_or_else(Update::default, |effects| Update {
+            redraw: true,
+            effects,
+        })
     }
 }
 

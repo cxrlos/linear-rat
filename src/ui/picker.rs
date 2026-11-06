@@ -8,7 +8,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Padding, Paragraph};
 
 use super::style;
-use crate::app::{Action, CreateForm, Edit, EditPicker, Links, Note, Picker, State, Step};
+use crate::app::{Action, Choice, CreateForm, Edit, EditPicker, Links, Note, Picker, State, Step};
 use crate::keys::Context;
 
 /// The width the list asks for at least, so short entries leave room for
@@ -119,6 +119,11 @@ fn edit_glyph(state: &State) -> impl Fn(&Edit) -> Option<Span<'static>> + '_ {
 /// Draws a picker of an issue's links centered inside `area`'s border.
 pub fn render_links(state: &State, links: &Links, frame: &mut Frame, area: Rect) {
     render(state, &links.title(), &links.list, |_| None, frame, area);
+}
+
+/// Draws a team switcher or filter centered inside `area`'s border.
+pub fn render_choice(state: &State, choice: &Choice, frame: &mut Frame, area: Rect) {
+    render(state, &choice.title(), &choice.list, |_| None, frame, area);
 }
 
 /// Draws `picker` titled `title`, each entry led by its number key and the

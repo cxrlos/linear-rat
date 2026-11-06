@@ -601,7 +601,10 @@ fn always(_: &State) -> bool {
 
 fn can_scroll_down(state: &State) -> bool {
     match state.modals.top() {
-        Some(Modal::Choice(choice)) => choice.cursor + 1 < choice.entries.len(),
+        Some(Modal::Choice(choice)) => choice
+            .list
+            .selected_position()
+            .is_some_and(|position| position + 1 < choice.list.visible().len()),
         Some(Modal::Picker(picker)) => picker
             .list
             .selected_position()
@@ -628,7 +631,10 @@ fn can_scroll_down(state: &State) -> bool {
 
 fn can_scroll_up(state: &State) -> bool {
     match state.modals.top() {
-        Some(Modal::Choice(choice)) => choice.cursor > 0,
+        Some(Modal::Choice(choice)) => choice
+            .list
+            .selected_position()
+            .is_some_and(|position| position > 0),
         Some(Modal::Picker(picker)) => picker
             .list
             .selected_position()
@@ -649,7 +655,7 @@ fn can_scroll_up(state: &State) -> bool {
 
 fn can_accept(state: &State) -> bool {
     match state.modals.top() {
-        Some(Modal::Choice(choice)) => choice.cursor < choice.entries.len(),
+        Some(Modal::Choice(choice)) => choice.list.selected().is_some(),
         Some(Modal::Picker(picker)) => picker.list.is_multi() || picker.list.selected().is_some(),
         Some(Modal::Links(links)) => links.list.selected().is_some(),
         Some(Modal::Create(form)) => form.list().is_none_or(|(_, selected)| selected.is_some()),
@@ -679,6 +685,7 @@ fn picker_has(count: usize, state: &State) -> bool {
     }
     match state.modals.top() {
         Some(Modal::Links(links)) => links.list.visible().len() >= count,
+        Some(Modal::Choice(choice)) => choice.list.visible().len() >= count,
         Some(Modal::Create(form)) => form.list().is_some_and(|(len, _)| len >= count),
         _ => false,
     }

@@ -1,7 +1,8 @@
 //! Team Issues: one of the viewer's teams, its issues a page at a time,
 //! narrowed by a filter, with the focused issue and its detail.
 
-use super::modal::{Choice, ChoiceEntry, Purpose};
+use super::modal::{Choice, Purpose};
+use super::picker::{Entry, Picker};
 use super::{Action, Effect, Modal, Names, Pane, State};
 use crate::linear::model::{Issue, Team};
 use crate::linear::{TeamFilter, TeamIssuesPage, TeamOptions, TeamQuery};
@@ -328,10 +329,10 @@ pub(super) fn options_loaded(state: &mut State, result: Result<TeamOptions, Stri
                 purpose: Purpose::Filter(field),
                 ..
             })) = state.modals.top()
-                && let Some(choice) = filter_choice(state, *field)
+                && let Some((entries, current)) = filter_entries(state, *field)
+                && let Some(Modal::Choice(choice)) = state.modals.top_mut()
             {
-                state.modals.pop();
-                state.modals.push(Modal::Choice(choice));
+                choice.list.set_entries(entries, current);
             }
         }
         // The error names no team; a popup opened later asks again.
@@ -447,55 +448,73 @@ pub fn can_load_more(state: &State) -> bool {
     state.team_issues.has_more() && state.team_issues.page != Progress::Loading
 }
 
-/// The team switcher, its cursor on the team shown.
-pub(super) fn team_choice(state: &State) -> Option<Choice> {
+/// An entry of a team switcher or filter: the id it picks, `None` for
+/// "Any".
+type ChoiceEntry = Entry<Option<String>>;
+
+/// A team switcher for `purpose` over the viewer's teams, the team
+/// `shown` marked and selected. `None` while the viewer has no teams.
+pub(super) fn team_switcher(
+    state: &State,
+    purpose: Purpose,
+    shown: Option<&String>,
+) -> Option<Choice> {
     let entries: Vec<ChoiceEntry> = state
         .store
         .viewer_teams()
-        .map(|team| ChoiceEntry {
-            id: Some(team.id.clone()),
+        .map(|team| Entry {
             label: format!("{} {}", team.key, team.name),
+            value: Some(team.id.clone()),
         })
         .collect();
     if entries.is_empty() {
         return None;
     }
-    let shown = state.team_issues.query.as_ref().map(|query| &query.team_id);
+    let current = entries
+        .iter()
+        .position(|entry| entry.value.as_ref() == shown);
     Some(Choice {
-        purpose: Purpose::Team,
-        cursor: entries
-            .iter()
-            .position(|entry| entry.id.as_ref() == shown)
-            .unwrap_or(0),
-        entries,
+        purpose,
+        list: Picker::new(entries, current),
+    })
+}
+
+/// The team switcher of Team Issues, the team shown selected.
+pub(super) fn team_choice(state: &State) -> Option<Choice> {
+    let shown = state.team_issues.query.as_ref().map(|query| &query.team_id);
+    team_switcher(state, Purpose::Team, shown)
+}
+
+/// The picker of the values `field` can filter by for the team shown.
+fn filter_choice(state: &State, field: FilterField) -> Option<Choice> {
+    let (entries, current) = filter_entries(state, field)?;
+    Some(Choice {
+        purpose: Purpose::Filter(field),
+        list: Picker::new(entries, current),
     })
 }
 
 /// The values `field` can filter by for the team shown, after "Any", with
-/// the cursor on the value in force.
-fn filter_choice(state: &State, field: FilterField) -> Option<Choice> {
+/// where the value in force is among them.
+fn filter_entries(state: &State, field: FilterField) -> Option<(Vec<ChoiceEntry>, Option<usize>)> {
     let query = state.team_issues.query.as_ref()?;
-    let mut entries = vec![ChoiceEntry {
-        id: None,
+    let mut entries = vec![Entry {
         label: "Any".to_owned(),
+        value: None,
     }];
     entries.extend(
         filter_values(state, &query.team_id, field)
             .into_iter()
-            .map(|(id, label)| ChoiceEntry {
-                id: Some(id),
+            .map(|(id, label)| Entry {
                 label,
+                value: Some(id),
             }),
     );
     let current = field.value(&query.filter);
-    Some(Choice {
-        purpose: Purpose::Filter(field),
-        cursor: entries
-            .iter()
-            .position(|entry| entry.id.as_ref() == current)
-            .unwrap_or(0),
-        entries,
-    })
+    let current = entries
+        .iter()
+        .position(|entry| entry.value.as_ref() == current);
+    Some((entries, current))
 }
 
 /// The ids and names `field` can take in `team_id`, in the order a viewer
@@ -572,18 +591,21 @@ pub fn filter_label(state: &State, field: FilterField) -> Option<String> {
     Some(name.unwrap_or_else(|| id.clone()))
 }
 
-/// Carries out the entry under the cursor of the choice on top, and closes
-/// it.
-pub(super) fn pick(state: &mut State) -> Vec<Effect> {
+/// Closes the team switcher or filter on top on its selected entry, or the
+/// `nth` visible one when given, and carries it out. Returns `None`, with
+/// the picker left open, when there is no such entry.
+pub(super) fn pick(state: &mut State, nth: Option<usize>) -> Option<Vec<Effect>> {
     let Some(Modal::Choice(choice)) = state.modals.top() else {
-        return Vec::new();
+        return None;
     };
     let purpose = choice.purpose;
-    let id = choice
-        .entries
-        .get(choice.cursor)
-        .and_then(|entry| entry.id.clone());
+    let id = choice.chosen(nth).cloned()?;
     state.modals.pop();
+    Some(carry_out(state, purpose, id))
+}
+
+/// Shows the team `id`, or filters by it, unless that is shown already.
+fn carry_out(state: &mut State, purpose: Purpose, id: Option<String>) -> Vec<Effect> {
     match purpose {
         Purpose::Team => match id {
             Some(team_id)

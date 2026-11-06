@@ -89,10 +89,8 @@ fn team_view(columns: u16, rows: u16) -> App<TestBackend> {
 fn team_view_of(nth: usize, columns: u16, rows: u16) -> App<TestBackend> {
     let mut app = team_view(columns, rows);
     app.handle(key('t')).unwrap();
-    for _ in 0..nth {
-        app.handle(key('j')).unwrap();
-    }
-    let effects = app.handle(enter()).unwrap();
+    let pick = char::from_digit(u32::try_from(nth + 1).unwrap(), 10).unwrap();
+    let effects = app.handle(key(pick)).unwrap();
     deliver(&mut app, effects);
     app
 }
@@ -144,8 +142,10 @@ fn a_longer_range_asks_the_team_only_for_the_weeks_it_adds() {
 #[test]
 fn switching_team_asks_for_that_teams_range() {
     let mut app = team_view(80, 24);
-    app.handle(key('t')).unwrap();
-    app.handle(key('j')).unwrap();
+    for c in "tdes".chars() {
+        app.handle(key(c)).unwrap();
+    }
+    assert!(!screen(&app).contains("OPS Operations"), "{}", screen(&app));
 
     let effects = app.handle(enter()).unwrap();
 
@@ -156,9 +156,8 @@ fn switching_team_asks_for_that_teams_range() {
 fn switching_back_to_a_loaded_team_asks_for_nothing() {
     let mut app = team_view_of(1, 80, 24);
     app.handle(key('t')).unwrap();
-    app.handle(key('k')).unwrap();
 
-    assert!(app.handle(enter()).unwrap().is_empty());
+    assert!(app.handle(key('1')).unwrap().is_empty());
     assert!(screen(&app).contains("ENG Engineering"));
 }
 
