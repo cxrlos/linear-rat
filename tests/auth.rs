@@ -11,7 +11,8 @@ use std::sync::{Arc, Mutex};
 
 use jiff::Timestamp;
 use linear_rat::auth::{
-    self, ApiKey, AuthError, Credentials, InvalidApiKey, KeyStore, KeyringError, WorkspaceFile,
+    self, ApiKey, AuthError, Credentials, EntryReader, InvalidApiKey, KeyStore, KeyringEntry,
+    KeyringError, WorkspaceFile,
 };
 use linear_rat::linear::model::{Issue, Label, Member, Team, Viewer, WorkflowState, Workspace};
 use linear_rat::linear::{
@@ -720,4 +721,197 @@ fn a_key_source_kind_names_where_the_key_came_from_without_the_account() {
     assert_eq!(linear_rat::auth::KeySource::Env.kind(), "LINEAR_API_KEY");
     assert_eq!(keyring.kind(), "OS keyring");
     assert!(!keyring.kind().contains(URL_KEY));
+}
+
+/// Other keyring entries, by service and account, as the viewer made them.
+#[derive(Default)]
+struct MemoryEntries(HashMap<(String, String), String>);
+
+impl MemoryEntries {
+    fn holding(service: &str, account: &str, secret: &str) -> Self {
+        Self(HashMap::from([(
+            (service.to_owned(), account.to_owned()),
+            secret.to_owned(),
+        )]))
+    }
+}
+
+impl EntryReader for MemoryEntries {
+    fn read(&self, entry: &KeyringEntry) -> Result<Option<String>, KeyringError> {
+        Ok(self
+            .0
+            .get(&(entry.service().to_owned(), entry.account().to_owned()))
+            .cloned())
+    }
+}
+
+impl EntryReader for UnavailableStore {
+    fn read(&self, _: &KeyringEntry) -> Result<Option<String>, KeyringError> {
+        Err(unavailable())
+    }
+}
+
+fn entry(value: &str) -> KeyringEntry {
+    value.parse().unwrap()
+}
+
+#[tokio::test]
+async fn login_from_the_default_entry_checks_that_key_and_stores_it_as_lrat_s_own() {
+    let credentials = Credentials::new(MemoryStore::default(), workspace_file(), None);
+    let entries = MemoryEntries::holding("linear", "api-key", &format!("{SECRET}\n"));
+    let used = Mutex::new(Vec::new());
+
+    let output = auth::login_from_keyring(
+        &credentials,
+        &entries,
+        &entry(KeyringEntry::DEFAULT),
+        fake_connect(&used),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(*used.lock().unwrap(), [SECRET]);
+    assert_eq!(
+        credentials.store().entries(),
+        HashMap::from([(URL_KEY.to_owned(), SECRET.to_owned())])
+    );
+    assert_eq!(
+        output,
+        "Read the API key from the OS keyring (service linear, account api-key).\n\
+         Logged in to Cheddar Works (cheddar-works) as Remy Fromage.\n\
+         The API key is in the OS keyring (service linear-rat, account cheddar-works)."
+    );
+    assert!(!output.contains(SECRET));
+}
+
+#[tokio::test]
+async fn login_from_a_custom_entry_reads_that_service_and_account() {
+    let credentials = Credentials::new(MemoryStore::default(), workspace_file(), None);
+    let mut entries = MemoryEntries::holding("linear", "api-key", OTHER_SECRET);
+    entries.0.insert(
+        ("work".to_owned(), "me@example.com".to_owned()),
+        SECRET.to_owned(),
+    );
+    let used = Mutex::new(Vec::new());
+
+    auth::login_from_keyring(
+        &credentials,
+        &entries,
+        &entry("work/me@example.com"),
+        fake_connect(&used),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(*used.lock().unwrap(), [SECRET]);
+    assert_eq!(credentials.store().entries()[URL_KEY], SECRET);
+}
+
+#[tokio::test]
+async fn login_from_a_missing_entry_names_it_and_stores_nothing() {
+    let credentials = Credentials::new(MemoryStore::default(), workspace_file(), None);
+    let used = Mutex::new(Vec::new());
+
+    let error = auth::login_from_keyring(
+        &credentials,
+        &MemoryEntries::default(),
+        &entry("work/linear-key"),
+        fake_connect(&used),
+    )
+    .await
+    .unwrap_err();
+
+    assert!(matches!(error, AuthError::NoEntry(_)), "{error:?}");
+    assert_eq!(
+        error.to_string(),
+        "the OS keyring has no entry with service work, account linear-key. Nothing was \
+         stored. Add the API key there, or name another entry as --from-keyring SERVICE/ACCOUNT"
+    );
+    assert!(used.lock().unwrap().is_empty());
+    assert!(credentials.store().entries().is_empty());
+    assert_eq!(credentials.workspace_file().read().unwrap(), None);
+}
+
+#[tokio::test]
+async fn login_from_an_unavailable_keyring_says_so_and_stores_nothing() {
+    let credentials = Credentials::new(MemoryStore::default(), workspace_file(), None);
+    let used = Mutex::new(Vec::new());
+
+    let error = auth::login_from_keyring(
+        &credentials,
+        &UnavailableStore,
+        &entry(KeyringEntry::DEFAULT),
+        fake_connect(&used),
+    )
+    .await
+    .unwrap_err();
+
+    let message = error.to_string();
+    assert!(
+        message.starts_with(
+            "could not read the entry with service linear, account api-key: \
+             the OS keyring is unavailable (org.freedesktop.secrets"
+        ),
+        "{message}"
+    );
+    assert!(message.ends_with("Nothing was stored."), "{message}");
+    assert!(used.lock().unwrap().is_empty());
+    assert!(credentials.store().entries().is_empty());
+}
+
+#[tokio::test]
+async fn login_from_an_entry_holding_a_rejected_key_names_the_entry_and_stores_nothing() {
+    let credentials = Credentials::new(MemoryStore::default(), workspace_file(), None);
+    let entries = MemoryEntries::holding("linear", "api-key", SECRET);
+
+    let error = auth::login_from_keyring(
+        &credentials,
+        &entries,
+        &entry(KeyringEntry::DEFAULT),
+        |_| Ok(RejectingClient),
+    )
+    .await
+    .unwrap_err();
+
+    let message = error.to_string();
+    assert!(matches!(error, AuthError::EntryRejected(_)), "{error:?}");
+    assert!(
+        message.starts_with(
+            "Linear rejected the API key in the OS keyring entry with service linear, \
+             account api-key: it is wrong, revoked or expired. Nothing was stored."
+        ),
+        "{message}"
+    );
+    assert!(!message.contains(SECRET), "{message}");
+    assert!(!format!("{error:?}").contains(SECRET));
+    assert!(credentials.store().entries().is_empty());
+    assert_eq!(credentials.workspace_file().read().unwrap(), None);
+}
+
+#[tokio::test]
+async fn login_from_an_entry_that_is_not_an_api_key_hides_its_value_and_stores_nothing() {
+    let credentials = Credentials::new(MemoryStore::default(), workspace_file(), None);
+    let secret = "my secret passphrase";
+    let entries = MemoryEntries::holding("linear", "api-key", secret);
+
+    let error = auth::login_from_keyring(
+        &credentials,
+        &entries,
+        &entry(KeyringEntry::DEFAULT),
+        |_| Ok(FakeClient),
+    )
+    .await
+    .unwrap_err();
+
+    let message = error.to_string();
+    assert!(
+        message.starts_with(
+            "the OS keyring entry with service linear, account api-key does not hold a \
+             valid API key: the API key holds a space"
+        ),
+        "{message}"
+    );
+    assert!(!message.contains(secret), "{message}");
+    assert!(!format!("{error:?}").contains(secret));
+    assert!(credentials.store().entries().is_empty());
 }

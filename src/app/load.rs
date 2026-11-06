@@ -36,13 +36,18 @@ impl From<&AuthError> for LoadError {
     fn from(error: &AuthError) -> Self {
         match error {
             AuthError::NoKey => Self::NoKey,
-            AuthError::Rejected(_) | AuthError::LoginRejected => Self::KeyRejected,
+            AuthError::Rejected(_) | AuthError::LoginRejected | AuthError::EntryRejected(_) => {
+                Self::KeyRejected
+            }
             AuthError::Keyring(keyring) => Self::KeyringUnavailable(keyring.to_string()),
             AuthError::Client(client) => Self::from(client),
             AuthError::Malformed(_)
             | AuthError::MalformedEnv(_)
             | AuthError::WorkspaceFile { .. }
-            | AuthError::ReadKey(_) => Self::KeyUnusable(chain(error)),
+            | AuthError::ReadKey(_)
+            | AuthError::NoEntry(_)
+            | AuthError::ReadEntry { .. }
+            | AuthError::MalformedEntry { .. } => Self::KeyUnusable(chain(error)),
         }
     }
 }

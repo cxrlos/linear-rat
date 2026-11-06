@@ -1,3 +1,5 @@
+use std::fmt;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use keyring_core::{CredentialStore, Entry, Error};
@@ -11,6 +13,56 @@ pub trait KeyStore {
     fn set(&self, account: &str, key: &ApiKey) -> Result<(), KeyringError>;
     /// Returns whether there was an entry to delete.
     fn delete(&self, account: &str) -> Result<bool, KeyringError>;
+}
+
+/// Reads an entry of the OS keyring that lrat does not own, such as one the
+/// viewer made for their Linear key. Tests supply an in-memory reader.
+pub trait EntryReader {
+    /// The secret of `entry`, or `None` when there is no such entry.
+    fn read(&self, entry: &KeyringEntry) -> Result<Option<String>, KeyringError>;
+}
+
+/// A keyring entry named by its service and account, written
+/// `SERVICE/ACCOUNT`. It splits at the first `/`, so the account may hold one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeyringEntry {
+    service: String,
+    account: String,
+}
+
+impl KeyringEntry {
+    /// The entry `lrat auth login --from-keyring` reads when given no value.
+    pub const DEFAULT: &str = "linear/api-key";
+
+    /// The keyring service, before the first `/`.
+    pub fn service(&self) -> &str {
+        &self.service
+    }
+
+    /// The keyring account, after the first `/`.
+    pub fn account(&self) -> &str {
+        &self.account
+    }
+}
+
+impl FromStr for KeyringEntry {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.split_once('/') {
+            Some((service, account)) if !service.is_empty() && !account.is_empty() => Ok(Self {
+                service: service.to_owned(),
+                account: account.to_owned(),
+            }),
+            _ => Err("expected SERVICE/ACCOUNT, such as linear/api-key".to_owned()),
+        }
+    }
+}
+
+impl fmt::Display for KeyringEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "service {}, account {}", self.service, self.account)
+    }
 }
 
 /// The OS keyring could not be used. There is no fallback store, so the
@@ -46,6 +98,20 @@ pub struct OsKeyring;
 impl OsKeyring {
     fn entry(self, account: &str) -> Result<Entry, KeyringError> {
         Ok(platform_store()?.build(SERVICE, account, None)?)
+    }
+}
+
+impl EntryReader for OsKeyring {
+    fn read(&self, entry: &KeyringEntry) -> Result<Option<String>, KeyringError> {
+        let found = platform_store()?.build(&entry.service, &entry.account, None)?;
+        match found.get_password() {
+            Ok(secret) => Ok(Some(secret)),
+            Err(Error::NoEntry) => Ok(None),
+            Err(Error::Ambiguous(_)) => Err(KeyringError::new(
+                "more than one entry has that service and account",
+            )),
+            Err(error) => Err(error.into()),
+        }
     }
 }
 

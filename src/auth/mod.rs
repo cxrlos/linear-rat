@@ -14,7 +14,7 @@ use std::fmt;
 use std::io;
 
 pub use key::{ApiKey, InvalidApiKey};
-pub use keyring::{KeyStore, KeyringError, OsKeyring};
+pub use keyring::{EntryReader, KeyStore, KeyringEntry, KeyringError, OsKeyring};
 pub use workspace_file::WorkspaceFile;
 
 use crate::linear::{ClientError, LinearClient};
@@ -80,6 +80,30 @@ pub enum AuthError {
         #[source]
         source: io::Error,
     },
+    #[error(
+        "the OS keyring has no entry with {0}. Nothing was stored. Add the API key there, \
+         or name another entry as --from-keyring SERVICE/ACCOUNT"
+    )]
+    NoEntry(KeyringEntry),
+    #[error("could not read the entry with {entry}: {reason}. Nothing was stored.")]
+    ReadEntry {
+        entry: KeyringEntry,
+        reason: KeyringError,
+    },
+    #[error(
+        "the OS keyring entry with {entry} does not hold a valid API key: {reason}. \
+         Nothing was stored."
+    )]
+    MalformedEntry {
+        entry: KeyringEntry,
+        reason: InvalidApiKey,
+    },
+    #[error(
+        "Linear rejected the API key in the OS keyring entry with {0}: it is wrong, revoked \
+         or expired. Nothing was stored. Create a personal API key at {KEYS_URL}, put it in \
+         that entry and try again"
+    )]
+    EntryRejected(KeyringEntry),
     #[error("reading the API key")]
     ReadKey(#[source] io::Error),
     #[error("checking the API key with Linear")]
@@ -211,6 +235,42 @@ where
         ));
     }
     Ok(output)
+}
+
+/// `lrat auth login --from-keyring`: reads the key from `entry`, an existing
+/// keyring entry lrat does not own, then logs in with it like [`login`]. The
+/// entry read is left as it is. Returns what to print.
+pub async fn login_from_keyring<S, R, C>(
+    credentials: &Credentials<S>,
+    reader: &R,
+    entry: &KeyringEntry,
+    connect: impl FnOnce(&ApiKey) -> Result<C, ClientError>,
+) -> Result<String, AuthError>
+where
+    S: KeyStore,
+    R: EntryReader,
+    C: LinearClient,
+{
+    let secret = reader
+        .read(entry)
+        .map_err(|reason| AuthError::ReadEntry {
+            entry: entry.clone(),
+            reason,
+        })?
+        .ok_or_else(|| AuthError::NoEntry(entry.clone()))?;
+    let key = ApiKey::new(&secret).map_err(|reason| AuthError::MalformedEntry {
+        entry: entry.clone(),
+        reason,
+    })?;
+    let output = login(credentials, key, connect)
+        .await
+        .map_err(|error| match error {
+            AuthError::LoginRejected => AuthError::EntryRejected(entry.clone()),
+            other => other,
+        })?;
+    Ok(format!(
+        "Read the API key from the OS keyring ({entry}).\n{output}"
+    ))
 }
 
 /// `lrat auth status`: which key is in use, and the workspace and viewer it

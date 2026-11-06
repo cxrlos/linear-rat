@@ -140,7 +140,11 @@ async fn run_auth(command: AuthCommand) -> anyhow::Result<()> {
         std::env::var(auth::KEY_VAR).ok(),
     );
     let output = match command {
-        AuthCommand::Login { stdin } => {
+        AuthCommand::Login {
+            from_keyring: Some(entry),
+            ..
+        } => auth::login_from_keyring(&credentials, &OsKeyring, &entry, HttpClient::new).await?,
+        AuthCommand::Login { stdin, .. } => {
             let key = if stdin {
                 auth::read_key(io::stdin().lock())?
             } else {
