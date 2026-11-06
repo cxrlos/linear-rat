@@ -1,0 +1,28 @@
+---
+source: tests/search_results.rs
+expression: app.backend()
+---
+" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+"┌Search "cheese" (5)───────────────────────────────────────────────────────────┐"
+"│▸ ENG-3  Cheese wheel barcode scanner dro ● Done        ▮▮▯ Medium  2 Cycle 1 │"
+"│  ENG-27 Deduplicate cheese varieties in  ● Done        ▮▯▯ Low     1 Cycle 3 │"
+"│  DES-7  Illustrate the cheese wheel life ● Done        ▮▮▮ High    2 Cycle 1 │"
+"│  DES-39 Holiday cheese board campaign as ◐ In Progress ··· None    5 Cycle 7 │"
+"│  OPS-36 Plan the office cheese cave move ◐ In Review   ▮▯▯ Low       Cycle 7 │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"└──────────────────────────────────────────────────────────────────────────────┘"
+" Move │ j down     │ k up   │ gg top  │ G bottom  │ C-d/C-u page │ h/l pane     "
+" Do   │ Enter open │ y yank │ o links │ Esc close │ ? keys       │ q quit       "

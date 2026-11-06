@@ -94,7 +94,11 @@ pub fn screen_contexts(state: &State) -> Vec<Context> {
         Screen::TeamIssues if state.team_issues.pane() == Pane::Detail => {
             vec![Context::Detail, Context::Global]
         }
+        Screen::Results if state.results.pane() == Pane::Detail => {
+            vec![Context::Detail, Context::Global]
+        }
         Screen::TeamIssues => vec![Context::TeamIssues, Context::List, Context::Global],
+        Screen::Results => vec![Context::List, Context::Global],
         Screen::MyIssues => vec![Context::List, Context::Global],
         Screen::Analytics => vec![Context::Analytics, Context::Global],
     }

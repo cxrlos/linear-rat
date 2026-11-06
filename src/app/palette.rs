@@ -7,7 +7,7 @@ use nucleo_matcher::pattern::{AtomKind, CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 
 use super::update::{Update, perform};
-use super::{Action, Modal, Screen, State};
+use super::{Action, Modal, Screen, State, results};
 use crate::keys::{ACTIONS, ActionSpec, Context};
 use crate::linear::model::Issue;
 use crate::ui;
@@ -100,7 +100,7 @@ pub(super) fn accept(state: &mut State) -> Update {
         return Update::default();
     };
     if let Some(id) = issue_id {
-        jump_to(state, &id);
+        jump_to(state, id);
         return Update::redraw();
     }
     match spec {
@@ -116,14 +116,14 @@ pub(super) fn accept(state: &mut State) -> Update {
     }
 }
 
-/// Shows the issue `id`: focused in My Issues when it is there, or else in
-/// its own detail over the screen.
-fn jump_to(state: &mut State, id: &str) {
-    if state.my_issues.focus_id(id) {
+/// Shows the issue `id`: focused in My Issues when it is there, or else
+/// alone in the results view.
+fn jump_to(state: &mut State, id: String) {
+    if state.my_issues.focus_id(&id) {
         state.screen = Screen::MyIssues;
         let rows = ui::list_rows(state, state.viewport);
         state.my_issues.scroll_into_view(rows);
     } else {
-        state.modals.push(Modal::Issue { id: id.to_owned() });
+        results::show(state, "Issue".to_owned(), vec![id]);
     }
 }

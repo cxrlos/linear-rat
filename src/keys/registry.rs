@@ -517,7 +517,9 @@ pub static ACTIONS: &[ActionSpec] = &[
         hint: does("close"),
         contexts: &[Context::List, Context::Detail, Context::Overlay],
         default_keys: &[&[Key::named(KeyCode::Esc)]],
-        available: |state| state.modals.top().is_some() || in_detail(state),
+        available: |state| {
+            state.modals.top().is_some() || in_detail(state) || state.screen == Screen::Results
+        },
     },
     ActionSpec {
         action: Action::ShowScreen(Screen::MyIssues),
@@ -611,20 +613,12 @@ fn can_scroll_down(state: &State) -> bool {
         Some(Modal::Create(form)) => form
             .list()
             .is_some_and(|(len, selected)| selected.is_some_and(|position| position + 1 < len)),
-        Some(Modal::Issue { id }) => {
-            let (scroll, max) = overlay_issue_scroll(state, id);
-            scroll < max
-        }
         Some(Modal::Cheatsheet { scroll }) => {
             *scroll < ui::cheatsheet_max_scroll(state, state.viewport)
         }
         Some(Modal::Palette(palette)) => {
             palette.selected + 1 < app::palette_matches(state, &palette.query).len()
         }
-        Some(Modal::Search(search)) => match &search.phase {
-            Phase::Found { ids, selected, .. } => selected + 1 < ids.len(),
-            _ => false,
-        },
         None if in_analytics(state) => {
             state.analytics_screen.scroll() < ui::analytics_max_scroll(state, state.viewport)
         }
@@ -646,12 +640,8 @@ fn can_scroll_up(state: &State) -> bool {
         Some(Modal::Create(form)) => form
             .list()
             .is_some_and(|(_, selected)| selected.is_some_and(|position| position > 0)),
-        Some(Modal::Issue { id }) => overlay_issue_scroll(state, id).0 > 0,
         Some(Modal::Cheatsheet { scroll }) => *scroll > 0,
         Some(Modal::Palette(palette)) => palette.selected > 0,
-        Some(Modal::Search(search)) => {
-            matches!(search.phase, Phase::Found { selected, .. } if selected > 0)
-        }
         None if in_analytics(state) => state.analytics_screen.scroll() > 0,
         _ => false,
     }
@@ -667,9 +657,8 @@ fn can_accept(state: &State) -> bool {
             palette.selected < app::palette_matches(state, &palette.query).len()
         }
         Some(Modal::Search(search)) => match &search.phase {
-            Phase::Typing { .. } => !search.query.trim().is_empty(),
+            Phase::Typing { .. } | Phase::NothingFound { .. } => !search.query.trim().is_empty(),
             Phase::Searching { .. } => false,
-            Phase::Found { ids, .. } => !ids.is_empty(),
         },
         _ => false,
     }
@@ -716,14 +705,6 @@ fn can_move_up(state: &State) -> bool {
     !in_detail(state) || detail_scroll(state).0 > 0
 }
 
-/// How far the issue overlay showing `issue_id` is scrolled and how far it
-/// can scroll.
-fn overlay_issue_scroll(state: &State, issue_id: &str) -> (usize, usize) {
-    let (rows, lines) = ui::issue_overlay_rows(state, state.viewport, issue_id);
-    let max = lines.saturating_sub(rows);
-    (state.detail.scroll(issue_id).min(max), max)
-}
-
 /// How far the detail is scrolled and how far it can scroll.
 fn detail_scroll(state: &State) -> (usize, usize) {
     let (rows, lines) = ui::detail_rows(state, state.viewport);
@@ -742,6 +723,7 @@ fn in_detail(state: &State) -> bool {
     match state.screen {
         Screen::MyIssues => state.my_issues.pane() == Pane::Detail,
         Screen::TeamIssues => state.team_issues.pane() == Pane::Detail,
+        Screen::Results => state.results.pane() == Pane::Detail,
         Screen::Analytics => false,
     }
 }

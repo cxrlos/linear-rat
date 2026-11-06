@@ -1,5 +1,5 @@
 //! The search overlay: `/`, a query, Enter to ask Linear, and the results
-//! as a list that opens each one in its detail.
+//! in the results view, where Enter opens each one in its detail.
 
 // clippy's allow-unwrap-in-tests does not cover helpers outside #[test] functions.
 #![allow(clippy::unwrap_used)]
@@ -90,10 +90,18 @@ fn an_empty_query_asks_for_nothing() {
 #[tokio::test]
 async fn the_results_show_as_a_list_closed_issues_included() {
     let mut app = app();
+    let closed = found("cheese")
+        .await
+        .issues
+        .into_iter()
+        .find(|issue| !issue.state.state_type.is_open())
+        .unwrap();
 
     searched(&mut app, "cheese").await;
 
-    assert_snapshot!(app.backend());
+    assert!(!shows(&app, " Search Linear "), "{:#?}", screen(&app));
+    assert!(shows(&app, &closed.identifier), "{:#?}", screen(&app));
+    assert!(shows(&app, "● Done"), "{:#?}", screen(&app));
 }
 
 #[tokio::test]
@@ -101,13 +109,20 @@ async fn enter_opens_a_result_in_the_detail_and_esc_goes_back_to_the_results() {
     let mut app = app();
     searched(&mut app, "cheese").await;
 
-    app.handle(press(KeyCode::Down)).unwrap();
+    let second = found("cheese").await.issues.remove(1);
+
+    app.handle(key('j')).unwrap();
     app.handle(press(KeyCode::Enter)).unwrap();
     let detail = screen(&app).join("\n");
     app.handle(press(KeyCode::Esc)).unwrap();
 
     assert_snapshot!(detail);
-    assert!(shows(&app, " Search Linear "), "{:#?}", screen(&app));
+    let focused = screen(&app)
+        .into_iter()
+        .find(|line| line.contains('▸'))
+        .unwrap_or_default();
+    assert!(shows(&app, "Search \"cheese\""), "{:#?}", screen(&app));
+    assert!(focused.contains(&second.identifier), "{focused}");
 }
 
 #[tokio::test]
@@ -222,7 +237,7 @@ async fn a_search_keeps_the_place_in_my_issues() {
 }
 
 #[tokio::test]
-async fn the_palette_finds_an_issue_a_search_loaded_and_opens_its_detail() {
+async fn the_palette_finds_an_issue_a_search_loaded_and_enter_opens_its_detail() {
     let mut app = app();
     searched(&mut app, "cheese").await;
     let closed = found("cheese")
@@ -235,6 +250,7 @@ async fn the_palette_finds_an_issue_a_search_loaded_and_opens_its_detail() {
 
     app.handle(key(':')).unwrap();
     type_text(&mut app, &closed.identifier.to_lowercase());
+    app.handle(press(KeyCode::Enter)).unwrap();
     app.handle(press(KeyCode::Enter)).unwrap();
 
     let title_row = &screen(&app)[1];

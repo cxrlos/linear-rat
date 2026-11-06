@@ -1,4 +1,4 @@
-//! The search overlay: the query, then what Linear found for it.
+//! The search overlay: the query, and how far its search is.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -22,19 +22,8 @@ pub fn render(state: &State, search: &Search, frame: &mut Frame, area: Rect) {
         Phase::Searching { term } => {
             Line::styled(format!(" Searching for \"{term}\"..."), style::muted(theme))
         }
-        Phase::Found { term, ids, .. } if ids.is_empty() => {
+        Phase::NothingFound { term } => {
             Line::styled(format!(" Nothing matches \"{term}\"."), style::muted(theme))
-        }
-        Phase::Found { ids, selected, .. } => {
-            let width = usize::from(list.width);
-            let issues: Vec<_> = ids.iter().filter_map(|id| state.store.issue(id)).collect();
-            let id_width = palette::identifier_width(issues.iter().copied());
-            let lines = issues
-                .into_iter()
-                .map(|issue| palette::issue_line(state, issue, id_width, width))
-                .collect();
-            palette::render_list(state, lines, *selected, frame, list);
-            return;
         }
     };
     frame.render_widget(Paragraph::new(message).wrap(Wrap { trim: false }), list);

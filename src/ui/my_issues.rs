@@ -231,11 +231,6 @@ pub(super) fn render_row(
     }
 }
 
-/// The detail of `issue` alone in `area`, as an overlay shows it.
-pub fn render_issue(state: &State, issue: &Issue, frame: &mut Frame, area: Rect) {
-    render_detail(state, Some(issue), frame, area, Focus::Alone);
-}
-
 /// The detail of `issue`, or an empty pane when there is none, scrolled as
 /// far as the viewer scrolled it.
 pub(super) fn render_detail(

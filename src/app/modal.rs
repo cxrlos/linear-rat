@@ -23,8 +23,6 @@ pub enum Modal {
     Palette(Palette),
     /// Search every issue in the workspace on Linear.
     Search(Search),
-    /// The detail of one issue from the store, over the screen.
-    Issue { id: String },
     /// A list to pick one entry from.
     Choice(Choice),
     /// A list of an issue's links to open one of.
@@ -38,11 +36,8 @@ impl Modal {
     pub fn takes_text(&self) -> bool {
         match self {
             Modal::Picker(_) | Modal::Palette(_) | Modal::Links(_) | Modal::Create(_) => true,
-            Modal::Search(search) => matches!(search.phase, Phase::Typing { .. }),
-            Modal::Cheatsheet { .. }
-            | Modal::WhichKey { .. }
-            | Modal::Issue { .. }
-            | Modal::Choice(_) => false,
+            Modal::Search(search) => !matches!(search.phase, Phase::Searching { .. }),
+            Modal::Cheatsheet { .. } | Modal::WhichKey { .. } | Modal::Choice(_) => false,
         }
     }
 
@@ -59,10 +54,7 @@ impl Modal {
             }
             Modal::Search(search) => search.text_field(),
             Modal::Create(form) => form.text_field(),
-            Modal::Cheatsheet { .. }
-            | Modal::WhichKey { .. }
-            | Modal::Issue { .. }
-            | Modal::Choice(_) => None,
+            Modal::Cheatsheet { .. } | Modal::WhichKey { .. } | Modal::Choice(_) => None,
         }
     }
 }
@@ -129,5 +121,10 @@ impl ModalStack {
 
     pub fn iter_mut(&mut self) -> impl DoubleEndedIterator<Item = &mut Modal> {
         self.0.iter_mut()
+    }
+
+    /// Keeps only the overlays `keep` says to.
+    pub fn retain(&mut self, keep: impl FnMut(&Modal) -> bool) {
+        self.0.retain(keep);
     }
 }

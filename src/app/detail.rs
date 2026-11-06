@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use super::{Action, Effect, Load, Modal, Pane, Screen, State, Update};
+use super::{Action, Effect, Load, Pane, Screen, State, Update};
 use crate::linear::{IssueDetail, Urgency};
 use crate::ui;
 
@@ -41,13 +41,9 @@ impl Detail {
     }
 }
 
-/// The issue whose detail is on screen: the one an issue overlay shows, or
-/// else the focused one, when the detail shows beside the list or has the
-/// screen to itself.
+/// The issue whose detail is on screen: the focused one, when the detail
+/// shows beside the list or has the screen to itself.
 fn shown_issue_id(state: &State) -> Option<String> {
-    if let Some(id) = overlay_issue_id(state) {
-        return Some(id.to_owned());
-    }
     let wide = state.viewport.width >= state.ui.wide_layout_columns;
     let shown = screen_pane(state).is_some_and(|pane| wide || pane == Pane::Detail);
     shown
@@ -61,15 +57,8 @@ fn screen_pane(state: &State) -> Option<Pane> {
     match state.screen {
         Screen::MyIssues => (state.load == Load::Loaded).then(|| state.my_issues.pane()),
         Screen::TeamIssues => Some(state.team_issues.pane()),
+        Screen::Results => Some(state.results.pane()),
         Screen::Analytics => None,
-    }
-}
-
-/// The issue the top overlay shows in full, when it is an issue overlay.
-fn overlay_issue_id(state: &State) -> Option<&str> {
-    match state.modals.top() {
-        Some(Modal::Issue { id }) => Some(id),
-        _ => None,
     }
 }
 
@@ -91,7 +80,7 @@ pub(super) fn request(state: &mut State) -> Option<Effect> {
         .detail
         .loads
         .insert(issue_id.clone(), DetailLoad::Loading);
-    let urgency = if has_focus(state) || overlay_issue_id(state).is_some() {
+    let urgency = if has_focus(state) {
         Urgency::Urgent
     } else {
         Urgency::Background
@@ -154,17 +143,6 @@ pub(super) fn scroll(state: &mut State, action: Action) -> Update {
     };
     let shown = ui::detail_rows(state, state.viewport);
     scroll_by(state, issue_id, shown, action)
-}
-
-/// Scrolls the issue overlay showing `issue_id` one line, as
-/// [`Action::ScrollDown`] or [`Action::ScrollUp`] asks.
-pub(super) fn scroll_overlay(state: &mut State, issue_id: &str, action: Action) -> Update {
-    let shown = ui::issue_overlay_rows(state, state.viewport, issue_id);
-    let action = match action {
-        Action::ScrollDown => Action::MoveDown,
-        _ => Action::MoveUp,
-    };
-    scroll_by(state, issue_id.to_owned(), shown, action)
 }
 
 /// Scrolls the detail of `issue_id`, which shows `rows` of its `lines`.

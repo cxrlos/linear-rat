@@ -6,8 +6,8 @@ use ratatui::layout::Size;
 use jiff::Timestamp;
 
 use super::{
-    AnalyticsScreen, Detail, Drafts, Load, LoadError, ModalStack, MyIssues, Store, SyncStatus,
-    TeamIssues,
+    AnalyticsScreen, Detail, Drafts, Load, LoadError, ModalStack, MyIssues, Results, Store,
+    SyncStatus, TeamIssues,
 };
 use crate::auth::KeySource;
 use crate::config::{AnalyticsSettings, Loaded, SyncSettings, UiSettings};
@@ -35,6 +35,8 @@ pub struct State {
     /// The focused issue's detail: its scroll and which details have loaded.
     pub detail: Detail,
     pub team_issues: TeamIssues,
+    /// What the last search found, or the issue a palette jump went to.
+    pub results: Results,
     /// Whether My Issues is still loading, and why it failed.
     pub load: Load,
     /// Where the API key in use came from, so a rejected key's error screen
@@ -161,6 +163,10 @@ impl State {
                 .team_issues
                 .focused_id()
                 .and_then(|id| self.store.issue(id)),
+            Screen::Results => self
+                .results
+                .focused_id()
+                .and_then(|id| self.store.issue(id)),
             Screen::Analytics => None,
         }
     }
@@ -189,13 +195,17 @@ pub(super) fn summary(messages: &[impl Display]) -> Option<String> {
     })
 }
 
-/// The top-level screens, in tab order.
+/// The top-level screens. [`Screen::ALL`] lists those with a tab, in tab
+/// order.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum Screen {
     #[default]
     MyIssues,
     TeamIssues,
     Analytics,
+    /// Search results or a palette jump, opened over another screen and
+    /// left with Esc. It has no tab.
+    Results,
 }
 
 impl Screen {
@@ -206,6 +216,7 @@ impl Screen {
             Screen::MyIssues => "My Issues",
             Screen::TeamIssues => "Team Issues",
             Screen::Analytics => "Analytics",
+            Screen::Results => "Results",
         }
     }
 }

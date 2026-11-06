@@ -4,7 +4,7 @@ use ratatui::layout::Size;
 use super::edit::{self, Editable};
 use super::{
     Action, Copyable, Effect, Event, Load, Modal, Palette, Pane, Purpose, Screen, Search, State,
-    analytics_screen, compose, create, detail, links, palette, search, sync, team_issues,
+    analytics_screen, compose, create, detail, links, palette, results, search, sync, team_issues,
 };
 use crate::keys::{self, Key, Resolution};
 use crate::ui;
@@ -72,6 +72,8 @@ fn apply(state: &mut State, event: Event) -> Update {
             state.my_issues.scroll_into_view(rows);
             let rows = ui::team_list_rows(state, state.viewport);
             state.team_issues.scroll_into_view(rows);
+            let rows = ui::list_rows(state, state.viewport);
+            state.results.scroll_into_view(rows);
             clamp_analytics_scroll(state);
             Update::redraw()
         }
@@ -245,7 +247,7 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             let effects = match screen {
                 Screen::TeamIssues => team_issues::open(state),
                 Screen::Analytics => analytics_screen::request_missing(state),
-                Screen::MyIssues => Vec::new(),
+                Screen::MyIssues | Screen::Results => Vec::new(),
             };
             Update {
                 redraw: true,
@@ -344,17 +346,40 @@ pub fn perform(state: &mut State, action: Action) -> Update {
                 effects: Vec::new(),
             }
         }
+        Action::Close if state.screen == Screen::Results && state.results.pane() == Pane::List => {
+            results::close(state);
+            Update::redraw()
+        }
+        Action::MoveDown
+        | Action::MoveUp
+        | Action::MoveToTop
+        | Action::MoveToBottom
+        | Action::HalfPageDown
+        | Action::HalfPageUp
+        | Action::FocusLeft
+        | Action::FocusRight
+        | Action::Open
+        | Action::Close
+            if state.screen == Screen::Results =>
+        {
+            let rows = ui::list_rows(state, state.viewport);
+            let pane = state.results.pane();
+            let redraw = state.results.perform(action, rows);
+            if pane == Pane::List && state.results.pane() == Pane::Detail {
+                detail::reopen(state);
+            }
+            Update {
+                redraw,
+                effects: Vec::new(),
+            }
+        }
         Action::ScrollDown | Action::ScrollUp => match state.modals.top() {
             Some(Modal::Picker(_)) => edit::select(state, step(action)),
             Some(Modal::Links(_)) => links::select(state, step(action)),
             Some(Modal::Create(_)) => create::select(state, step(action)),
-            Some(Modal::Issue { id }) => {
-                let id = id.clone();
-                detail::scroll_overlay(state, &id, action)
-            }
             Some(Modal::Choice(_)) => move_choice(state, action),
             Some(Modal::Palette(_)) => palette::step(state, action),
-            Some(Modal::Search(_)) => search::step(state, action),
+            Some(Modal::Search(_)) => Update::default(),
             None if state.screen == Screen::Analytics => {
                 let max = ui::analytics_max_scroll(state, state.viewport);
                 analytics_screen::scroll(state, action == Action::ScrollDown, max)
