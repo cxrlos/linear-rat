@@ -1688,6 +1688,7 @@ dependencies = [
  "apple-native-keyring-store",
  "clap",
  "crossterm",
+ "dbus-secret-service",
  "dbus-secret-service-keyring-store",
  "etcetera",
  "futures-util",

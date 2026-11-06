@@ -101,6 +101,36 @@ impl OsKeyring {
     }
 }
 
+#[cfg(target_os = "linux")]
+impl EntryReader for OsKeyring {
+    fn read(&self, entry: &KeyringEntry) -> Result<Option<String>, KeyringError> {
+        use dbus_secret_service::{EncryptionType, SecretService};
+
+        let unavailable = |error: dbus_secret_service::Error| KeyringError::new(error.to_string());
+        let service = SecretService::connect(EncryptionType::Dh).map_err(unavailable)?;
+        for attributes in secret_service_attributes(entry) {
+            let found = service
+                .search_items(attributes.into_iter().collect())
+                .map_err(unavailable)?;
+            let mut items: Vec<_> = found.unlocked.into_iter().chain(found.locked).collect();
+            if items.len() > 1 {
+                return Err(KeyringError::new(
+                    "more than one entry has that service and account",
+                ));
+            }
+            if let Some(item) = items.pop() {
+                item.unlock().map_err(unavailable)?;
+                let secret = item.get_secret().map_err(unavailable)?;
+                return String::from_utf8(secret)
+                    .map(Some)
+                    .map_err(|_| KeyringError::new("the entry does not hold text"));
+            }
+        }
+        Ok(None)
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
 impl EntryReader for OsKeyring {
     fn read(&self, entry: &KeyringEntry) -> Result<Option<String>, KeyringError> {
         let found = platform_store()?.build(&entry.service, &entry.account, None)?;
@@ -153,5 +183,39 @@ impl KeyStore for OsKeyring {
             Err(Error::NoEntry) => Ok(false),
             Err(error) => Err(error.into()),
         }
+    }
+}
+
+/// The Secret Service attributes that can name an entry, tried in order:
+/// `account`, as `secret-tool store ... service S account A` writes it, then
+/// `username`, as the keyring crate writes it.
+pub fn secret_service_attributes(entry: &KeyringEntry) -> [[(&str, &str); 2]; 2] {
+    [
+        [
+            ("service", entry.service.as_str()),
+            ("account", entry.account.as_str()),
+        ],
+        [
+            ("service", entry.service.as_str()),
+            ("username", entry.account.as_str()),
+        ],
+    ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn secret_service_entries_match_on_account_first_then_username() {
+        let entry: KeyringEntry = "linear/api-key".parse().unwrap();
+
+        assert_eq!(
+            secret_service_attributes(&entry),
+            [
+                [("service", "linear"), ("account", "api-key")],
+                [("service", "linear"), ("username", "api-key")],
+            ]
+        );
     }
 }

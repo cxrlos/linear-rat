@@ -18,7 +18,7 @@ There are three ways to hand it the key:
 
 The entry lrat looks for is, on each system:
 
-- Linux: a Secret Service item with the attributes `service` and `username`. To make the default entry: `secret-tool store --label='Linear API key' service linear username api-key`, then paste the key.
+- Linux: a Secret Service item with the attributes `service` and `account`, or `service` and `username` (the attribute keyring libraries write). To make the default entry: `secret-tool store --label='Linear API key' service linear account api-key`, then paste the key.
 - macOS: a generic password in the Keychain with that service and account. To make the default entry: `security add-generic-password -s linear -a api-key -w`, then paste the key. macOS may ask whether lrat may read it.
 
 When the entry is missing, the keyring cannot be reached, the entry does not hold a valid key or Linear rejects the key, `lrat auth login` says which and stores nothing.

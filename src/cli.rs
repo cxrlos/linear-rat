@@ -32,7 +32,8 @@ pub enum AuthCommand {
         ///
         /// The entry is named SERVICE/ACCOUNT and defaults to linear/api-key.
         /// On Linux it is a Secret Service item (GNOME Keyring, KWallet) with
-        /// the attributes `service` and `username`; on macOS it is a generic
+        /// the attributes `service` and `account`, as `secret-tool store`
+        /// writes it, or `service` and `username`; on macOS it is a generic
         /// password in the Keychain with that service and account. lrat
         /// checks the key with Linear, then stores a copy under its own entry;
         /// the entry read is left as it is. For another entry, name it:
