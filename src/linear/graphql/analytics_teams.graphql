@@ -1,0 +1,39 @@
+# budget: 850
+# One page of the viewer's teams with each team's cycles in the analytics
+# window, history arrays included. `$cycles` is a CycleFilter on the window.
+# A team holds at most 30 such cycles here, enough for 26 weeks of one-week
+# cycles; a team that comes back with 30 may have more, and lrat reports it.
+# Pages hold 25 teams. The client follows `endCursor` until
+# `hasNextPage` is false.
+query AnalyticsTeams($cycles: CycleFilter, $after: String) {
+  viewer {
+    id
+    name
+    teams(first: 25, after: $after) {
+      nodes {
+        id
+        key
+        name
+        issueEstimationType
+        cycles(first: 30, filter: $cycles) {
+          nodes {
+            id
+            number
+            name
+            startsAt
+            endsAt
+            completedAt
+            scopeHistory
+            completedScopeHistory
+            issueCountHistory
+            completedIssueCountHistory
+          }
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}

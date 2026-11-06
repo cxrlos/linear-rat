@@ -58,6 +58,9 @@ pub enum ClientError {
     Setup(#[source] reqwest::Error),
     #[error("Linear answered with HTTP {0}")]
     Status(u16),
+    /// Linear kept refusing requests for its rate limit, after every retry.
+    #[error("Linear's rate limit is used up")]
+    RateLimited,
     /// Errors with no data, or with data too incomplete to use.
     #[error("Linear returned errors: {}", join(.0))]
     GraphQl(Vec<GraphQlError>),

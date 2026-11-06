@@ -1,0 +1,28 @@
+---
+source: tests/open_links.rs
+expression: app.backend()
+---
+" [1] My Issues │ [2] Team Issues │ [3] Analytics                                                    "
+"┌My Issues─────────────────────────────────────────────────────────────────────────────────────────┐"
+"│◐ Started (9)                                                                                     │"
+"│▸ DES-34 Design QA for the autumn release                     ◐ In Progress ▮▮▮ High    3 Cycle 7 │"
+"│  ENG-51 Add a dry-run mode to the importer                   ◐ In Progress ▮▮▯ Medium  2 Cycle 7 │"
+"│  OPS-37 Clean up unused API keys                             ◐ In Review   ▮▮▯ Medium    Cycle 7 │"
+"│  ENG-61 Add contract tests for the recipes API               ◐ In Progress ▮▯▯ Low     2 Cycle 7 │"
+"│  OPS-36 Plan the office cheese cave move                     ◐ In Review   ▮▯▯ Low       Cycle 7 │"
+"│┌ Links of DES-34 ───────────────────────────────────────────────────────────────────────────────┐│"
+"││ > type to filter                                                                               ││"
+"││ 1 attachment: figma · Autumn QA board · https://www.figma.com/file/nibble-autumn-qa            ││"
+"││ 2 attachment: slack · Thread in #design · https://squeakworks.slack.com/archives/C042DESIGN/p1 ││"
+"││ 3 attachment: github · Screenshots are blurry on tablets · https://github.com/squeakworks/nibb ││"
+"│└ Down/Up select  Enter choose  Esc close ───────────────────────────────────────────────────────┘│"
+"│  ENG-57 Throttle sensor writes during bursts                 ○ Todo        ▮▮▯ Medium  2 Cycle 7 │"
+"│  OPS-38 Add synthetic checks for login                       ○ Todo        ▮▮▯ Medium    Cycle 7 │"
+"│  DES-31 Review copy for permission prompts                   ○ Todo        ▮▯▯ Low     5 Cycle 7 │"
+"│  ENG-65 Rotate refresh tokens on every use                   ○ Todo        ··· None    2 Cycle 7 │"
+"│  DES-16 Accessible focus rings across whisker                ○ Todo        ▮▮▮ High    5         │"
+"│  ENG-56 Notification settings reset after update             ○ Todo        ▮▮▮ High    2         │"
+"│  ENG-6  Migrate burrow storage to the new bucket layout      ○ Todo        ▮▮▯ Medium  3         │"
+"└──────────────────────────────────────────────────────────────────────────────────────────────────┘"
+" Move │ Down/Up move                                                                                "
+" Do   │ Esc close                                                                                   "

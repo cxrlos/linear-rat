@@ -1,0 +1,65 @@
+# budget: 850
+# One page of a team's issues matching `$filter`, which the client builds for
+# the analytics window: created, completed or canceled in it. Archived issues
+# count too, since Linear archives old completed ones. Pages hold 100 issues;
+# the client follows `endCursor` for at most 10 pages.
+query TeamRangeIssues($teamId: String!, $filter: IssueFilter, $after: String) {
+  team(id: $teamId) {
+    issues(first: 100, after: $after, includeArchived: true, filter: $filter) {
+      nodes {
+        id
+        identifier
+        title
+        description
+        url
+        branchName
+        priority
+        estimate
+        labelIds
+        createdAt
+        updatedAt
+        startedAt
+        completedAt
+        canceledAt
+        triagedAt
+        team {
+          id
+          key
+          name
+          issueEstimationType
+        }
+        state {
+          id
+          name
+          type
+          position
+        }
+        assignee {
+          id
+          name
+          displayName
+        }
+        creator {
+          id
+          name
+          displayName
+        }
+        cycle {
+          id
+          number
+          name
+          startsAt
+          endsAt
+          completedAt
+        }
+        project {
+          id
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}

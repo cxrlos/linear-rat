@@ -54,6 +54,7 @@ fn issue(id: &str) -> Build {
         title: format!("Issue {id}"),
         description: None,
         url: format!("https://linear.app/cheese/issue/ENG-{id}"),
+        branch_name: format!("eng-{id}-issue-{id}"),
         team_id: "eng".into(),
         state: state(StateType::Backlog),
         priority: Priority::None,
@@ -1040,4 +1041,41 @@ fn team_analytics_leave_out_the_per_person_breakdown_for_other_teams() {
     // Issues 2, 4 and 6 have not changed since 1 January; issue 7 is DES's.
     let stale: Vec<&str> = member.stale.iter().map(|s| s.issue_id.as_str()).collect();
     assert_eq!(stale, ["2", "4", "6"]);
+}
+
+#[test]
+fn open_issue_trend_counts_issues_open_at_the_end_of_each_week() {
+    // The weeks of 12, 19 and 26 October end at midnight on the next Monday;
+    // the week of 2 November ends now.
+    let issues = [
+        issue("1").created("2026-09-01T09:00:00Z").build(),
+        issue("2")
+            .created("2026-10-14T09:00:00Z")
+            .completed("2026-10-21T09:00:00Z")
+            .build(),
+        issue("3")
+            .created("2026-10-20T09:00:00Z")
+            .canceled("2026-11-03T09:00:00Z")
+            .build(),
+        issue("4").created("2026-11-04T09:00:00Z").build(),
+        issue("5")
+            .created("2026-09-01T09:00:00Z")
+            .completed("2026-10-01T09:00:00Z")
+            .build(),
+        issue("6").created("2026-11-04T18:00:00Z").build(),
+    ];
+
+    assert_eq!(open_issue_trend(&issues, &four_weeks()), [2, 2, 2, 2]);
+}
+
+#[test]
+fn open_issue_trend_counts_a_reopened_issue_as_open() {
+    let mut reopened = issue("1")
+        .created("2026-10-14T09:00:00Z")
+        .completed("2026-10-21T09:00:00Z")
+        .build();
+    reopened.state = state(StateType::Started);
+    reopened.completed_at = None;
+
+    assert_eq!(open_issue_trend(&[reopened], &four_weeks()), [1, 1, 1, 1]);
 }

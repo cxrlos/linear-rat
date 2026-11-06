@@ -1,0 +1,77 @@
+# budget: 450
+# One page of a team's issues updated after `since`, most recently updated
+# first, archived and trashed ones included, for the delta poll. Pages hold 50
+# issues: Linear charges a connection by `first`, not by what comes back, and
+# a poll usually finds a handful. The client follows `endCursor` until
+# `hasNextPage` is false, or asks for `first: 1` to learn the team's newest
+# `updatedAt`.
+query TeamIssuesChanged(
+  $teamId: ID!
+  $since: DateTimeOrDuration!
+  $first: Int = 50
+  $after: String
+) {
+  issues(
+    first: $first
+    after: $after
+    orderBy: updatedAt
+    includeArchived: true
+    filter: { team: { id: { eq: $teamId } }, updatedAt: { gt: $since } }
+  ) {
+    nodes {
+      id
+      identifier
+      title
+      description
+      url
+      branchName
+      priority
+      estimate
+      labelIds
+      createdAt
+      updatedAt
+      startedAt
+      completedAt
+      canceledAt
+      triagedAt
+      trashed
+      team {
+        id
+        key
+        name
+        issueEstimationType
+      }
+      state {
+        id
+        name
+        type
+        position
+      }
+      assignee {
+        id
+        name
+        displayName
+      }
+      creator {
+        id
+        name
+        displayName
+      }
+      cycle {
+        id
+        number
+        name
+        startsAt
+        endsAt
+        completedAt
+      }
+      project {
+        id
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}

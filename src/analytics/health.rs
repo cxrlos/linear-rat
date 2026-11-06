@@ -48,6 +48,11 @@ impl StaleThreshold {
     pub const fn days(days: u32) -> Self {
         Self(days)
     }
+
+    /// The number of days.
+    pub const fn in_days(self) -> u32 {
+        self.0
+    }
 }
 
 impl Default for StaleThreshold {

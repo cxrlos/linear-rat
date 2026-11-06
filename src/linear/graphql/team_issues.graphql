@@ -1,0 +1,65 @@
+# budget: 500
+# One page of a team's issues that match `filter`, most recently updated
+# first, with the team, workflow state, people, cycle and project each one
+# refers to. Pages hold 50 issues; Team Issues asks for the next page only
+# when the viewer does.
+query TeamIssues($teamId: String!, $filter: IssueFilter, $after: String) {
+  team(id: $teamId) {
+    issues(first: 50, after: $after, filter: $filter, orderBy: updatedAt) {
+      nodes {
+        id
+        identifier
+        title
+        description
+        url
+        branchName
+        priority
+        estimate
+        labelIds
+        createdAt
+        updatedAt
+        startedAt
+        completedAt
+        canceledAt
+        triagedAt
+        team {
+          id
+          key
+          name
+          issueEstimationType
+        }
+        state {
+          id
+          name
+          type
+          position
+        }
+        assignee {
+          id
+          name
+          displayName
+        }
+        creator {
+          id
+          name
+          displayName
+        }
+        cycle {
+          id
+          number
+          name
+          startsAt
+          endsAt
+          completedAt
+        }
+        project {
+          id
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}

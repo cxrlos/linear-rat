@@ -1,0 +1,19 @@
+# budget: 210
+# One page of the teams the viewer is a member of. Pages hold 100 teams. The
+# client follows `endCursor` until `hasNextPage` is false.
+query Teams($after: String) {
+  viewer {
+    teams(first: 100, after: $after) {
+      nodes {
+        id
+        key
+        name
+        issueEstimationType
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}

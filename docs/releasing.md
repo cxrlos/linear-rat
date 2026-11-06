@@ -66,7 +66,7 @@ Done: immutable releases, Discussions, wiki, delete branches on merge; Projects 
 
 ## First release (0.1.0)
 
-The `feat/v0.1.0` branch carries all v0.1.0 work and is squash-merged into `main` as one commit. Because `linear-rat` is not on crates.io yet, release-plz treats `0.1.0` as unreleased: right after that merge it opens a release PR that keeps the version at `0.1.0` and adds `CHANGELOG.md` (its dry run shows exactly this). Then:
+Work toward 0.1.0 is squash-merged into `main` from the `feat/v0.1.0` branch. Because `linear-rat` is not on crates.io yet, release-plz treats `0.1.0` as unreleased: after the first such merge it opens a release PR that keeps the version at `0.1.0` and adds `CHANGELOG.md`, and it updates that PR on every push to `main`. I leave that PR open until 0.1.0 is complete. Then:
 
 1. From a clean `main`, publish by hand:
 

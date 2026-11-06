@@ -1,0 +1,56 @@
+# budget: 10
+# Every update to an issue of team `teamId`, with the fields the delta poll
+# reads, for live updates.
+subscription IssueUpdatedLive($teamId: ID!) {
+  issueUpdated(filter: { teamId: { eq: $teamId } }) {
+    id
+    identifier
+    title
+    description
+    url
+    branchName
+    priority
+    estimate
+    labelIds
+    createdAt
+    updatedAt
+    startedAt
+    completedAt
+    canceledAt
+    triagedAt
+    trashed
+    team {
+      id
+      key
+      name
+      issueEstimationType
+    }
+    state {
+      id
+      name
+      type
+      position
+    }
+    assignee {
+      id
+      name
+      displayName
+    }
+    creator {
+      id
+      name
+      displayName
+    }
+    cycle {
+      id
+      number
+      name
+      startsAt
+      endsAt
+      completedAt
+    }
+    project {
+      id
+    }
+  }
+}

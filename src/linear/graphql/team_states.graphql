@@ -1,0 +1,20 @@
+# budget: 210
+# One page of a team's workflow states, for the state picker. Pages hold 100
+# states, far more than a team has; the client still follows `endCursor`
+# until `hasNextPage` is false.
+query TeamStates($teamId: String!, $after: String) {
+  team(id: $teamId) {
+    states(first: 100, after: $after) {
+      nodes {
+        id
+        name
+        type
+        position
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}

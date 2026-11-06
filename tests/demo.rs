@@ -381,3 +381,24 @@ fn every_date_is_anchored_before_now() {
             .all(|date: Timestamp| earliest <= date && date <= demo::NOW)
     );
 }
+
+#[test]
+fn every_issue_has_a_git_safe_branch_name_starting_with_its_identifier() {
+    for issue in data().issues {
+        let prefix = format!("{}-", issue.identifier.to_lowercase());
+        assert!(
+            issue.branch_name.starts_with(&prefix),
+            "{}",
+            issue.branch_name
+        );
+        assert!(issue.branch_name.len() <= 60, "{}", issue.branch_name);
+        assert!(
+            issue
+                .branch_name
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'),
+            "{}",
+            issue.branch_name
+        );
+    }
+}

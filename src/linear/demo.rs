@@ -8,9 +8,10 @@
 use jiff::{SignedDuration, Timestamp};
 
 use super::model::{
-    Comment, Cycle, Estimation, Issue, Label, Member, Priority, Project, StateSpan, StateType,
-    Team, Viewer, WorkflowState, Workspace,
+    Attachment, Comment, Cycle, Estimation, Issue, Label, Member, Priority, Project, StateSpan,
+    StateType, Team, Viewer, WorkflowState, Workspace,
 };
+use super::{TeamOptions, TeamQuery};
 
 /// The demo's "now": every date in the demo workspace is anchored to it.
 pub const NOW: Timestamp = Timestamp::constant(1_793_631_600, 0); // 2026-11-02T15:00:00Z
@@ -37,6 +38,7 @@ pub struct DemoWorkspace {
     pub cycles: Vec<Cycle>,
     pub issues: Vec<Issue>,
     pub comments: Vec<Comment>,
+    pub attachments: Vec<Attachment>,
 }
 
 /// Builds the demo workspace. Deterministic: no clock, no OS randomness.
@@ -78,11 +80,198 @@ pub fn workspace() -> DemoWorkspace {
         cycles: Vec::new(),
         issues: Vec::new(),
         comments: Vec::new(),
+        attachments: Vec::new(),
     };
     for spec in &TEAMS {
         add_team(&mut data, spec, &mut rng);
     }
+    add_links(&mut data);
     data
+}
+
+/// The issue DES-34's pull requests and other attachments.
+const DES_34_ATTACHMENTS: &[(&str, &str, &str, Option<&str>)] = &[
+    (
+        "https://github.com/squeakworks/nibble/pull/412",
+        "Autumn release spacing fixes",
+        "github",
+        Some("merged"),
+    ),
+    (
+        "https://github.com/squeakworks/nibble/pull/418",
+        "Tidy the release screenshots",
+        "github",
+        Some("open"),
+    ),
+    (
+        "https://www.figma.com/file/nibble-autumn-qa",
+        "Autumn QA board",
+        "figma",
+        None,
+    ),
+    (
+        "https://squeakworks.slack.com/archives/C042DESIGN/p1793400000",
+        "Thread in #design",
+        "slack",
+        None,
+    ),
+    (
+        "https://github.com/squeakworks/nibble/issues/377",
+        "Screenshots are blurry on tablets",
+        "github",
+        None,
+    ),
+];
+
+/// The issue DES-16's attachments.
+const DES_16_ATTACHMENTS: &[(&str, &str, &str, Option<&str>)] = &[
+    (
+        "https://github.com/squeakworks/whisker/pull/88",
+        "Focus ring tokens",
+        "github",
+        Some("draft"),
+    ),
+    (
+        "https://www.w3.org/WAI/WCAG22/Understanding/focus-appearance",
+        "WCAG focus appearance",
+        "unknown",
+        None,
+    ),
+];
+
+/// DES-16's description: a Markdown link, bare URLs, an autolink, its own
+/// Linear page and another issue's.
+const DES_16_DESCRIPTION: &str = "Follow [the focus appearance criterion]\
+(https://www.w3.org/WAI/WCAG22/Understanding/focus-appearance) and match the \
+rings in https://www.figma.com/file/whisker-focus-rings.\n\n\
+Tracked in https://linear.app/squeakworks/issue/DES-16, related to \
+https://linear.app/squeakworks/issue/DES-31. Ring styles: \
+<https://whisker.squeakworks.example/focus>";
+
+/// What DES-16's first comment adds: a link the description has, a new one
+/// and the pull request it is attached to.
+const DES_16_COMMENT: &str = " Notes in https://www.figma.com/file/whisker-focus-rings, \
+https://whisker.squeakworks.example/focus-rings and \
+https://github.com/squeakworks/whisker/pull/88.";
+
+/// Gives two of the viewer's issues something to open beyond their Linear
+/// page: DES-34 has pull requests and other attachments, and DES-16 has
+/// links in its description and a comment as well. Added after the
+/// generated data, so the seed's draws stay as they were.
+fn add_links(data: &mut DemoWorkspace) {
+    for (identifier, attachments) in [
+        ("DES-34", DES_34_ATTACHMENTS),
+        ("DES-16", DES_16_ATTACHMENTS),
+    ] {
+        let issue_id = format!("issue-{}", identifier.to_lowercase());
+        for (n, &(url, title, source, status)) in attachments.iter().enumerate() {
+            data.attachments.push(Attachment {
+                id: format!("attachment-{}-{}", identifier.to_lowercase(), n + 1),
+                issue_id: issue_id.clone(),
+                url: url.to_owned(),
+                title: title.to_owned(),
+                subtitle: None,
+                source_type: Some(source.to_owned()),
+                status: status.map(str::to_owned),
+            });
+        }
+    }
+    let focus_rings = "issue-des-16";
+    if let Some(issue) = data.issues.iter_mut().find(|issue| issue.id == focus_rings) {
+        issue.description = Some(DES_16_DESCRIPTION.to_owned());
+    }
+    if let Some(comment) = data
+        .comments
+        .iter_mut()
+        .find(|comment| comment.issue_id == focus_rings)
+    {
+        comment.body.push_str(DES_16_COMMENT);
+    }
+}
+
+/// The ids of the members of the demo team with id `team_id`.
+pub fn team_member_ids(team_id: &str) -> Vec<String> {
+    TEAMS
+        .iter()
+        .find(|spec| format!("team-{}", spec.key.to_lowercase()) == team_id)
+        .map(|spec| {
+            spec.members
+                .iter()
+                .map(|handle| member_id(handle))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The ids of the demo teams the viewer administers: Engineering and
+/// Operations, not Design, so the demo shows the per-person breakdown both
+/// present (in points and in issue counts) and absent.
+pub fn administrable_team_ids() -> Vec<String> {
+    vec!["team-eng".to_owned(), "team-ops".to_owned()]
+}
+
+/// The issues of `query` in `data`, most recently updated first, as the fake
+/// client pages through them.
+pub fn team_issues(data: &DemoWorkspace, query: &TeamQuery) -> Vec<Issue> {
+    let mut issues: Vec<Issue> = data
+        .issues
+        .iter()
+        .filter(|issue| issue.team_id == query.team_id && query.filter.matches(issue))
+        .cloned()
+        .collect();
+    issues.sort_by(|a, b| {
+        b.updated_at
+            .cmp(&a.updated_at)
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    issues
+}
+
+/// What the Team Issues filters offer for `team_id` in `data`. Its projects
+/// are the ones its issues belong to.
+pub fn team_options(data: &DemoWorkspace, team_id: &str) -> TeamOptions {
+    let handles: &[&str] = TEAMS
+        .iter()
+        .find(|spec| format!("team-{}", spec.key.to_lowercase()) == team_id)
+        .map_or(&[], |spec| spec.members);
+    TeamOptions {
+        team_id: team_id.to_owned(),
+        states: data
+            .workflow_states
+            .iter()
+            .filter(|state| state.team_id == team_id)
+            .cloned()
+            .collect(),
+        members: data
+            .members
+            .iter()
+            .filter(|member| handles.iter().any(|&handle| member_id(handle) == member.id))
+            .cloned()
+            .collect(),
+        labels: data
+            .labels
+            .iter()
+            .filter(|label| label.team_id.as_deref().is_none_or(|id| id == team_id))
+            .cloned()
+            .collect(),
+        cycles: data
+            .cycles
+            .iter()
+            .filter(|cycle| cycle.team_id == team_id)
+            .cloned()
+            .collect(),
+        projects: data
+            .projects
+            .iter()
+            .filter(|project| {
+                data.issues.iter().any(|issue| {
+                    issue.team_id == team_id && issue.project_id.as_ref() == Some(&project.id)
+                })
+            })
+            .cloned()
+            .collect(),
+        problems: Vec::new(),
+    }
 }
 
 struct TeamSpec {
@@ -474,15 +663,12 @@ fn finish(
             }
         })
         .collect();
+    let title = spec.titles.get(number - 1).copied().unwrap_or("Untitled");
     let issue = Issue {
         id: issue_id,
         url: format!("https://linear.app/{URL_KEY}/issue/{identifier}"),
-        title: spec
-            .titles
-            .get(number - 1)
-            .copied()
-            .unwrap_or("Untitled")
-            .to_owned(),
+        branch_name: branch_name(&identifier, title),
+        title: title.to_owned(),
         identifier,
         description: draft.description,
         team_id: team_id.to_owned(),
@@ -889,3 +1075,20 @@ const OPS_TITLES: &[&str] = &[
     "Expense policy for conference travel",
     "Schedule the winter maintenance window",
 ];
+
+/// Linear's suggested branch name: the lowercased identifier, then the title
+/// as a slug, cut to a whole word within 60 characters.
+fn branch_name(identifier: &str, title: &str) -> String {
+    let mut name = identifier.to_lowercase();
+    for word in title
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|word| !word.is_empty())
+    {
+        if name.len() + 1 + word.len() > 60 {
+            break;
+        }
+        name.push('-');
+        name.push_str(&word.to_lowercase());
+    }
+    name
+}

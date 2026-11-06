@@ -1,0 +1,17 @@
+# budget: 210
+# One page of the ids of a team's issues that match `filter`, to count them.
+# Pages hold 100 ids. The client follows `endCursor` until `hasNextPage` is
+# false.
+query TeamIssueIds($teamId: String!, $filter: IssueFilter, $after: String) {
+  team(id: $teamId) {
+    issues(first: 100, after: $after, filter: $filter) {
+      nodes {
+        id
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}

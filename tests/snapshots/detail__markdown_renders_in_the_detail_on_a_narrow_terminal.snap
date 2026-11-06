@@ -1,0 +1,28 @@
+---
+source: tests/detail.rs
+expression: app.backend()
+---
+" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+"┌DES-34────────────────────────────────────────────────────────────────────────┐"
+"│Design QA for the autumn release                                              │"
+"│                                                                              │"
+"│State     ◐ In Progress                                                       │"
+"│Priority  ▮▮▮ High                                                            │"
+"│Estimate  3                                                                   │"
+"│                                                                              │"
+"│Rind photos upload twice                                                      │"
+"│                                                                              │"
+"│Seen on flaky networks with slow uploads and old new builds. Run burrow sync  │"
+"│to check.                                                                     │"
+"│                                                                              │"
+"│Steps                                                                         │"
+"│                                                                              │"
+"│1. Open a shared pantry                                                       │"
+"│2. Add a wheel                                                                │"
+"│   ◦ with a photo                                                             │"
+"│   ◦ without one                                                              │"
+"│                                                                              │"
+"│[x] Reproduce on staging                                                      │"
+"└──────────────────────────────────────────────────────────────────────────────┘"
+" Move │ j down │ k up    │ gg top    │ G bottom │ C-d/C-u page │ h/l pane       "
+" Do   │ y yank │ o links │ Esc close │ ? keys   │ q quit                        "

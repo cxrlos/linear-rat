@@ -1,0 +1,58 @@
+# budget: 10
+# Creates an issue from the fields in `input`. Returns the issue as Linear
+# stored it, with the same fields as the assigned issues query.
+mutation IssueCreate($input: IssueCreateInput!) {
+  issueCreate(input: $input) {
+    success
+    issue {
+      id
+      identifier
+      title
+      description
+      url
+      branchName
+      priority
+      estimate
+      labelIds
+      createdAt
+      updatedAt
+      startedAt
+      completedAt
+      canceledAt
+      triagedAt
+      team {
+        id
+        key
+        name
+        issueEstimationType
+      }
+      state {
+        id
+        name
+        type
+        position
+      }
+      assignee {
+        id
+        name
+        displayName
+      }
+      creator {
+        id
+        name
+        displayName
+      }
+      cycle {
+        id
+        number
+        name
+        startsAt
+        endsAt
+        completedAt
+      }
+      project {
+        id
+      }
+    }
+  }
+}

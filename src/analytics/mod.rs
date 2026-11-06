@@ -17,7 +17,7 @@ mod unit;
 pub use cycles::{
     BurnUp, BurnUpDay, CycleVelocity, VELOCITY_CYCLES, active_cycle, burn_up, velocity,
 };
-pub use flow::{DayCount, WeekFlow, completion_days, weekly_flow};
+pub use flow::{DayCount, WeekFlow, completion_days, open_issue_trend, weekly_flow};
 pub use health::{StaleIssue, StaleThreshold, TriageHealth, stale_issues, triage_health};
 pub use people::{AdministrableTeams, PerPersonBreakdown, PersonBreakdown, per_person_breakdown};
 pub use percentile::Percentiles;

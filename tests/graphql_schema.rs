@@ -10,9 +10,11 @@
 //! estimate is a simplified version of Linear's own scoring: every field that
 //! selects an object (a connection, its `nodes`, any nested object) costs one
 //! point times the product of the `first:` values of the connections around
-//! it. Scalars are free. A connection without `first:` (a literal, or a
-//! variable with a default) is rejected, because Linear would charge it at
-//! its default page size of 50 and the document would hide that cost.
+//! it. Scalars are free. A search payload such as `IssueSearchPayload` pages
+//! like a connection and is counted as one. A connection without `first:` (a
+//! literal, or a variable with a default) is rejected, because Linear would
+//! charge it at its default page size of 50 and the document would hide that
+//! cost.
 
 // clippy's allow-unwrap-in-tests does not cover helpers outside #[test] functions.
 #![allow(clippy::unwrap_used)]
@@ -120,7 +122,8 @@ impl Estimator<'_> {
         if field.selection_set.selections.is_empty() {
             return 0;
         }
-        let inner = if field.ty().inner_named_type().ends_with("Connection") {
+        let type_name = field.ty().inner_named_type();
+        let inner = if type_name.ends_with("Connection") || type_name.ends_with("SearchPayload") {
             match self.first(field) {
                 Some(first) => multiplier * first,
                 None => {

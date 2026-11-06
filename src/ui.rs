@@ -1,10 +1,20 @@
 //! Rendering: a pure function of [`State`].
 
+mod analytics;
 mod cheatsheet;
+mod detail;
+mod error;
 mod hints;
-mod icons;
+pub mod icons;
+pub(crate) mod markdown;
 mod my_issues;
+mod palette;
+mod picker;
+mod results;
+mod search;
 pub mod style;
+mod team_issues;
+pub mod theme;
 mod which_key;
 
 use ratatui::Frame;
@@ -12,33 +22,59 @@ use ratatui::layout::{Constraint, Layout, Rect, Size};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph, Tabs};
 
-use crate::app::{Action, Modal, Screen, State};
+use crate::app::{Action, Load, Modal, Screen, State};
 use crate::keys::{self, Context};
 
 const MAX_NOTICE_ROWS: usize = 3;
 
 pub fn render(state: &State, frame: &mut Frame) {
-    let notice = notice_rows(state, frame.area().width);
-    let [tabs_area, body_area, notice_area, bar_area] = areas(frame.area(), notice.len());
+    let theme = &state.theme;
+    let area = frame.area();
+    frame.buffer_mut().set_style(area, style::base(theme));
+    let notice = notice_rows(state, area.width);
+    let [tabs_area, body_area, notice_area, bar_area] = areas(area, notice.len());
 
     let selected = Screen::ALL
         .iter()
         .position(|&screen| screen == state.screen);
-    let tabs = Tabs::new(Screen::ALL.map(|screen| tab_title(state, screen))).select(selected);
-    frame.render_widget(tabs, tabs_area);
+    let titles = Screen::ALL.map(|screen| tab_title(state, screen));
+    let tabs_width = titles_width(&titles);
+    frame.render_widget(Tabs::new(titles).select(selected), tabs_area);
+    render_sync_indicator(state, frame, tabs_area, tabs_width);
     match state.screen {
-        Screen::MyIssues => my_issues::render(&state.my_issues, frame, body_area),
-        Screen::TeamIssues | Screen::Analytics => {
-            frame.render_widget(Block::bordered().title(state.screen.title()), body_area);
-        }
+        Screen::MyIssues => match &state.load {
+            Load::Loaded => my_issues::render(state, frame, body_area),
+            Load::Loading => error::render_loading(&state.theme, frame, body_area),
+            Load::Failed(error) => {
+                error::render(
+                    error,
+                    state.key_source.as_ref(),
+                    &state.theme,
+                    frame,
+                    body_area,
+                );
+            }
+        },
+        Screen::TeamIssues => team_issues::render(state, frame, body_area),
+        Screen::Analytics => analytics::render(state, frame, body_area),
+        Screen::Results => results::render(state, frame, body_area),
     }
-    frame.render_widget(Paragraph::new(notice).style(style::error()), notice_area);
+    frame.render_widget(
+        Paragraph::new(notice).style(style::error(theme)),
+        notice_area,
+    );
     hints::render(state, frame, bar_area);
 
     for modal in state.modals.iter() {
         match modal {
-            Modal::Cheatsheet => cheatsheet::render(state, frame, body_area),
+            Modal::Cheatsheet { scroll } => cheatsheet::render(state, *scroll, frame, body_area),
             Modal::WhichKey { prefix } => which_key::render(state, prefix, frame, body_area),
+            Modal::Picker(edit) => picker::render_edit(state, edit, frame, body_area),
+            Modal::Links(links) => picker::render_links(state, links, frame, body_area),
+            Modal::Palette(palette) => palette::render(state, palette, frame, body_area),
+            Modal::Search(search) => search::render(state, search, frame, body_area),
+            Modal::Choice(choice) => picker::render_choice(state, choice, frame, body_area),
+            Modal::Create(form) => picker::render_create(state, form, frame, body_area),
         }
     }
 }
@@ -57,6 +93,39 @@ fn tab_title(state: &State, screen: Screen) -> String {
     }
 }
 
+/// How wide [`Tabs`] draws `titles`: each padded by a space on both sides,
+/// with a one-column divider between them.
+fn titles_width(titles: &[String]) -> u16 {
+    let padded: usize = titles
+        .iter()
+        .map(|title| Span::raw(title.as_str()).width() + 2)
+        .sum();
+    let dividers = titles.len().saturating_sub(1);
+    u16::try_from(padded + dividers).unwrap_or(u16::MAX)
+}
+
+/// The sync indicator at the right end of the tab row, muted while sync is
+/// fine and accented when it is failing or throttled. Left out when it
+/// would touch the tabs.
+fn render_sync_indicator(state: &State, frame: &mut Frame, area: Rect, tabs_width: u16) {
+    let Some(indicator) = state.sync_status.indicator() else {
+        return;
+    };
+    let text = Span::raw(format!("{} ", indicator.text));
+    let width = u16::try_from(text.width()).unwrap_or(u16::MAX);
+    if tabs_width.saturating_add(width).saturating_add(1) > area.width {
+        return;
+    }
+    let style = if indicator.alert {
+        style::accent(&state.theme)
+    } else {
+        style::muted(&state.theme)
+    };
+    let [_, right] =
+        Layout::horizontal([Constraint::Fill(1), Constraint::Length(width)]).areas(area);
+    frame.render_widget(text.style(style), right);
+}
+
 /// The first key that closes an overlay, as ` Esc close `, or nothing if
 /// the viewer unbound them all.
 fn close_hint(state: &State) -> Line<'static> {
@@ -67,11 +136,19 @@ fn close_hint(state: &State) -> Line<'static> {
     {
         Some(key) => Line::from(vec![
             Span::raw(" "),
-            Span::styled(key.to_string(), style::accent()),
+            Span::styled(key.to_string(), style::accent(&state.theme)),
             Span::raw(" close "),
         ]),
         None => Line::default(),
     }
+}
+
+/// The block of a popup: its border in the theme's border color, and the
+/// theme's text and background under it, since `Clear` resets them.
+fn popup_block(state: &State) -> Block<'static> {
+    Block::bordered()
+        .border_style(style::border(&state.theme))
+        .style(style::base(&state.theme))
 }
 
 /// A `width` by `height` box centered in `area`, shrunk to fit.
@@ -94,13 +171,56 @@ pub fn list_rows(state: &State, viewport: Size) -> usize {
     usize::from(body_area.height.saturating_sub(2))
 }
 
+/// How many rows the focused issue's detail shows in a `viewport`-sized
+/// terminal, inside its border, and how many lines it has. Both are 0 when
+/// no detail is on screen.
+pub fn detail_rows(state: &State, viewport: Size) -> (usize, usize) {
+    let area = Rect::from((ratatui::layout::Position::ORIGIN, viewport));
+    let [_, body_area, _, _] = areas(area, notice_rows(state, viewport.width).len());
+    let pane = match state.screen {
+        Screen::MyIssues => my_issues::detail_area(state, body_area, state.my_issues.pane()),
+        Screen::TeamIssues => team_issues::detail_area(state, body_area),
+        Screen::Results => my_issues::detail_area(state, body_area, state.results.pane()),
+        Screen::Analytics => None,
+    };
+    let Some(pane) = pane else {
+        return (0, 0);
+    };
+    let inner = Block::bordered().inner(pane);
+    let lines =
+        detail::issue(state).map_or(0, |issue| detail::lines(state, issue, inner.width).len());
+    (usize::from(inner.height), lines)
+}
+
+/// How many issue rows fit in the Team Issues list of a `viewport`-sized
+/// terminal, under its header.
+pub fn team_list_rows(state: &State, viewport: Size) -> usize {
+    list_rows(state, viewport).saturating_sub(usize::from(team_issues::header_rows(state)))
+}
+
+/// How far the cheatsheet can scroll in a `viewport`-sized terminal: how
+/// many of its rows do not fit.
+pub fn cheatsheet_max_scroll(state: &State, viewport: Size) -> u16 {
+    let area = Rect::from((ratatui::layout::Position::ORIGIN, viewport));
+    let [_, body_area, _, _] = areas(area, notice_rows(state, viewport.width).len());
+    cheatsheet::max_scroll(state, body_area)
+}
+
+/// How far the Analytics screen can scroll in a `viewport`-sized terminal:
+/// how many of its rows do not fit.
+pub fn analytics_max_scroll(state: &State, viewport: Size) -> u16 {
+    let area = Rect::from((ratatui::layout::Position::ORIGIN, viewport));
+    let [_, body_area, _, _] = areas(area, notice_rows(state, viewport.width).len());
+    analytics::max_scroll(state, body_area)
+}
+
 /// The tab row, the body, the notice and the bottom bar, top to bottom.
 fn areas(area: Rect, notice_rows: usize) -> [Rect; 4] {
     Layout::vertical([
         Constraint::Length(1),
         Constraint::Fill(1),
         Constraint::Length(u16::try_from(notice_rows).unwrap_or(0)),
-        Constraint::Length(1),
+        Constraint::Length(hints::ROWS),
     ])
     .areas(area)
 }

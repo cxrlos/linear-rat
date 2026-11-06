@@ -1,0 +1,25 @@
+# budget: 310
+# One page of an issue's comments with each author. Pages hold 100 comments.
+# The client follows `endCursor` until `hasNextPage` is false and sorts them
+# oldest first.
+query IssueComments($id: String!, $after: String) {
+  issue(id: $id) {
+    id
+    comments(first: 100, after: $after) {
+      nodes {
+        id
+        body
+        createdAt
+        user {
+          id
+          name
+          displayName
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}

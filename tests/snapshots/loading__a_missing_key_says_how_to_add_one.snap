@@ -1,0 +1,28 @@
+---
+source: tests/loading.rs
+expression: app.backend()
+---
+" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+"┌My Issues─────────────────────────────────────────────────────────────────────┐"
+"│                                                                              │"
+"│ Not logged in                                                                │"
+"│                                                                              │"
+"│ No API key: run `lrat auth login`, or set LINEAR_API_KEY.                    │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"└──────────────────────────────────────────────────────────────────────────────┘"
+"                                                                                "
+" Do   │ ? keys │ q quit                                                         "

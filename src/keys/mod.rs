@@ -4,13 +4,15 @@
 
 mod key;
 mod keymap;
+mod reference;
 mod registry;
 
 pub use key::{Key, KeySequence, ParseKeyError};
 pub use keymap::{Change, Keymap, Override, Resolution, Target};
-pub use registry::{ACTIONS, ActionSpec, by_id, spec};
+pub use reference::keymap_reference;
+pub use registry::{ACTIONS, ActionSpec, Hint, HintRow, by_id, spec};
 
-use crate::app::{Modal, Pane, Screen, State};
+use crate::app::{Load, Modal, Pane, Screen, State};
 
 /// Where a binding applies. Several contexts are active at once, most
 /// specific first, and the first one that binds a key wins.
@@ -20,18 +22,24 @@ pub enum Context {
     Global,
     /// An issue list.
     List,
+    /// The Team Issues list, ahead of [`Context::List`] there.
+    TeamIssues,
     /// An issue's detail.
     Detail,
     /// An overlay such as the cheatsheet, which takes every key.
     Overlay,
+    /// The Analytics screen.
+    Analytics,
 }
 
 impl Context {
-    pub const ALL: [Context; 4] = [
+    pub const ALL: [Context; 6] = [
         Context::Global,
         Context::List,
+        Context::TeamIssues,
         Context::Detail,
         Context::Overlay,
+        Context::Analytics,
     ];
 
     /// The name of its table in `config.toml`, as in `[keys.list]`.
@@ -39,8 +47,10 @@ impl Context {
         match self {
             Context::Global => "global",
             Context::List => "list",
+            Context::TeamIssues => "team-issues",
             Context::Detail => "detail",
             Context::Overlay => "overlay",
+            Context::Analytics => "analytics",
         }
     }
 
@@ -53,8 +63,10 @@ impl Context {
         match self {
             Context::Global => "Everywhere",
             Context::List => "Issue list",
+            Context::TeamIssues => "Team Issues",
             Context::Detail => "Issue detail",
             Context::Overlay => "Overlays",
+            Context::Analytics => "Analytics",
         }
     }
 }
@@ -73,13 +85,23 @@ pub fn active_contexts(state: &State) -> Vec<Context> {
     }
 }
 
-/// The contexts of the screen under any overlay.
+/// The contexts of the screen under any overlay. My Issues has no list
+/// while it loads or shows why it could not.
 pub fn screen_contexts(state: &State) -> Vec<Context> {
     match state.screen {
+        Screen::MyIssues if state.load != Load::Loaded => vec![Context::Global],
         Screen::MyIssues if state.my_issues.pane() == Pane::Detail => {
             vec![Context::Detail, Context::Global]
         }
-        Screen::MyIssues | Screen::TeamIssues => vec![Context::List, Context::Global],
-        Screen::Analytics => vec![Context::Global],
+        Screen::TeamIssues if state.team_issues.pane() == Pane::Detail => {
+            vec![Context::Detail, Context::Global]
+        }
+        Screen::Results if state.results.pane() == Pane::Detail => {
+            vec![Context::Detail, Context::Global]
+        }
+        Screen::TeamIssues => vec![Context::TeamIssues, Context::List, Context::Global],
+        Screen::Results => vec![Context::List, Context::Global],
+        Screen::MyIssues => vec![Context::List, Context::Global],
+        Screen::Analytics => vec![Context::Analytics, Context::Global],
     }
 }

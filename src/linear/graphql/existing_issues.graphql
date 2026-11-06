@@ -1,0 +1,22 @@
+# budget: 210
+# Which of the given issue ids still exist, for the reconciliation that drops
+# issues deleted for good or out of the viewer's reach. Archived issues still
+# count; trashed ones come back marked. The client sends at most 100 ids per
+# request and follows `endCursor` until `hasNextPage` is false.
+query ExistingIssues($ids: [ID!], $after: String) {
+  issues(
+    first: 100
+    after: $after
+    includeArchived: true
+    filter: { id: { in: $ids } }
+  ) {
+    nodes {
+      id
+      trashed
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}

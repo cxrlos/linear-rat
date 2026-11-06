@@ -65,7 +65,40 @@ fn fg_of(app: &App<TestBackend>, y: u16, text: &str) -> Option<Color> {
 fn the_bottom_bar_lists_the_keys_of_the_issue_list() {
     let app = app();
 
-    assert_snapshot!(row(&app, 23));
+    assert_snapshot!(format!("{}\n{}", row(&app, 22), row(&app, 23)));
+}
+
+#[test]
+fn the_bottom_bar_lines_up_moves_and_actions_in_two_rows() {
+    let app = app();
+
+    assert_eq!(
+        row(&app, 22).trim_end(),
+        " Move │ j down     │ k up   │ gg top  │ G bottom  │ C-d/C-u page │ h/l pane"
+    );
+    assert_eq!(
+        row(&app, 23).trim_end(),
+        " Do   │ Enter open │ y yank │ o links │ Esc close │ ? keys       │ q quit"
+    );
+}
+
+#[test]
+fn a_bottom_bar_too_wide_for_columns_lists_each_row_after_its_label() {
+    let loaded = config::parse("", Path::new("config.toml"));
+    let app = App::new(
+        TestBackend::new(70, 24),
+        State::default().with_config(&loaded),
+    )
+    .unwrap();
+
+    assert_eq!(
+        row(&app, 22).trim_end(),
+        " Move │ j down  k up  gg top  G bottom  C-d/C-u page  h/l pane"
+    );
+    assert_eq!(
+        row(&app, 23).trim_end(),
+        " Do   │ Enter open  y yank  o links  Esc close  ? keys  q quit"
+    );
 }
 
 #[test]
@@ -73,11 +106,11 @@ fn the_bottom_bar_mutes_unavailable_actions_and_accents_the_rest() {
     let app = app();
 
     assert_eq!(fg_of(&app, 23, "Esc"), Some(Color::DarkGray));
-    assert_eq!(fg_of(&app, 23, "j"), Some(Color::Cyan));
+    assert_eq!(fg_of(&app, 22, "j"), Some(Color::Cyan));
 }
 
 #[test]
-fn the_bottom_bar_accents_esc_and_mutes_moves_while_the_detail_is_open() {
+fn the_bottom_bar_accents_esc_and_the_moves_that_scroll_while_the_detail_is_open() {
     let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
 
     app.handle(Event::Key(KeyEvent::new(
@@ -87,7 +120,8 @@ fn the_bottom_bar_accents_esc_and_mutes_moves_while_the_detail_is_open() {
     .unwrap();
 
     assert_eq!(fg_of(&app, 23, "Esc"), Some(Color::Cyan));
-    assert_eq!(fg_of(&app, 23, "j"), Some(Color::DarkGray));
+    assert_eq!(fg_of(&app, 22, "j"), Some(Color::Cyan), "more below");
+    assert_eq!(fg_of(&app, 22, "k"), Some(Color::DarkGray), "at the top");
 }
 
 #[test]
@@ -135,7 +169,7 @@ move-down = "2"
 fn the_bottom_bar_shows_overridden_keys() {
     let app = app_with(OVERRIDES);
 
-    assert_snapshot!(row(&app, 23));
+    assert_snapshot!(format!("{}\n{}", row(&app, 22), row(&app, 23)));
 }
 
 #[test]
@@ -152,8 +186,55 @@ fn the_cheatsheet_shows_overridden_keys() {
     let mut app = app_with(OVERRIDES);
 
     press(&mut app, "?");
-
     assert_snapshot!(app.backend());
+
+    press(&mut app, &"j".repeat(30));
+    assert_snapshot!(
+        "the_cheatsheet_shows_overridden_keys_scrolled",
+        app.backend()
+    );
+}
+
+fn screen(app: &App<TestBackend>) -> String {
+    (0..24).map(|y| row(app, y) + "\n").collect()
+}
+
+#[test]
+fn the_cheatsheet_fits_inside_the_frame_and_scrolls_to_the_rest() {
+    let mut app = app();
+
+    press(&mut app, "?");
+    assert!(
+        row(&app, 1).starts_with("┌My Issues───"),
+        "{}",
+        screen(&app)
+    );
+    assert!(!screen(&app).contains("Quit lrat"));
+
+    press(&mut app, &"j".repeat(30));
+    assert!(
+        screen(&app).contains("q       Quit lrat"),
+        "{}",
+        screen(&app)
+    );
+    assert!(!screen(&app).contains("Issue list"));
+    assert!(row(&app, 20).contains("└ Esc close"), "{}", screen(&app));
+
+    press(&mut app, &"k".repeat(30));
+    assert!(row(&app, 3).contains("Issue list"), "{}", screen(&app));
+}
+
+#[test]
+fn the_bottom_bar_of_the_cheatsheet_accents_only_the_ways_it_can_scroll() {
+    let mut app = app();
+
+    press(&mut app, "?");
+    assert_eq!(fg_of(&app, 22, "j"), Some(Color::Cyan));
+    assert_eq!(fg_of(&app, 22, "k"), Some(Color::DarkGray));
+
+    press(&mut app, &"j".repeat(30));
+    assert_eq!(fg_of(&app, 22, "j"), Some(Color::DarkGray));
+    assert_eq!(fg_of(&app, 22, "k"), Some(Color::Cyan));
 }
 
 #[test]
@@ -348,8 +429,8 @@ mvoe-up = \"e\"
 ";
     let mut app = app_with(config);
 
-    assert_snapshot!(row(&app, 22));
-    assert!(row(&app, 23).starts_with(" j down  k up"));
+    assert_snapshot!(row(&app, 21));
+    assert!(row(&app, 22).starts_with(" Move │ j down"));
     assert_eq!(press(&mut app, "Q"), vec![Effect::Quit]);
 }
 
@@ -371,7 +452,7 @@ quit = \"x\"
         State::default().with_config(&loaded),
     )
     .unwrap();
-    let notice = row(&app, 21) + &row(&app, 22);
+    let notice = row(&app, 20) + &row(&app, 21);
     assert!(notice.starts_with("config.toml:2: `<Nope>` is not a key"));
     assert!(notice.trim_end().ends_with("(and 2 more; see the log)"));
 }
@@ -380,10 +461,10 @@ quit = \"x\"
 fn the_next_key_press_clears_the_notice() {
     let mut app = app_with("[keys]\nlist = 3\n");
 
-    assert!(row(&app, 22).starts_with("config.toml:2:"));
+    assert!(row(&app, 21).starts_with("config.toml:2:"));
     press(&mut app, "x");
-    assert!(row(&app, 23).starts_with(" j down"));
-    assert!(row(&app, 22).starts_with("└"));
+    assert!(row(&app, 22).starts_with(" Move │ j down"));
+    assert!(row(&app, 21).starts_with("└"));
 }
 
 #[test]

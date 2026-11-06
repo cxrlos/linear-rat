@@ -1,0 +1,28 @@
+---
+source: tests/loading.rs
+expression: app.backend()
+---
+" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+"┌My Issues─────────────────────────────────────────────────────────────────────┐"
+"│                                                                              │"
+"│ API key rejected                                                             │"
+"│                                                                              │"
+"│ Linear rejected the API key from LINEAR_API_KEY: it is wrong, revoked or     │"
+"│ expired. Create a new personal API key at                                    │"
+"│ https://linear.app/settings/account/security, then put it in LINEAR_API_KEY, │"
+"│ or unset LINEAR_API_KEY to use the OS keyring.                               │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"│                                                                              │"
+"└──────────────────────────────────────────────────────────────────────────────┘"
+"                                                                                "
+" Do   │ ? keys │ q quit                                                         "
