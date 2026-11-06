@@ -24,5 +24,5 @@ expression: detail
 │History                                                                       │
 │Loading…                                                                      │
 └──────────────────────────────────────────────────────────────────────────────┘
- Move │ j/k move                                                                
- Do   │ Esc close
+ Move │ j down │ k up    │ gg top    │ G bottom │ C-d/C-u page │ h/l pane       
+ Do   │ y yank │ o links │ Esc close │ ? keys   │ q quit
