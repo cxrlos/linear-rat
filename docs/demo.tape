@@ -7,9 +7,11 @@
 #   cargo build --release --locked
 #   vhs docs/demo.tape
 #
-# The config dir points at a directory that does not exist, so the recording
-# uses the default config (and the terminal theme below) whatever my own
-# config.toml says. My Issues shows the detail beside the list from 120
+# lrat's config dir points at a directory that does not exist, so the
+# recording uses the default config (and the terminal theme below) whatever
+# my own config.toml says. It is set on the lrat command, not with Env: Env
+# also reaches the browser VHS records with, which then fails to start.
+# My Issues shows the detail beside the list from 120
 # columns; the size below is meant to clear that, but the column count is an
 # estimate, so check the first frames show the detail on the right.
 
@@ -23,10 +25,8 @@ Set Padding 20
 Set Theme "Catppuccin Mocha"
 Set TypingSpeed 120ms
 
-Env XDG_CONFIG_HOME "/nonexistent/lrat-demo"
-
 Hide
-Type "clear && target/release/lrat --demo"
+Type "clear && XDG_CONFIG_HOME=/nonexistent/lrat-demo target/release/lrat --demo"
 Enter
 Sleep 1.5s
 Show
