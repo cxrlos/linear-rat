@@ -12,6 +12,8 @@ lrat supports Linux and macOS, and one Linear workspace at a time. Issues labell
 - [`cargo-insta`](https://insta.rs) for snapshot tests
 - [`cargo-deny`](https://github.com/EmbarkStudios/cargo-deny) for dependency checks
 
+With Nix, `nix develop` gives a shell with all of these, through rustup with the stable and 1.88 toolchains.
+
 `cargo run -- --demo` starts lrat with fake data, so you don't need a Linear account to work on the UI. When your change touches how lrat talks to Linear, also try it against a throwaway workspace, as described in [Testing against a free Linear workspace](#testing-against-a-free-linear-workspace).
 
 ## Testing against a free Linear workspace
