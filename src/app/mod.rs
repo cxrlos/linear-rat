@@ -26,6 +26,7 @@ mod update;
 
 use ratatui::Terminal;
 use ratatui::backend::Backend;
+use ratatui::layout::Rect;
 
 pub use action::{Action, Copyable};
 pub use analytics_screen::{AnalyticsScreen, AnalyticsView};
@@ -96,8 +97,13 @@ impl<B: Backend> App<B> {
     /// terminal's size, as after something else, such as `$EDITOR`, has
     /// drawn over it.
     pub fn redraw_all(&mut self) -> Result<(), B::Error> {
-        self.terminal.clear()?;
         let size = self.terminal.size()?;
+        // Clears and forgets the last frame as `Terminal::clear` does, but
+        // without asking the terminal for the cursor position: after a signal,
+        // crossterm's input thread holds the reader and the answer never
+        // arrives.
+        self.terminal
+            .resize(Rect::new(0, 0, size.width, size.height))?;
         self.handle(Event::Resize {
             columns: size.width,
             rows: size.height,

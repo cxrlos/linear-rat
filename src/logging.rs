@@ -20,7 +20,7 @@ const LEVEL_VAR: &str = "LRAT_LOG";
 /// `~/.local/state/lrat`, on macOS too) at the level in `LRAT_LOG`, `info` if
 /// unset. Keep the returned guard alive: dropping it flushes and stops logging.
 pub fn init() -> anyhow::Result<WorkerGuard> {
-    let dir = log_dir()?;
+    let dir = state_dir()?;
     fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
     let appender = RollingFileAppender::builder()
         .rotation(Rotation::DAILY)
@@ -65,7 +65,9 @@ where
     )
 }
 
-fn log_dir() -> anyhow::Result<PathBuf> {
+/// `$XDG_STATE_HOME/lrat` (by default `~/.local/state/lrat`, on macOS too),
+/// where the logs and crash reports go.
+pub fn state_dir() -> anyhow::Result<PathBuf> {
     let base = choose_base_strategy().context("finding the home directory")?;
     let state = base
         .state_dir()

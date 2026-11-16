@@ -21,6 +21,7 @@ use crate::app::{
 };
 use crate::linear::{AnalyticsWindow, ClientError, LinearClient, LiveEvent, Urgency};
 use crate::snapshot::SnapshotCache;
+use crate::terminal::JobControl;
 use crate::{browser, clipboard, terminal};
 
 /// How often [`Event::Tick`] goes out.
@@ -64,21 +65,19 @@ where
     I: Stream<Item = io::Result<TerminalEvent>> + Unpin,
     S: Future<Output = ()>,
 {
-    let reach = Reach {
-        client,
-        snapshots,
-        live: Cell::new(None),
-    };
-    let result = run_loop(app, &reach, input, shutdown).await;
-    save_snapshot(app, &reach);
-    result
+    let no_job_control = futures_util::stream::pending();
+    run_with_job_control(app, client, snapshots, input, shutdown, no_job_control).await
 }
 
-async fn run_loop<B, C, I, S>(
+/// [`run`], suspending or resuming lrat on each `job_control` signal. The
+/// loop goes on after either.
+pub async fn run_with_job_control<B, C, I, S, J>(
     app: &mut App<B>,
-    reach: &Reach<'_, C>,
-    mut input: I,
+    client: Option<&C>,
+    snapshots: Option<&SnapshotCache>,
+    input: I,
     shutdown: S,
+    job_control: J,
 ) -> anyhow::Result<()>
 where
     B: Backend,
@@ -86,8 +85,35 @@ where
     C: LinearClient,
     I: Stream<Item = io::Result<TerminalEvent>> + Unpin,
     S: Future<Output = ()>,
+    J: Stream<Item = JobControl>,
+{
+    let reach = Reach {
+        client,
+        snapshots,
+        live: Cell::new(None),
+    };
+    let result = run_loop(app, &reach, input, shutdown, job_control).await;
+    save_snapshot(app, &reach);
+    result
+}
+
+async fn run_loop<B, C, I, S, J>(
+    app: &mut App<B>,
+    reach: &Reach<'_, C>,
+    mut input: I,
+    shutdown: S,
+    job_control: J,
+) -> anyhow::Result<()>
+where
+    B: Backend,
+    B::Error: Send + Sync + 'static,
+    C: LinearClient,
+    I: Stream<Item = io::Result<TerminalEvent>> + Unpin,
+    S: Future<Output = ()>,
+    J: Stream<Item = JobControl>,
 {
     tokio::pin!(shutdown);
+    tokio::pin!(job_control);
     let clock = Clock::start();
     let mut ticks = tokio::time::interval(TICK);
     ticks.set_missed_tick_behavior(MissedTickBehavior::Delay);
@@ -109,6 +135,7 @@ where
             }
             Some(event) = in_flight.next(), if !in_flight.is_empty() => Some(event),
             Some(event) = next_live(&mut live) => Some(Event::Live(event)),
+            Some(signal) = job_control.next() => on_job_control(app, signal, &mut System)?,
             terminal_event = input.next() => match terminal_event {
                 Some(event) => from_terminal(event.context("reading terminal input")?),
                 None => return Ok(()),
@@ -157,6 +184,11 @@ trait Outside {
     /// Runs the viewer's editor on `text` until it exits, and returns what
     /// it saved.
     fn edit(&mut self, text: &str) -> anyhow::Result<String>;
+    /// Hands the terminal to the shell and stops lrat until it is
+    /// continued, then takes the terminal back.
+    fn suspend(&mut self) -> anyhow::Result<()>;
+    /// Takes the terminal back after lrat was continued.
+    fn resume(&mut self) -> anyhow::Result<()>;
 }
 
 /// The terminal's clipboard, the viewer's browser and their editor.
@@ -178,6 +210,37 @@ impl Outside for System {
     fn edit(&mut self, text: &str) -> anyhow::Result<String> {
         terminal::edit(text)
     }
+
+    fn suspend(&mut self) -> anyhow::Result<()> {
+        terminal::suspend().context("could not suspend lrat")
+    }
+
+    fn resume(&mut self) -> anyhow::Result<()> {
+        terminal::resume().context("could not take the terminal back")
+    }
+}
+
+/// Suspends or resumes as `signal` asks and draws the whole screen, which
+/// the shell may have drawn over. A failure comes back as the event that
+/// shows it.
+fn on_job_control<B>(
+    app: &mut App<B>,
+    signal: JobControl,
+    outside: &mut impl Outside,
+) -> anyhow::Result<Option<Event>>
+where
+    B: Backend,
+    B::Error: Send + Sync + 'static,
+{
+    tracing::info!(?signal, "job control");
+    let result = match signal {
+        JobControl::Suspend => outside.suspend(),
+        JobControl::Continue => outside.resume(),
+    };
+    app.redraw_all().context("drawing the screen")?;
+    Ok(result
+        .err()
+        .map(|error| Event::EffectFailed(format!("{error:#}"))))
 }
 
 /// Hands `event` to the app and carries out the effects it returns.
@@ -217,6 +280,13 @@ where
 {
     let outcome = match effect {
         Effect::Quit => return Ok(ControlFlow::Break(())),
+        // Like the editor, the stop holds the loop: nothing is read or drawn
+        // until lrat is continued and has the terminal back.
+        Effect::Suspend => {
+            let result = outside.suspend();
+            app.redraw_all().context("drawing the screen")?;
+            result
+        }
         Effect::LoadMyIssues => {
             in_flight.push(Box::pin(load_my_issues(reach.client)));
             Ok(())
@@ -685,6 +755,8 @@ mod tests {
         /// What the editor saves.
         saves: String,
         failure: Option<&'static str>,
+        suspended: usize,
+        resumed: usize,
     }
 
     impl Outside for Fake {
@@ -706,6 +778,17 @@ mod tests {
                 Some(failure) => Err(anyhow::anyhow!(failure)),
                 None => Ok(self.saves.clone()),
             }
+        }
+
+        fn suspend(&mut self) -> anyhow::Result<()> {
+            self.suspended += 1;
+            self.failure
+                .map_or(Ok(()), |failure| Err(anyhow::anyhow!(failure)))
+        }
+
+        fn resume(&mut self) -> anyhow::Result<()> {
+            self.resumed += 1;
+            Ok(())
         }
     }
 
@@ -995,5 +1078,87 @@ mod tests {
 
         assert_eq!(flow, ControlFlow::Break(()));
         assert!(outside.copied.is_empty() && outside.opened.is_empty());
+    }
+
+    #[test]
+    fn suspend_stops_lrat_then_draws_the_whole_screen_and_the_loop_goes_on() {
+        let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+        let mut outside = Fake::default();
+        let frames = app.frames_drawn();
+
+        let flow = run_effect(&mut app, Effect::Suspend, &mut outside);
+
+        assert_eq!(flow, ControlFlow::Continue(()));
+        assert_eq!(outside.suspended, 1);
+        assert!(
+            app.frames_drawn() > frames,
+            "the screen was not drawn again"
+        );
+    }
+
+    #[test]
+    fn a_suspend_that_fails_says_why() {
+        let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+        let mut outside = Fake {
+            failure: Some("could not suspend lrat: Operation not permitted"),
+            ..Fake::default()
+        };
+
+        let flow = run_effect(&mut app, Effect::Suspend, &mut outside);
+
+        assert_eq!(flow, ControlFlow::Continue(()));
+        assert!(
+            screen(&app).contains("could not suspend lrat"),
+            "{}",
+            screen(&app)
+        );
+    }
+
+    #[test]
+    fn sigtstp_from_outside_suspends_as_the_key_does() {
+        let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+        let mut outside = Fake::default();
+        let frames = app.frames_drawn();
+
+        let next = on_job_control(&mut app, JobControl::Suspend, &mut outside).unwrap();
+
+        assert_eq!(next, None);
+        assert_eq!((outside.suspended, outside.resumed), (1, 0));
+        assert!(
+            app.frames_drawn() > frames,
+            "the screen was not drawn again"
+        );
+    }
+
+    #[test]
+    fn sigcont_takes_the_terminal_back_and_draws_the_whole_screen() {
+        let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+        let mut outside = Fake::default();
+        let frames = app.frames_drawn();
+
+        let next = on_job_control(&mut app, JobControl::Continue, &mut outside).unwrap();
+
+        assert_eq!(next, None);
+        assert_eq!((outside.suspended, outside.resumed), (0, 1));
+        assert!(
+            app.frames_drawn() > frames,
+            "the screen was not drawn again"
+        );
+    }
+
+    #[test]
+    fn a_failed_sigtstp_suspend_comes_back_as_the_notice() {
+        let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+        let mut outside = Fake {
+            failure: Some("could not suspend lrat"),
+            ..Fake::default()
+        };
+
+        let next = on_job_control(&mut app, JobControl::Suspend, &mut outside).unwrap();
+
+        assert_eq!(
+            next,
+            Some(Event::EffectFailed("could not suspend lrat".to_owned()))
+        );
     }
 }

@@ -4,6 +4,7 @@ use std::io::{self, IsTerminal, Write};
 use anyhow::Context;
 use clap::Parser;
 use crossterm::event::EventStream;
+use futures_util::Stream;
 use jiff::tz::TimeZone;
 use linear_rat::app::{App, Load, LoadError, State};
 use linear_rat::auth::{self, Credentials, KeyringStore, OsKeyring, WorkspaceFile};
@@ -12,7 +13,7 @@ use linear_rat::config::{self, Loaded};
 use linear_rat::linear::{FakeClient, HttpClient, LinearClient};
 use linear_rat::open::{self, IssueKey};
 use linear_rat::snapshot::SnapshotCache;
-use linear_rat::terminal::{self, TerminalGuard};
+use linear_rat::terminal::{self, JobControl, TerminalGuard};
 use linear_rat::ui::theme;
 use linear_rat::{browser, completions, doctor, logging, runtime};
 use ratatui::backend::CrosstermBackend;
@@ -58,11 +59,12 @@ async fn main() -> anyhow::Result<()> {
     );
     let shutdown =
         terminal::shutdown_signal().context("listening for SIGINT, SIGTERM and SIGHUP")?;
+    let job_control = terminal::job_control().context("listening for SIGTSTP and SIGCONT")?;
     let result = if cli.demo {
         let state = State::loading(None)
             .with_config(&loaded)
             .with_time_zone(TimeZone::system());
-        run_tui(state, Some(&FakeClient), None, shutdown).await
+        run_tui(state, Some(&FakeClient), None, shutdown, job_control).await
     } else {
         let (state, client) = connect(loaded.config.auth.store);
         let snapshots = snapshot_cache();
@@ -70,7 +72,14 @@ async fn main() -> anyhow::Result<()> {
             .with_config(&loaded)
             .with_time_zone(TimeZone::system());
         let state = from_snapshot(state, snapshots.as_ref());
-        run_tui(state, client.as_ref(), snapshots.as_ref(), shutdown).await
+        run_tui(
+            state,
+            client.as_ref(),
+            snapshots.as_ref(),
+            shutdown,
+            job_control,
+        )
+        .await
     };
 
     match &result {
@@ -156,11 +165,20 @@ async fn run_tui<C: LinearClient>(
     client: Option<&C>,
     snapshots: Option<&SnapshotCache>,
     shutdown: impl Future<Output = ()>,
+    job_control: impl Stream<Item = JobControl>,
 ) -> anyhow::Result<()> {
     let guard = TerminalGuard::enter().context("preparing the terminal")?;
     let result = match App::new(CrosstermBackend::new(io::stdout()), state) {
         Ok(mut app) => {
-            runtime::run(&mut app, client, snapshots, EventStream::new(), shutdown).await
+            runtime::run_with_job_control(
+                &mut app,
+                client,
+                snapshots,
+                EventStream::new(),
+                shutdown,
+                job_control,
+            )
+            .await
         }
         Err(error) => Err(error).context("drawing the first frame"),
     };

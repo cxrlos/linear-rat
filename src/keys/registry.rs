@@ -606,6 +606,15 @@ pub static ACTIONS: &[ActionSpec] = &[
         default_keys: &[&[Key::char('q')]],
         available: always,
     },
+    ActionSpec {
+        action: Action::Suspend,
+        id: "suspend",
+        description: "Suspend lrat to the shell",
+        hint: None,
+        contexts: GLOBAL,
+        default_keys: &[&[Key::ctrl('z')]],
+        available: always,
+    },
 ];
 
 fn always(_: &State) -> bool {

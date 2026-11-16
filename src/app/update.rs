@@ -242,6 +242,10 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             redraw: false,
             effects: vec![Effect::Quit],
         },
+        Action::Suspend => Update {
+            redraw: false,
+            effects: vec![Effect::Suspend],
+        },
         Action::ShowScreen(screen) if screen != state.screen => {
             state.screen = screen;
             let effects = match screen {

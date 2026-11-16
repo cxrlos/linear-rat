@@ -22,6 +22,7 @@ expression: app.backend()
 "│               │  :, C-k  Find an action or loaded issue      │               │"
 "│               │  /       Search all issues in Linear         │               │"
 "│               │  Q       Quit lrat                           │               │"
+"│               │  C-z     Suspend lrat to the shell           │               │"
 "│               └ Esc close ───────────────────────────────────┘               │"
 "└──────────────────────────────────────────────────────────────────────────────┘"
 " Move │ j/k move                                                                "

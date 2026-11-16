@@ -473,3 +473,20 @@ fn a_missing_config_file_is_the_default_config() {
 
     assert_eq!(loaded, config::Loaded::default());
 }
+
+#[test]
+fn ctrl_z_asks_to_suspend_lrat() {
+    let mut app = app();
+    let ctrl_z = Event::Key(KeyEvent::new(KeyCode::Char('z'), KeyModifiers::CONTROL));
+
+    assert_eq!(app.handle(ctrl_z).unwrap(), vec![Effect::Suspend]);
+}
+
+#[test]
+fn suspend_can_be_rebound() {
+    let mut app = app_with("[keys.global]\nsuspend = \"<C-s>\"\n");
+    let ctrl = |c| Event::Key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::CONTROL));
+
+    assert!(app.handle(ctrl('z')).unwrap().is_empty());
+    assert_eq!(app.handle(ctrl('s')).unwrap(), vec![Effect::Suspend]);
+}

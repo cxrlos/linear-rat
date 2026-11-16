@@ -8,6 +8,9 @@ use crate::linear::{AnalyticsWindow, TeamQuery, Urgency};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Effect {
     Quit,
+    /// Restore the terminal, stop lrat until it is continued, then take the
+    /// terminal back and draw the whole screen.
+    Suspend,
     /// Load the viewer's open assigned issues; the result comes back as
     /// [`Event::MyIssuesLoaded`](super::Event::MyIssuesLoaded).
     LoadMyIssues,

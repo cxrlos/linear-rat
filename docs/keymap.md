@@ -18,6 +18,7 @@ The Team Issues list also takes the Issue list keys. While an overlay has a text
 | `show-palette` | `:`, `<C-k>` | Find an action or loaded issue |
 | `show-search` | `/` | Search all issues in Linear |
 | `quit` | `q` | Quit lrat |
+| `suspend` | `<C-z>` | Suspend lrat to the shell |
 
 ## Issue list (`[keys.list]`)
 
