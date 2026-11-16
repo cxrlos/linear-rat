@@ -238,3 +238,47 @@ fn the_text_edit_can_be_rebound() {
         }]
     ));
 }
+
+/// The issue's `updatedAt` moves when a write lrat sent lands, so a text
+/// edit opened before then would be refused as if a teammate had changed
+/// the issue. The editor waits until the issue's writes are answered.
+#[test]
+fn the_editor_does_not_open_while_a_write_to_the_issue_is_in_flight() {
+    let mut app = app();
+    press(&mut app, "p");
+    app.handle(key(KeyCode::Down)).unwrap();
+    let picked = app.handle(key(KeyCode::Enter)).unwrap();
+    let [Effect::UpdateIssue(write)] = picked.as_slice() else {
+        panic!("{picked:?}");
+    };
+
+    let effects = press(&mut app, "E");
+
+    assert!(effects.is_empty(), "{effects:?}");
+    assert!(shows(&app, &format!("{FIRST} is still being saved")));
+
+    app.handle(Event::IssueUpdated {
+        write: write.clone(),
+        result: Err("Linear returned errors".to_owned()),
+    })
+    .unwrap();
+    open_editor(&mut app);
+}
+
+#[test]
+fn a_second_text_edit_waits_for_the_first_save() {
+    let mut app = app();
+    let (write, _) = only_text_write(save(&mut app, "Autumn release, take two\n\nBody"));
+
+    assert!(press(&mut app, "E").is_empty());
+
+    let mut stored = demo_issue(FIRST);
+    stored.title = "Autumn release, take two".to_owned();
+    stored.description = Some("Body".to_owned());
+    app.handle(Event::IssueUpdated {
+        write,
+        result: Ok(Box::new(stored)),
+    })
+    .unwrap();
+    open_editor(&mut app);
+}

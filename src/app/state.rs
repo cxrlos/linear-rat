@@ -31,6 +31,8 @@ pub struct State {
     /// Why Linear rejected the last edit of an issue, by issue id, shown on
     /// its row until the next edit of that issue.
     pub row_errors: BTreeMap<String, String>,
+    /// How many edits sent to Linear are still unanswered, by issue id.
+    pub writes_in_flight: BTreeMap<String, usize>,
     pub my_issues: MyIssues,
     /// The focused issue's detail: its scroll and which details have loaded.
     pub detail: Detail,

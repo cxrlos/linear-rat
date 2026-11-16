@@ -48,6 +48,15 @@ pub(super) fn open(state: &mut State) -> Update {
         ));
         return Update::redraw();
     }
+    // An lrat write landing moves `updatedAt`, so the save would be refused
+    // as if someone else had changed the issue.
+    if state.writes_in_flight.contains_key(&issue.id) {
+        state.notice = Some(format!(
+            "{} is still being saved; edit it once Linear answers",
+            issue.identifier
+        ));
+        return Update::redraw();
+    }
     let opened = TextOpened {
         issue_id: issue.id.clone(),
         identifier: issue.identifier.clone(),
@@ -98,6 +107,7 @@ pub(super) fn closed(state: &mut State, opened: TextOpened, text: String) -> Upd
     let previous = Editable::Text.current(issue);
     state.store.apply_edit(&opened.issue_id, &edit);
     state.row_errors.remove(&opened.issue_id);
+    super::edit::sent(state, &opened.issue_id);
     state.rebuild_my_issues();
     Update {
         redraw: true,

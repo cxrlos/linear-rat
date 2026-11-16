@@ -575,6 +575,7 @@ fn write(state: &mut State, issue_id: &str, edit: Edit) -> Update {
     }
     state.store.apply_edit(issue_id, &edit);
     state.row_errors.remove(issue_id);
+    sent(state, issue_id);
     state.rebuild_my_issues();
     Update {
         redraw: true,
@@ -587,6 +588,14 @@ fn write(state: &mut State, issue_id: &str, edit: Edit) -> Update {
     }
 }
 
+/// Counts a write to `issue_id` as sent until [`finished`] takes its answer.
+pub(super) fn sent(state: &mut State, issue_id: &str) {
+    *state
+        .writes_in_flight
+        .entry(issue_id.to_owned())
+        .or_default() += 1;
+}
+
 /// Takes in Linear's answer to `write`: the issue as stored, or why the edit
 /// was rejected, in which case the previous value comes back and the error
 /// shows on the row and in the notice.
@@ -595,6 +604,12 @@ pub(super) fn finished(
     write: &Write,
     result: Result<Box<Issue>, String>,
 ) -> Update {
+    if let Some(count) = state.writes_in_flight.get_mut(&write.issue_id) {
+        *count = count.saturating_sub(1);
+        if *count == 0 {
+            state.writes_in_flight.remove(&write.issue_id);
+        }
+    }
     match result {
         Ok(issue) => {
             state.store.upsert_issue(*issue);
