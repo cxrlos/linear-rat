@@ -1,0 +1,13 @@
+---
+source: tests/doctor.rs
+expression: "printed(&report, Some(&dir))"
+---
+● Key source    LINEAR_API_KEY
+● API key       valid for Cheddar Works (cheddar-works), viewer Remy Fromage
+● Rate limit    requests 4990 of 5000 left, complexity 2996000 of 3000000 left
+● Role          member, administers 2 teams; the key's scopes are inferred from this, since Linear does not report them
+● Clock         in step with Linear
+● Colors        24-bit (COLORTERM=truecolor)
+● OSC 52 copy   not detectable outside tmux
+● Focus events  not detectable outside tmux
+● Config        <config dir>/config.toml: no file, using the defaults

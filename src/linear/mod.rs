@@ -182,6 +182,42 @@ pub trait LinearClient {
         team_key: &str,
         number: u32,
     ) -> impl Future<Output = Result<Option<IssueLink>, ClientError>> + Send;
+
+    /// What `lrat doctor` reports about the key beyond its viewer: the
+    /// viewer's role, Linear's `rateLimitStatus` and Linear's clock.
+    fn diagnostics(&self) -> impl Future<Output = Result<Diagnostics, ClientError>> + Send;
+}
+
+/// The viewer's role, the rate limits and Linear's clock, as `lrat doctor`
+/// reports them.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Diagnostics {
+    pub role: Role,
+    pub rate_limits: Vec<RateLimit>,
+    /// From the response's `Date` header, to the second; `None` when Linear
+    /// sent none that could be read.
+    pub server_time: Option<Timestamp>,
+}
+
+/// The viewer's workspace role, as Linear's `User.admin`, `owner` and
+/// `guest`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Role {
+    pub admin: bool,
+    pub owner: bool,
+    pub guest: bool,
+}
+
+/// One of Linear's rate limits, as `RateLimitResultPayload`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RateLimit {
+    /// What it limits, as Linear names it, such as request count or query
+    /// complexity.
+    pub kind: String,
+    pub allowed: f64,
+    pub remaining: f64,
+    /// When the limit is fully replenished.
+    pub reset: Option<Timestamp>,
 }
 
 /// Enough of an issue to name it and open it.
@@ -1032,6 +1068,27 @@ impl LinearClient for FakeClient {
                 title: issue.title,
                 url: issue.url,
             }))
+    }
+
+    async fn diagnostics(&self) -> Result<Diagnostics, ClientError> {
+        Ok(Diagnostics {
+            role: Role::default(),
+            rate_limits: vec![
+                RateLimit {
+                    kind: "requests".to_owned(),
+                    allowed: 5_000.0,
+                    remaining: 4_990.0,
+                    reset: demo::NOW.checked_add(SignedDuration::from_mins(40)).ok(),
+                },
+                RateLimit {
+                    kind: "complexity".to_owned(),
+                    allowed: 3_000_000.0,
+                    remaining: 2_996_000.0,
+                    reset: demo::NOW.checked_add(SignedDuration::from_mins(40)).ok(),
+                },
+            ],
+            server_time: Some(demo::NOW),
+        })
     }
 }
 

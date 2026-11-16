@@ -21,8 +21,9 @@ use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
 
+use jiff::fmt::rfc2822;
 use jiff::{SignedDuration, Timestamp};
-use reqwest::header::HeaderMap;
+use reqwest::header::{DATE, HeaderMap};
 
 /// How the client tells the time and waits. The real one is [`SystemTimer`];
 /// tests use a clock that moves only when the client sleeps.
@@ -67,6 +68,8 @@ pub(crate) struct Governor {
     last_cost: Option<u64>,
     /// No request goes out before this, after a rate-limited response.
     blocked_until: Option<Timestamp>,
+    /// Linear's clock, from the last response's `Date` header.
+    server_time: Option<Timestamp>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -91,6 +94,16 @@ impl Governor {
         if let Some(cost) = number(headers, "x-complexity") {
             self.last_cost = Some(cost);
         }
+        let date = headers.get(DATE).and_then(|value| value.to_str().ok());
+        if let Some(time) = date.and_then(|date| rfc2822::parse(date).ok()) {
+            self.server_time = Some(time.timestamp());
+        }
+    }
+
+    /// Linear's clock when it sent the last response that had a readable
+    /// `Date` header, to the second.
+    pub(crate) fn server_time(&self) -> Option<Timestamp> {
+        self.server_time
     }
 
     /// Linear refused a request for its rate limit; `retry_after` is its
@@ -197,6 +210,27 @@ mod tests {
             ("x-ratelimit-requests-limit", limit.to_string()),
             ("x-ratelimit-requests-reset", reset.to_string()),
         ])
+    }
+
+    #[test]
+    fn the_date_header_tells_linear_s_time() {
+        let mut governor = Governor::default();
+        assert_eq!(governor.server_time(), None);
+
+        governor.observe(&headers(&[(
+            "date",
+            "Mon, 02 Nov 2026 15:00:07 GMT".to_owned(),
+        )]));
+
+        assert_eq!(
+            governor.server_time(),
+            Some(Timestamp::constant(1_793_631_607, 0))
+        );
+        governor.observe(&headers(&[("date", "yesterday".to_owned())]));
+        assert_eq!(
+            governor.server_time(),
+            Some(Timestamp::constant(1_793_631_607, 0))
+        );
     }
 
     #[test]

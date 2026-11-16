@@ -1,0 +1,17 @@
+# budget: 3
+# The viewer's workspace role and the key's rate limits, for `lrat doctor`.
+query Diagnostics {
+  viewer {
+    admin
+    owner
+    guest
+  }
+  rateLimitStatus {
+    limits {
+      type
+      allowedAmount
+      remainingAmount
+      reset
+    }
+  }
+}

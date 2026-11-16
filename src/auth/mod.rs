@@ -27,7 +27,7 @@ pub const SERVICE: &str = "linear-rat";
 pub const KEY_VAR: &str = "LINEAR_API_KEY";
 
 /// Where a viewer creates personal API keys.
-const KEYS_URL: &str = "https://linear.app/settings/account/security";
+pub(crate) const KEYS_URL: &str = "https://linear.app/settings/account/security";
 
 /// Where the key in use came from.
 #[derive(Debug, Clone, PartialEq, Eq)]

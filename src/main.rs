@@ -1,5 +1,5 @@
 use std::future::Future;
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 
 use anyhow::Context;
 use clap::Parser;
@@ -14,7 +14,7 @@ use linear_rat::open::{self, IssueKey};
 use linear_rat::snapshot::SnapshotCache;
 use linear_rat::terminal::{self, TerminalGuard};
 use linear_rat::ui::theme;
-use linear_rat::{browser, completions, logging, runtime};
+use linear_rat::{browser, completions, doctor, logging, runtime};
 use ratatui::backend::CrosstermBackend;
 
 #[tokio::main(flavor = "current_thread")]
@@ -33,6 +33,15 @@ async fn main() -> anyhow::Result<()> {
             return io::stdout()
                 .write_all(&completions::script(shell))
                 .context("writing the completion script");
+        }
+        Some(Command::Doctor) => {
+            let log_guard = logging::init().context("setting up the log file")?;
+            let failed = run_doctor().await?;
+            if failed {
+                drop(log_guard);
+                std::process::exit(1);
+            }
+            return Ok(());
         }
         None => {}
     }
@@ -201,4 +210,26 @@ async fn run_open(key: &IssueKey) -> anyhow::Result<()> {
     let output = open::open(&credentials, key, HttpClient::new, browser::open).await?;
     println!("{output}");
     Ok(())
+}
+
+/// Prints the doctor's report and returns whether any check failed.
+async fn run_doctor() -> anyhow::Result<bool> {
+    let credentials = Credentials::new(
+        OsKeyring::default(),
+        WorkspaceFile::in_state_dir()?,
+        std::env::var(auth::KEY_VAR).ok(),
+    );
+    let var = |name: &str| std::env::var(name).ok();
+    let facts = doctor::gather(
+        &credentials,
+        HttpClient::new,
+        doctor::Terminal::from_env(var),
+        doctor::ConfigFacts::load(),
+        jiff::Timestamp::now,
+    )
+    .await;
+    let report = doctor::report(&facts);
+    let color = doctor::use_color(io::stdout().is_terminal(), var("NO_COLOR").as_deref());
+    print!("{}", report.render(color));
+    Ok(report.failed())
 }

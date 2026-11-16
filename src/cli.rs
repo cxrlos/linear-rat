@@ -29,6 +29,12 @@ pub enum Command {
         /// The issue key, such as ENG-123, in any case
         key: IssueKey,
     },
+    /// Check the API key, Linear, the terminal and the config
+    ///
+    /// Prints one line per check, marked ● (ok), ▲ (warning) or ✘ (failure),
+    /// each warning or failure followed by how to fix it. Never prints the
+    /// API key. Exits non-zero when any check fails.
+    Doctor,
 }
 
 #[derive(Debug, Subcommand)]
