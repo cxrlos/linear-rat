@@ -600,3 +600,53 @@ async fn the_clock_is_read_right_after_the_dated_response() {
     let now = log.iter().position(|step| *step == "now").unwrap();
     assert_eq!(log[now - 1], "diagnostics", "{log:?}");
 }
+
+/// A Linux kernel keyring holding one key under any account.
+struct KernelKeyring;
+
+impl KeyStore for KernelKeyring {
+    fn kind(&self) -> KeyringStore {
+        KeyringStore::Keyutils
+    }
+
+    fn get(&self, _: &str) -> Result<Option<ApiKey>, KeyringError> {
+        Ok(Some(ApiKey::new(SECRET).unwrap()))
+    }
+
+    fn set(&self, _: &str, _: &ApiKey) -> Result<(), KeyringError> {
+        Ok(())
+    }
+
+    fn delete(&self, _: &str) -> Result<bool, KeyringError> {
+        Ok(false)
+    }
+}
+
+#[tokio::test]
+async fn a_key_in_the_kernel_keyring_is_named_as_auth_status_names_it() {
+    let workspace_file = WorkspaceFile::new(scratch_dir().join("keyring-workspace"));
+    workspace_file.write("acme").unwrap();
+    let credentials = Credentials::new(KernelKeyring, workspace_file, None);
+
+    let facts = doctor::gather(
+        &credentials,
+        |_| Ok(FakeClient),
+        truecolor(),
+        config(None),
+        || demo::NOW,
+    )
+    .await;
+    let report = doctor::report(&facts);
+
+    let key_source = line(&report, "Key source");
+    assert_eq!(key_source.status, Status::Ok);
+    assert!(
+        key_source.detail.starts_with("the Linux kernel keyring"),
+        "{key_source:?}"
+    );
+    assert_eq!(
+        key_source.detail,
+        facts.key.as_ref().unwrap().to_string(),
+        "doctor prints KeySource's Display"
+    );
+}

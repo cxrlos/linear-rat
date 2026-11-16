@@ -220,8 +220,9 @@ async fn run_auth(command: AuthCommand) -> anyhow::Result<()> {
 }
 
 async fn run_open(key: &IssueKey) -> anyhow::Result<()> {
+    let loaded = load_config();
     let credentials = Credentials::new(
-        OsKeyring::default(),
+        OsKeyring::new(loaded.config.auth.store),
         WorkspaceFile::in_state_dir()?,
         std::env::var(auth::KEY_VAR).ok(),
     );
@@ -232,8 +233,9 @@ async fn run_open(key: &IssueKey) -> anyhow::Result<()> {
 
 /// Prints the doctor's report and returns whether any check failed.
 async fn run_doctor() -> anyhow::Result<bool> {
+    let config = doctor::ConfigFacts::load();
     let credentials = Credentials::new(
-        OsKeyring::default(),
+        OsKeyring::new(config.loaded.config.auth.store),
         WorkspaceFile::in_state_dir()?,
         std::env::var(auth::KEY_VAR).ok(),
     );
@@ -242,7 +244,7 @@ async fn run_doctor() -> anyhow::Result<bool> {
         &credentials,
         HttpClient::new,
         doctor::Terminal::from_env(var),
-        doctor::ConfigFacts::load(),
+        config,
         jiff::Timestamp::now,
     )
     .await;
