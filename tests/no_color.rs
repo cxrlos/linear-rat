@@ -42,13 +42,25 @@ fn has_modifier(buffer: &Buffer, modifier: Modifier) -> bool {
         .any(|cell| cell.modifier.contains(modifier))
 }
 
+fn assert_row_reversed(buffer: &Buffer, y: u16, reversed: bool) {
+    let inner = 1..buffer.area.width - 1;
+    for x in inner {
+        assert_eq!(
+            buffer[(x, y)].modifier.contains(Modifier::REVERSED),
+            reversed,
+            "cell ({x}, {y})"
+        );
+    }
+}
+
 #[test]
 fn my_issues_draws_no_color_and_reverses_the_focused_row() {
     let app = no_color_demo();
     let buffer = app.backend().buffer();
 
     assert_colorless(buffer);
-    assert!(has_modifier(buffer, Modifier::REVERSED));
+    assert_row_reversed(buffer, 3, true);
+    assert_row_reversed(buffer, 4, false);
     assert_debug_snapshot!(buffer);
 }
 
