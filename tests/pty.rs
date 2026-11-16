@@ -7,6 +7,7 @@
 
 use std::fs;
 use std::io::{Read, Write};
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -139,13 +140,23 @@ impl Pty {
 
     /// Whether the process is stopped, as job control shows it.
     fn stopped(&self) -> bool {
-        let ps = Command::new("ps")
-            .args(["-o", "stat=", "-p", &self.pid().to_string()])
+        stopped(self.pid())
+    }
+
+    /// The pid of the one process the program started, as a shell starts
+    /// lrat.
+    fn only_child(&self) -> u32 {
+        let pgrep = Command::new("pgrep")
+            .args(["-P", &self.pid().to_string()])
             .output()
             .unwrap();
-        String::from_utf8_lossy(&ps.stdout)
-            .trim_start()
-            .starts_with('T')
+        let children = String::from_utf8_lossy(&pgrep.stdout).into_owned();
+        let pids: Vec<u32> = children
+            .split_whitespace()
+            .map(|pid| pid.parse().unwrap())
+            .collect();
+        assert_eq!(pids.len(), 1, "children: {children:?}");
+        pids[0]
     }
 
     fn exited(&mut self) -> bool {
@@ -185,6 +196,17 @@ impl Drop for Pty {
             let _ = self.child.kill();
         }
     }
+}
+
+/// Whether the process `pid` is stopped, as job control shows it.
+fn stopped(pid: u32) -> bool {
+    let ps = Command::new("ps")
+        .args(["-o", "stat=", "-p", &pid.to_string()])
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&ps.stdout)
+        .trim_start()
+        .starts_with('T')
 }
 
 /// A fresh directory under the system temp directory, removed on drop.
@@ -334,4 +356,52 @@ fn a_panic_restores_the_terminal_then_names_its_crash_report() {
     assert!(report.contains("Backtrace:"));
     assert!(!report.contains(SENTINEL_KEY));
     assert!(!output.contains(SENTINEL_KEY));
+}
+
+/// An editor that suspends the way classic Vim does, with `kill -TSTP 0` to
+/// its whole process group, lrat included. lrat must stop with it so the
+/// shell gets the terminal back, and `fg` must bring both back.
+#[test]
+fn an_editor_that_suspends_its_group_stops_lrat_with_it() {
+    let scripts = TempDir::new();
+    let editor = scripts.0.join("editor.sh");
+    fs::write(
+        &editor,
+        "#!/bin/sh\nkill -TSTP 0\necho 'a comment' > \"$1\"\n",
+    )
+    .unwrap();
+    fs::set_permissions(&editor, fs::Permissions::from_mode(0o755)).unwrap();
+    // A shell with job control, as at a prompt: it gives lrat a process
+    // group of its own and takes the terminal back when that group stops.
+    let script = "\"$LRAT\" --demo; echo shell-has-the-terminal; read _; fg; echo shell-done";
+    let editor = editor.to_string_lossy();
+    let mut pty = Pty::spawn_with(
+        Path::new("/bin/sh"),
+        &["-m", "-c", script],
+        &[("LRAT", env!("CARGO_BIN_EXE_lrat")), ("EDITOR", &editor)],
+    );
+    pty.wait_for_first_frame();
+
+    pty.press(b"c");
+
+    pty.wait_until("the shell gets the terminal back", |pty| {
+        pty.output().contains("shell-has-the-terminal")
+    });
+    assert!(
+        stopped(pty.only_child()),
+        "lrat runs while its editor is stopped"
+    );
+    assert!(pty.cooked());
+
+    let continued_at = pty.written();
+    pty.press(b"\n");
+
+    pty.wait_until("lrat draws again", |pty| {
+        pty.output_since(continued_at).contains(DRAWN)
+    });
+    assert!(!pty.cooked(), "lrat came back without raw mode");
+    pty.press(b"q");
+    pty.wait_until("lrat quits and the shell ends", Pty::exited);
+    assert!(pty.output_since(continued_at).contains("shell-done"));
+    assert!(pty.cooked());
 }

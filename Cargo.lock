@@ -1728,6 +1728,7 @@ dependencies = [
  "insta",
  "jiff",
  "keyring-core",
+ "libc",
  "linux-keyutils-keyring-store",
  "nucleo-matcher",
  "portable-pty",

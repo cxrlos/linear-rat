@@ -106,6 +106,7 @@ fn edit_with(editor: &str, text: &str) -> anyhow::Result<String> {
 
     let status = {
         let _handed_over = HandedOver::begin();
+        let _stops_with_the_editor = DefaultStop::begin();
         Command::new("sh")
             .arg("-c")
             .arg(format!("{editor} \"$1\""))
@@ -221,6 +222,53 @@ impl Drop for HandedOver {
             && let Err(error) = take_over()
         {
             tracing::warn!(%error, "could not take the terminal back");
+        }
+    }
+}
+
+/// SIGTSTP back at its default action, stopping lrat, until dropped.
+///
+/// [`job_control`] catches SIGTSTP for lrat's whole life. While the editor
+/// runs, lrat must not: an editor that suspends with `kill(0, SIGTSTP)`, as
+/// classic Vim does, stops itself, and a lrat that only noted the signal
+/// would keep the shell waiting with no way back, then suspend unprompted
+/// once the editor exits. With the default action lrat stops with the
+/// editor, and the terminal is already handed over.
+struct DefaultStop {
+    caught: Option<libc::sigaction>,
+}
+
+impl DefaultStop {
+    fn begin() -> Self {
+        // SAFETY: an all-zero sigaction is a valid value: no flags, an empty
+        // mask, and a handler of SIG_DFL, which is 0.
+        let mut default: libc::sigaction = unsafe { std::mem::zeroed() };
+        default.sa_sigaction = libc::SIG_DFL;
+        // SAFETY: as above.
+        let mut caught: libc::sigaction = unsafe { std::mem::zeroed() };
+        // SAFETY: both pointers are to live sigaction values, and SIG_DFL
+        // runs no code in this process.
+        if unsafe { libc::sigaction(libc::SIGTSTP, &default, &mut caught) } != 0 {
+            let error = io::Error::last_os_error();
+            tracing::warn!(%error, "could not let SIGTSTP stop lrat with the editor");
+            return Self { caught: None };
+        }
+        Self {
+            caught: Some(caught),
+        }
+    }
+}
+
+impl Drop for DefaultStop {
+    fn drop(&mut self) {
+        let Some(caught) = &self.caught else {
+            return;
+        };
+        // SAFETY: `caught` is the action sigaction returned, tokio's handler,
+        // put back as it was.
+        if unsafe { libc::sigaction(libc::SIGTSTP, caught, std::ptr::null_mut()) } != 0 {
+            let error = io::Error::last_os_error();
+            tracing::warn!(%error, "could not catch SIGTSTP again after the editor");
         }
     }
 }
