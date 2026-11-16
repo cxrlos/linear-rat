@@ -259,6 +259,19 @@ pub static ACTIONS: &[ActionSpec] = &[
         available: app::focused_team_estimates,
     },
     ActionSpec {
+        action: Action::Edit(Editable::Text),
+        id: "edit-text",
+        description: "Edit the title and description",
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('E')]],
+        available: |state| {
+            state
+                .focused_issue()
+                .is_some_and(|issue| !app::is_local(&issue.id))
+        },
+    },
+    ActionSpec {
         action: Action::Comment,
         id: "comment",
         description: "Comment in $EDITOR",

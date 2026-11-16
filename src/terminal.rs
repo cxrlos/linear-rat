@@ -115,6 +115,40 @@ fn edit_with(editor: &str, text: &str) -> anyhow::Result<String> {
     fs::read_to_string(&path).with_context(|| format!("could not read {}", path.display()))
 }
 
+/// Writes `text` to a new file under the system temp directory that only
+/// the viewer can read, named after `stem`, and returns its path. The file
+/// stays: it holds what the viewer wrote that lrat could not save.
+pub fn keep(text: &str, stem: &str) -> anyhow::Result<PathBuf> {
+    static NEXT: AtomicU32 = AtomicU32::new(0);
+    let base = std::env::temp_dir();
+    let mut attempts = 0;
+    loop {
+        let n = NEXT.fetch_add(1, Ordering::SeqCst);
+        let path = base.join(format!("lrat-{stem}-{}-{n}.md", std::process::id()));
+        // A name already taken, perhaps by another user, is skipped rather
+        // than written through.
+        let mut file = match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&path)
+        {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists && attempts < 100 => {
+                attempts += 1;
+                continue;
+            }
+            Err(error) => {
+                return Err(error).with_context(|| format!("could not create {}", path.display()));
+            }
+        };
+        file.write_all(text.as_bytes())
+            .and_then(|()| file.sync_all())
+            .with_context(|| format!("could not write {}", path.display()))?;
+        return Ok(path);
+    }
+}
+
 /// The editor to run: the first of `visual` and `editor` that is set and
 /// not blank, else `vi`.
 fn editor_command(visual: Option<String>, editor: Option<String>) -> String {
@@ -236,6 +270,25 @@ mod tests {
         let saved = edit_with(editor, "a comment\n").unwrap();
 
         assert_eq!(saved, "A COMMENT\n");
+    }
+
+    #[test]
+    fn kept_text_lands_in_a_file_only_the_viewer_can_read() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = keep("Title\n\nBody\n", "DES-34").unwrap();
+        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        let text = fs::read_to_string(&path).unwrap();
+        fs::remove_file(&path).unwrap();
+
+        assert_eq!(mode, 0o600);
+        assert_eq!(text, "Title\n\nBody\n");
+        assert!(
+            path.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("lrat-DES-34-")
+        );
     }
 
     #[test]

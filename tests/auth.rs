@@ -240,6 +240,10 @@ impl LinearClient for RejectingClient {
     async fn diagnostics(&self) -> Result<Diagnostics, ClientError> {
         Err(ClientError::InvalidKey)
     }
+
+    async fn issue_updated_at(&self, _: &str) -> Result<Timestamp, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
 }
 
 /// A workspace file path in a fresh directory for one test.

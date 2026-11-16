@@ -378,6 +378,10 @@ where
             in_flight.push(Box::pin(create_issue(reach.client, issue)));
             Ok(())
         }
+        Effect::UpdateIssueText { write, seen, text } => {
+            in_flight.push(Box::pin(update_issue_text(reach.client, write, seen, text)));
+            Ok(())
+        }
     };
     if let Err(error) = outcome {
         let failed = Event::EffectFailed(format!("{error:#}"));
@@ -501,6 +505,46 @@ async fn update_issue<C: LinearClient>(client: Option<&C>, write: Write) -> Even
         Ok(_) => tracing::info!(issue = %write.identifier, "Linear applied an edit"),
         Err(error) => tracing::warn!(issue = %write.identifier, %error, "Linear rejected an edit"),
     }
+    Event::IssueUpdated { write, result }
+}
+
+/// Reads the issue's `updatedAt` again and sends `write` only if it is still
+/// `seen`. If it moved, `text` is kept in a file and the error names it.
+/// Linear has no compare-and-set, so an edit landing between the read and
+/// the write is not caught.
+async fn update_issue_text<C: LinearClient>(
+    client: Option<&C>,
+    write: Write,
+    seen: Timestamp,
+    text: String,
+) -> Event {
+    let Some(client) = client else {
+        let result = Err(NO_CLIENT.to_owned());
+        return Event::IssueUpdated { write, result };
+    };
+    let result = match client.issue_updated_at(&write.issue_id).await {
+        Err(error) => Err(format!(
+            "could not check it is unchanged in Linear: {}",
+            message(error)
+        )),
+        Ok(now) if now != seen => {
+            tracing::info!(issue = %write.identifier, "refused a save over a newer edit");
+            Err(match terminal::keep(&text, &write.identifier) {
+                Ok(path) => format!(
+                    "it changed in Linear while the editor was open, so nothing was sent; \
+                     your text is in {}",
+                    path.display()
+                ),
+                Err(error) => format!(
+                    "it changed in Linear while the editor was open, so nothing was sent, \
+                     and your text could not be kept: {error:#}"
+                ),
+            })
+        }
+        Ok(_) => {
+            return update_issue(Some(client), write).await;
+        }
+    };
     Event::IssueUpdated { write, result }
 }
 
@@ -870,6 +914,76 @@ mod tests {
             "{}",
             screen(&app)
         );
+    }
+
+    /// A save of a new title for the demo's DES-34, opened when its
+    /// `updatedAt` was the demo's.
+    fn text_write() -> (Write, Timestamp) {
+        let issue = crate::linear::demo::workspace()
+            .issues
+            .into_iter()
+            .find(|issue| issue.identifier == "DES-34")
+            .unwrap();
+        let write = Write {
+            issue_id: issue.id.clone(),
+            identifier: issue.identifier.clone(),
+            edit: crate::app::Edit::Text {
+                title: "Autumn release, take two".to_owned(),
+                description: "Body".to_owned(),
+            },
+            previous: crate::app::Editable::Text.current(&issue),
+        };
+        (write, issue.updated_at)
+    }
+
+    #[tokio::test]
+    async fn a_text_save_over_a_newer_edit_sends_nothing_and_keeps_the_text_in_a_file() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (write, seen) = text_write();
+        let teammate = crate::linear::IssueUpdate {
+            priority: Some(crate::linear::model::Priority::Urgent),
+            ..crate::linear::IssueUpdate::default()
+        };
+        FakeClient
+            .update_issue(&write.issue_id, &teammate)
+            .await
+            .unwrap();
+        let text = "Autumn release, take two\n\nBody\n".to_owned();
+
+        let event = update_issue_text(Some(&FakeClient), write.clone(), seen, text.clone()).await;
+
+        let Event::IssueUpdated { result, .. } = event else {
+            panic!("{event:?}");
+        };
+        let error = result.unwrap_err();
+        let path = error.rsplit("your text is in ").next().unwrap();
+        let kept = std::fs::read_to_string(path).unwrap();
+        let mode = std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        std::fs::remove_file(path).unwrap();
+        assert!(error.starts_with("it changed in Linear while the editor was open"));
+        assert_eq!(kept, text);
+        assert_eq!(mode, 0o600);
+        let checked = FakeClient.issue_updated_at(&write.issue_id).await.unwrap();
+        assert_eq!(
+            checked,
+            seen + SignedDuration::from_secs(1),
+            "a second write went out"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_text_save_over_an_unchanged_issue_goes_to_linear() {
+        let (write, seen) = text_write();
+
+        let event = update_issue_text(Some(&FakeClient), write, seen, String::new()).await;
+
+        let Event::IssueUpdated { result, .. } = event else {
+            panic!("{event:?}");
+        };
+        let stored = result.unwrap();
+        assert_eq!(stored.title, "Autumn release, take two");
+        assert_eq!(stored.description.as_deref(), Some("Body"));
     }
 
     #[test]

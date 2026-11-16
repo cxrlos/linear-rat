@@ -182,6 +182,10 @@ impl LinearClient for RejectingClient {
     async fn diagnostics(&self) -> Result<Diagnostics, ClientError> {
         Err(ClientError::InvalidKey)
     }
+
+    async fn issue_updated_at(&self, _: &str) -> Result<Timestamp, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
 }
 
 #[tokio::test]
@@ -335,6 +339,10 @@ async fn q_quits_while_the_load_is_still_in_flight() {
         async fn diagnostics(&self) -> Result<Diagnostics, ClientError> {
             future::pending().await
         }
+
+        async fn issue_updated_at(&self, _: &str) -> Result<Timestamp, ClientError> {
+            future::pending().await
+        }
     }
     let mut app = App::new(TestBackend::new(80, 24), State::loading(None)).unwrap();
 
@@ -479,6 +487,10 @@ impl LinearClient for CountingClient {
 
     async fn diagnostics(&self) -> Result<Diagnostics, ClientError> {
         FakeClient.diagnostics().await
+    }
+
+    async fn issue_updated_at(&self, issue_id: &str) -> Result<Timestamp, ClientError> {
+        FakeClient.issue_updated_at(issue_id).await
     }
 }
 

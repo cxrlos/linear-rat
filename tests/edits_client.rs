@@ -348,3 +348,47 @@ async fn team_labels_follow_every_page_with_the_workspace_labels() {
     let body: Value = requests[0].body_json().unwrap();
     assert!(body["query"].as_str().unwrap().contains("query TeamLabels"));
 }
+
+#[tokio::test]
+async fn a_title_and_a_description_are_sent_as_given() {
+    let server = server_answering(updated()).await;
+    let update = IssueUpdate {
+        title: Some("Grate the gouda".to_owned()),
+        description: Some(String::new()),
+        ..IssueUpdate::default()
+    };
+
+    client_for(&server)
+        .update_issue("issue-1", &update)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        sent_variables(&server).await,
+        json!({ "id": "issue-1", "input": { "title": "Grate the gouda", "description": "" } })
+    );
+}
+
+#[tokio::test]
+async fn the_updated_at_is_read_afresh_for_the_issue_asked_for() {
+    let server = server_answering(json!({
+        "data": { "issue": { "id": "issue-1", "updatedAt": "2026-11-02T15:00:01.000Z" } }
+    }))
+    .await;
+
+    let updated_at = client_for(&server)
+        .issue_updated_at("issue-1")
+        .await
+        .unwrap();
+
+    assert_eq!(updated_at, "2026-11-02T15:00:01Z".parse().unwrap());
+    let requests = server.received_requests().await.unwrap();
+    let body: Value = requests[0].body_json().unwrap();
+    assert!(
+        body["query"]
+            .as_str()
+            .unwrap()
+            .contains("query IssueUpdatedAt")
+    );
+    assert_eq!(body["variables"], json!({ "id": "issue-1" }));
+}

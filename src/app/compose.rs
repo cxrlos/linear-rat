@@ -1,11 +1,12 @@
-//! Long text written in the viewer's `$EDITOR`: a comment on an issue, or
-//! the description of a new one. The runtime suspends the screen for the
-//! editor and hands its buffer back; an empty buffer cancels, anything else
-//! goes to Linear as one mutation.
+//! Long text written in the viewer's `$EDITOR`: a comment on an issue, the
+//! description of a new one, or the title and description of an existing
+//! one. The runtime suspends the screen for the editor and hands its buffer
+//! back; an empty buffer cancels, anything else goes to Linear as one
+//! mutation.
 
 use std::collections::BTreeMap;
 
-use super::{Effect, State, Update};
+use super::{Effect, State, TextOpened, Update, edit_text};
 use crate::linear::model::{Issue, Priority, WorkflowState};
 use crate::linear::{IssueCreate, PostedComment};
 use crate::ui;
@@ -20,6 +21,9 @@ pub enum Writing {
     },
     /// The description of a new issue, whose other fields the form chose.
     Description(IssueDraft),
+    /// The title and description of an existing issue, as the editor
+    /// opened on them.
+    Text(TextOpened),
 }
 
 /// A new issue as the create form left it, waiting for its description.
@@ -111,14 +115,14 @@ pub(super) fn closed(
     writing: Writing,
     result: Result<String, String>,
 ) -> Update {
-    let text = match result {
-        Ok(text) => text,
+    let saved = match result {
+        Ok(saved) => saved,
         Err(error) => {
             state.notice = Some(format!("Could not run the editor: {error}"));
             return Update::redraw();
         }
     };
-    let text = text.trim();
+    let text = saved.trim();
     let effect = match writing {
         Writing::Comment {
             issue_id,
@@ -144,6 +148,7 @@ pub(super) fn closed(
             }
             Effect::CreateIssue(show_stand_in(state, draft, text))
         }
+        Writing::Text(opened) => return edit_text::closed(state, opened, saved),
     };
     Update {
         redraw: true,

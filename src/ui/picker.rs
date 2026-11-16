@@ -112,7 +112,7 @@ fn edit_glyph(state: &State) -> impl Fn(&Edit) -> Option<Span<'static>> + '_ {
         Edit::Priority(priority) => {
             Some(Span::raw(state.ui.icons.priority(*priority)).fg(state.theme.priority(*priority)))
         }
-        Edit::Assignee(_) | Edit::Labels(_) | Edit::Estimate(_) => None,
+        Edit::Assignee(_) | Edit::Labels(_) | Edit::Estimate(_) | Edit::Text { .. } => None,
     }
 }
 

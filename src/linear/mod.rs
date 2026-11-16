@@ -165,6 +165,13 @@ pub trait LinearClient {
         window: AnalyticsWindow,
     ) -> impl Future<Output = Result<TeamAnalyticsIssues, ClientError>> + Send;
 
+    /// When the issue with id `issue_id` was last updated in Linear, read
+    /// afresh, so a save can refuse to overwrite a newer edit.
+    fn issue_updated_at(
+        &self,
+        issue_id: &str,
+    ) -> impl Future<Output = Result<Timestamp, ClientError>> + Send;
+
     /// Live events from Linear's websocket for the issues of `team_ids` and
     /// every new comment, for as long as the stream is polled. It reconnects
     /// by itself after any disconnect and never ends. Without a live
@@ -299,6 +306,11 @@ pub struct IssueUpdate {
     pub added_label_ids: Vec<String>,
     /// Labels to remove, leaving the issue's other labels as they are.
     pub removed_label_ids: Vec<String>,
+    /// The new title, or `None` to leave it.
+    pub title: Option<String>,
+    /// The new Markdown description, or `None` to leave it. An empty one
+    /// empties it.
+    pub description: Option<String>,
 }
 
 /// A change to a field that can be empty: leave it, empty it, or set it.
@@ -785,6 +797,12 @@ fn demo_update(
             issue.label_ids.push(id.clone());
         }
     }
+    if let Some(title) = &update.title {
+        issue.title.clone_from(title);
+    }
+    if let Some(description) = &update.description {
+        issue.description = (!description.is_empty()).then(|| description.clone());
+    }
     issue.updated_at += SignedDuration::from_secs(1);
     Ok(issue)
 }
@@ -1089,6 +1107,20 @@ impl LinearClient for FakeClient {
             ],
             server_time: Some(demo::NOW),
         })
+    }
+
+    /// The `updatedAt` of the issue as edits through this client left it.
+    async fn issue_updated_at(&self, issue_id: &str) -> Result<Timestamp, ClientError> {
+        DEMO_EDITS
+            .with_borrow(|edits| edits.get(issue_id).map(|issue| issue.updated_at))
+            .or_else(|| {
+                demo::workspace()
+                    .issues
+                    .into_iter()
+                    .find(|issue| issue.id == issue_id)
+                    .map(|issue| issue.updated_at)
+            })
+            .ok_or_else(|| not_found("issue", issue_id))
     }
 }
 

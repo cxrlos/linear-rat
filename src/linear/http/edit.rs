@@ -1,10 +1,12 @@
 //! What the pickers load and what an edit sends: a team's workflow states,
-//! members and labels, and one `issueUpdate`.
+//! members and labels, one `issueUpdate`, and the `updatedAt` a text save
+//! checks first.
 
+use jiff::Timestamp;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
-use super::assigned::{Connection, IssueNode, LabelsPage, PersonNode, StateNode};
+use super::assigned::{Connection, IssueNode, LabelsPage, PersonNode, StateNode, timestamp};
 use super::{HttpClient, Urgency};
 use crate::linear::model::{Issue, Label, Member, Priority, WorkflowState};
 use crate::linear::{ClientError, IssueUpdate, Patch, Response};
@@ -13,6 +15,7 @@ const TEAM_STATES: &str = include_str!("../graphql/team_states.graphql");
 const TEAM_MEMBERS: &str = include_str!("../graphql/team_members.graphql");
 const TEAM_LABELS: &str = include_str!("../graphql/team_labels.graphql");
 const ISSUE_UPDATE: &str = include_str!("../graphql/issue_update.graphql");
+const ISSUE_UPDATED_AT: &str = include_str!("../graphql/issue_updated_at.graphql");
 
 pub(super) async fn workflow_states(
     client: &HttpClient,
@@ -92,6 +95,17 @@ pub(super) async fn update_issue(
     }
 }
 
+/// When the issue was last updated, read as the viewer waits on a save.
+pub(super) async fn issue_updated_at(
+    client: &HttpClient,
+    issue_id: &str,
+) -> Result<Timestamp, ClientError> {
+    let response: Response<UpdatedAtData> = client
+        .execute(ISSUE_UPDATED_AT, json!({ "id": issue_id }))
+        .await?;
+    Ok(response.data.issue.updated_at)
+}
+
 /// `IssueUpdateInput` with only the fields `update` changes. A cleared field
 /// is sent as null; an unchanged one is left out.
 fn input(update: &IssueUpdate) -> Value {
@@ -128,6 +142,12 @@ fn input(update: &IssueUpdate) -> Value {
             "removedLabelIds".to_owned(),
             json!(update.removed_label_ids),
         );
+    }
+    if let Some(title) = &update.title {
+        input.insert("title".to_owned(), json!(title));
+    }
+    if let Some(description) = &update.description {
+        input.insert("description".to_owned(), json!(description));
     }
     Value::Object(input)
 }
@@ -173,4 +193,16 @@ struct UpdateData {
 struct UpdatePayload {
     success: bool,
     issue: Option<IssueNode>,
+}
+
+#[derive(Deserialize)]
+struct UpdatedAtData {
+    issue: UpdatedAtNode,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdatedAtNode {
+    #[serde(deserialize_with = "timestamp")]
+    updated_at: Timestamp,
 }

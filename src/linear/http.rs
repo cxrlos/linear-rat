@@ -444,6 +444,10 @@ impl LinearClient for HttpClient {
     async fn diagnostics(&self) -> Result<Diagnostics, ClientError> {
         diagnostics::load(self).await
     }
+
+    async fn issue_updated_at(&self, issue_id: &str) -> Result<Timestamp, ClientError> {
+        edit::issue_updated_at(self, issue_id).await
+    }
 }
 
 /// What came back from one send.

@@ -1,0 +1,9 @@
+# budget: 1
+# When one issue was last updated, read again right before saving its title
+# and description, so a save never overwrites a newer edit unseen.
+query IssueUpdatedAt($id: String!) {
+  issue(id: $id) {
+    id
+    updatedAt
+  }
+}
