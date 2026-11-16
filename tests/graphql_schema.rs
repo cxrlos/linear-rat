@@ -15,6 +15,13 @@
 //! literal, or a variable with a default) is rejected, because Linear would
 //! charge it at its default page size of 50 and the document would hide that
 //! cost.
+//!
+//! `LRAT_SCHEMA_PATH` points the document check at another schema file, which
+//! the weekly drift workflow uses to try Linear's latest schema:
+//!
+//! ```sh
+//! LRAT_SCHEMA_PATH=/path/to/schema.graphql cargo test --locked --test graphql_schema every_document
+//! ```
 
 // clippy's allow-unwrap-in-tests does not cover helpers outside #[test] functions.
 #![allow(clippy::unwrap_used)]
@@ -24,25 +31,44 @@ use std::path::Path;
 use std::sync::OnceLock;
 
 use apollo_compiler::executable::{Field, Selection, SelectionSet};
+use apollo_compiler::schema::ExtendedType;
 use apollo_compiler::validation::Valid;
 use apollo_compiler::{ExecutableDocument, Name, Node, Schema};
 
 /// Linear rejects any single query above this many complexity points.
 const LINEAR_MAX_COMPLEXITY: u64 = 10_000;
 
-fn schema() -> &'static Valid<Schema> {
-    static SCHEMA: OnceLock<Valid<Schema>> = OnceLock::new();
-    SCHEMA.get_or_init(|| {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/linear/schema.graphql");
-        let text = fs::read_to_string(&path).unwrap();
-        Schema::parse_and_validate(text, &path).unwrap()
+/// Points the document check at another copy of the schema, such as Linear's
+/// latest. The rule tests below always use the pinned copy.
+const SCHEMA_OVERRIDE: &str = "LRAT_SCHEMA_PATH";
+
+fn load_schema(path: &Path) -> Valid<Schema> {
+    let text = fs::read_to_string(path)
+        .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
+    Schema::parse_and_validate(text, path).unwrap_or_else(|invalid| {
+        panic!(
+            "{} is not a valid schema:\n{}",
+            path.display(),
+            invalid.errors
+        )
     })
 }
 
-/// Validates `text` against the schema and returns its estimated complexity,
-/// or every problem found.
+fn pinned_schema() -> &'static Valid<Schema> {
+    static SCHEMA: OnceLock<Valid<Schema>> = OnceLock::new();
+    SCHEMA.get_or_init(|| {
+        load_schema(&Path::new(env!("CARGO_MANIFEST_DIR")).join("src/linear/schema.graphql"))
+    })
+}
+
+/// Validates `text` against the pinned schema and returns its estimated
+/// complexity, or every problem found.
 fn check(text: &str, name: &str) -> Result<u64, Vec<String>> {
-    let document = ExecutableDocument::parse_and_validate(schema(), text, name)
+    check_with(pinned_schema(), text, name)
+}
+
+fn check_with(schema: &Valid<Schema>, text: &str, name: &str) -> Result<u64, Vec<String>> {
+    let document = ExecutableDocument::parse_and_validate(schema, text, name)
         .map_err(|invalid| vec![invalid.errors.to_string()])?;
     let mut problems = Vec::new();
     let mut cost = 0;
@@ -176,37 +202,67 @@ fn budget(text: &str) -> Option<u64> {
         .and_then(|budget| budget.trim().parse().ok())
 }
 
+/// Checks every document under `src/linear/graphql/` against `schema`.
+/// Fails with a report that names each failing document on a `name.graphql:`
+/// line followed by its problems.
+fn check_documents(schema: &Valid<Schema>) -> Result<(), String> {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/linear/graphql");
+    let mut paths: Vec<_> = fs::read_dir(&dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "graphql")
+        })
+        .collect();
+    paths.sort();
+    assert!(!paths.is_empty(), "no documents found in {}", dir.display());
+
+    let mut failing = Vec::new();
+    let mut report = String::new();
+    for path in &paths {
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        let text = fs::read_to_string(path).unwrap();
+        let problems = document_problems(schema, &text, &name);
+        if !problems.is_empty() {
+            report.push_str(&format!("\n{name}:\n  {}\n", problems.join("\n  ")));
+            failing.push(name);
+        }
+    }
+    if failing.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "failing documents: {}\n{report}",
+            failing.join(", ")
+        ))
+    }
+}
+
+fn document_problems(schema: &Valid<Schema>, text: &str, name: &str) -> Vec<String> {
+    let Some(budget) = budget(text) else {
+        return vec!["needs a `# budget: N` line".to_owned()];
+    };
+    if budget > LINEAR_MAX_COMPLEXITY {
+        return vec![format!("budget {budget} is above Linear's limit")];
+    }
+    match check_with(schema, text, name) {
+        Ok(cost) if cost > budget => vec![format!("estimated {cost} points, budget {budget}")],
+        Ok(_) => Vec::new(),
+        Err(problems) => problems,
+    }
+}
+
 #[test]
 fn every_document_is_valid_and_within_its_budget() {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/linear/graphql");
-    let mut checked = 0;
-    for entry in fs::read_dir(&dir).unwrap() {
-        let path = entry.unwrap().path();
-        if path
-            .extension()
-            .is_none_or(|extension| extension != "graphql")
-        {
-            continue;
-        }
-        let name = path.file_name().unwrap().to_string_lossy().into_owned();
-        let text = fs::read_to_string(&path).unwrap();
-        let budget = budget(&text).unwrap_or_else(|| panic!("{name} needs a `# budget: N` line"));
-        assert!(
-            budget <= LINEAR_MAX_COMPLEXITY,
-            "{name}: budget {budget} is above Linear's limit"
-        );
+    let result = match std::env::var_os(SCHEMA_OVERRIDE).filter(|path| !path.is_empty()) {
+        Some(path) => check_documents(&load_schema(Path::new(&path))),
+        None => check_documents(pinned_schema()),
+    };
 
-        let cost = check(&text, &name).unwrap_or_else(|problems| {
-            panic!("{name}:\n{}", problems.join("\n"));
-        });
-
-        assert!(
-            cost <= budget,
-            "{name}: estimated {cost} points, budget {budget}"
-        );
-        checked += 1;
+    if let Err(report) = result {
+        panic!("{report}");
     }
-    assert!(checked > 0, "no documents found in {}", dir.display());
 }
 
 #[test]
@@ -253,4 +309,19 @@ fn first_may_come_from_a_variable_default() {
     let text = "query Page($first: Int = 20) { issues(first: $first) { nodes { id } } }";
 
     assert_eq!(check(text, "variable"), Ok(21));
+}
+
+#[test]
+fn a_schema_without_a_field_a_document_uses_names_that_document() {
+    let mut schema = pinned_schema().clone().into_inner();
+    let Some(ExtendedType::Object(issue)) = schema.types.get_mut("Issue") else {
+        panic!("Issue is not an object type");
+    };
+    issue.make_mut().fields.shift_remove("identifier");
+    let schema = schema.validate().unwrap();
+
+    let failures = check_documents(&schema).unwrap_err();
+
+    assert!(failures.contains("assigned_issues.graphql:"), "{failures}");
+    assert!(!failures.contains("viewer.graphql:"), "{failures}");
 }
