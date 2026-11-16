@@ -3,7 +3,7 @@
 
 use clap::Parser;
 use linear_rat::auth::KeyringEntry;
-use linear_rat::cli::{AuthCommand, Cli, Command};
+use linear_rat::cli::{AuthCommand, Cli, Command, CompletionShell};
 
 fn parse(args: &[&str]) -> Option<Command> {
     Cli::try_parse_from(args).unwrap().command
@@ -133,4 +133,25 @@ fn login_help_names_the_supported_keychains_and_how_to_point_at_another_entry() 
     assert!(help.contains("Secret Service"), "{help}");
     assert!(help.contains("Keychain"), "{help}");
     assert!(help.contains("linear/api-key"), "{help}");
+}
+
+#[test]
+fn completions_takes_bash_zsh_or_fish() {
+    for (name, shell) in [
+        ("bash", CompletionShell::Bash),
+        ("zsh", CompletionShell::Zsh),
+        ("fish", CompletionShell::Fish),
+    ] {
+        let parsed = parse(&["lrat", "completions", name]);
+        assert!(
+            matches!(parsed, Some(Command::Completions { shell: s }) if s == shell),
+            "{name}"
+        );
+    }
+    let error = Cli::try_parse_from(["lrat", "completions", "powershell"]).unwrap_err();
+    assert_eq!(
+        error.kind(),
+        clap::error::ErrorKind::InvalidValue,
+        "{error}"
+    );
 }

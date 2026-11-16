@@ -1,5 +1,5 @@
 use std::future::Future;
-use std::io;
+use std::io::{self, Write};
 
 use anyhow::Context;
 use clap::Parser;
@@ -13,7 +13,7 @@ use linear_rat::linear::{FakeClient, HttpClient, LinearClient};
 use linear_rat::snapshot::SnapshotCache;
 use linear_rat::terminal::{self, TerminalGuard};
 use linear_rat::ui::theme;
-use linear_rat::{logging, runtime};
+use linear_rat::{completions, logging, runtime};
 use ratatui::backend::CrosstermBackend;
 
 #[tokio::main(flavor = "current_thread")]
@@ -22,6 +22,11 @@ async fn main() -> anyhow::Result<()> {
     if let Some(Command::Auth(command)) = cli.command {
         let _log_guard = logging::init().context("setting up the log file")?;
         return run_auth(command).await;
+    }
+    if let Some(Command::Completions { shell }) = cli.command {
+        return io::stdout()
+            .write_all(&completions::script(shell))
+            .context("writing the completion script");
     }
     let _log_guard = logging::init().context("setting up the log file")?;
     tracing::info!(version = env!("CARGO_PKG_VERSION"), "starting");

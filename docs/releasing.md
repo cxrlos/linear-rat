@@ -13,7 +13,7 @@ Both release-plz jobs run with a GitHub App token, not `GITHUB_TOKEN`, because e
 
 Targets: `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`, `x86_64-apple-darwin`, `aarch64-apple-darwin`. Linux and macOS only; Windows is not supported.
 
-Each release carries one `.tar.xz` archive per target (the `lrat` binary and both licenses) with its `.sha256`, `source.tar.gz`, `sha256.sum`, the shell installer `linear-rat-installer.sh` and the Homebrew formula `linear-rat.rb`. The install channels are:
+Each release carries one `.tar.xz` archive per target (the `lrat` binary, both licenses, `README.md`, `CHANGELOG.md`, and the completion scripts and man pages from `assets/` under `completions/` and `man/`) with its `.sha256`, `source.tar.gz`, `sha256.sum`, the shell installer `linear-rat-installer.sh` and the Homebrew formula `linear-rat.rb`. The install channels are:
 
 ```bash
 cargo install --locked linear-rat

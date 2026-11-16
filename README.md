@@ -40,6 +40,8 @@ curl --proto '=https' --tlsv1.2 -LsSf \
 
 Prebuilt binaries cover `x86_64` and `aarch64` on Linux (glibc) and macOS. Every [GitHub release](https://github.com/cxrlos/linear-rat/releases) carries the archives and their checksums if you prefer to install by hand.
 
+`lrat completions bash|zsh|fish` prints a completion script for your shell, for example `lrat completions zsh > ~/.zfunc/_lrat`. Each release archive also carries the scripts under `completions/` and the man pages under `man/`.
+
 ## Quick start
 
 Try it first with made-up data. This needs no Linear account and makes no network requests:

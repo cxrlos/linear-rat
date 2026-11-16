@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 
 use crate::auth::KeyringEntry;
 
@@ -18,6 +18,11 @@ pub enum Command {
     /// Manage the Linear API key
     #[command(subcommand)]
     Auth(AuthCommand),
+    /// Print the completion script for a shell
+    Completions {
+        /// The shell to complete in
+        shell: CompletionShell,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -51,4 +56,12 @@ pub enum AuthCommand {
     Status,
     /// Delete the API key from the configured keyring
     Logout,
+}
+
+/// A shell `lrat completions` writes a script for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum CompletionShell {
+    Bash,
+    Zsh,
+    Fish,
 }

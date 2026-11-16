@@ -1,0 +1,21 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH lrat-auth-login 1  lrat 
+.SH NAME
+lrat\-auth\-login \- Check an API key with Linear and store it in the OS keyring
+.SH SYNOPSIS
+\fBlrat auth login\fR [\fB\-\-stdin\fR] [\fB\-\-from\-keyring\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+.SH DESCRIPTION
+Check an API key with Linear and store it in the OS keyring
+.SH OPTIONS
+.TP
+\fB\-\-stdin\fR
+Read the key from standard input instead of prompting for it
+.TP
+\fB\-\-from\-keyring\fR [\fI<SERVICE/ACCOUNT>\fR]
+Read the key from an existing OS keyring entry instead of prompting for it
+
+The entry is named SERVICE/ACCOUNT and defaults to linear/api\-key. On Linux it is a Secret Service item (GNOME Keyring, KWallet) with the attributes `service` and `account`, as `secret\-tool store` writes it, or `service` and `username`; on macOS it is a generic password in the Keychain with that service and account. lrat checks the key with Linear, then stores a copy under its own entry; the entry read is left as it is. For another entry, name it: `\-\-from\-keyring work/linear\-key`.
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help (see a summary with \*(Aq\-h\*(Aq)

@@ -1,0 +1,23 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH lrat-auth 1  lrat 
+.SH NAME
+lrat\-auth \- Manage the Linear API key
+.SH SYNOPSIS
+\fBlrat auth\fR [\fB\-h\fR|\fB\-\-help\fR] <\fIsubcommands\fR>
+.SH DESCRIPTION
+Manage the Linear API key
+.SH OPTIONS
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.SH SUBCOMMANDS
+.TP
+lrat\-auth\-login(1)
+Check an API key with Linear and store it in the OS keyring
+.TP
+lrat\-auth\-status(1)
+Show where the API key comes from, and its workspace and viewer
+.TP
+lrat\-auth\-logout(1)
+Delete the API key from the OS keyring

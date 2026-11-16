@@ -1,0 +1,26 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH lrat 1  lrat 
+.SH NAME
+lrat \- A fast, keyboard\-first terminal client for Linear
+.SH SYNOPSIS
+\fBlrat\fR [\fB\-\-demo\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIsubcommands\fR]
+.SH DESCRIPTION
+A fast, keyboard\-first terminal client for Linear
+.SH OPTIONS
+.TP
+\fB\-\-demo\fR
+Run without a Linear account or API key
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Print version
+.SH SUBCOMMANDS
+.TP
+lrat\-auth(1)
+Manage the Linear API key
+.TP
+lrat\-completions(1)
+Print the completion script for a shell
