@@ -4,7 +4,17 @@ use crate::auth::KeyringEntry;
 use crate::open::IssueKey;
 
 #[derive(Debug, Parser)]
-#[command(name = "lrat", version, about, args_conflicts_with_subcommands = true)]
+#[command(
+    name = "lrat",
+    version,
+    about,
+    args_conflicts_with_subcommands = true,
+    after_help = "Getting started:\n  \
+        lrat auth login    store a Linear API key in the keyring (see `lrat auth --help`)\n  \
+        lrat               open My Issues\n  \
+        lrat --demo        try lrat without an account\n\n\
+        LINEAR_API_KEY, when set, is used instead of the keyring."
+)]
 pub struct Cli {
     /// Run without a Linear account or API key
     #[arg(long)]
@@ -17,7 +27,15 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// Manage the Linear API key
-    #[command(subcommand)]
+    #[command(
+        subcommand,
+        after_help = "Create a personal API key at https://linear.app/settings/account/security, then:\n  \
+            lrat auth login                  paste the key at the prompt\n  \
+            lrat auth login --stdin          read it from a pipe, as in `pass linear | lrat auth login --stdin`\n  \
+            lrat auth login --from-keyring   copy it from an existing keyring entry (default linear/api-key)\n  \
+            lrat auth status                 check where the key comes from and which workspace it opens\n\n\
+            LINEAR_API_KEY, when set, wins over the keyring. `[auth] store` in config.toml picks the keyring."
+    )]
     Auth(AuthCommand),
     /// Print the completion script for a shell
     Completions {

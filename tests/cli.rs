@@ -155,3 +155,29 @@ fn completions_takes_bash_zsh_or_fish() {
         "{error}"
     );
 }
+
+fn help(args: &[&str]) -> String {
+    Cli::try_parse_from(args).unwrap_err().to_string()
+}
+
+#[test]
+fn top_level_help_says_how_to_log_in() {
+    let help = help(&["lrat", "--help"]);
+    assert!(help.contains("lrat auth login"), "{help}");
+    assert!(help.contains("LINEAR_API_KEY"), "{help}");
+    assert!(help.contains("lrat --demo"), "{help}");
+}
+
+#[test]
+fn auth_help_shows_each_way_to_log_in() {
+    let help = help(&["lrat", "auth", "--help"]);
+    for way in [
+        "lrat auth login",
+        "lrat auth login --stdin",
+        "lrat auth login --from-keyring",
+        "lrat auth status",
+        "linear.app/settings/account/security",
+    ] {
+        assert!(help.contains(way), "missing {way:?} in:\n{help}");
+    }
+}
