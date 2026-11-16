@@ -122,19 +122,27 @@ impl fmt::Display for KeyringEntry {
     }
 }
 
-/// The OS keyring could not be used. There is no fallback store, so the
-/// message points at `LINEAR_API_KEY`.
+/// A keyring could not be used. There is no fallback store, so the message
+/// points at `LINEAR_API_KEY`.
 #[derive(Debug, thiserror::Error)]
-#[error("the OS keyring is unavailable ({reason}); set {KEY_VAR} to use lrat without it")]
+#[error("{store} is unavailable ({reason}); set {KEY_VAR} to use lrat without it")]
 pub struct KeyringError {
+    store: KeyringStore,
     reason: String,
 }
 
 impl KeyringError {
+    /// An error of the OS keyring; [`KeyringError::in_store`] names another.
     pub fn new(reason: impl Into<String>) -> Self {
         Self {
+            store: KeyringStore::Os,
             reason: reason.into(),
         }
+    }
+
+    /// The same error, said of `store`.
+    pub fn in_store(self, store: KeyringStore) -> Self {
+        Self { store, ..self }
     }
 }
 
@@ -245,12 +253,8 @@ fn platform_store() -> Result<Arc<CredentialStore>, KeyringError> {
     ))
 }
 
-impl KeyStore for OsKeyring {
-    fn kind(&self) -> KeyringStore {
-        self.store
-    }
-
-    fn get(&self, account: &str) -> Result<Option<ApiKey>, KeyringError> {
+impl OsKeyring {
+    fn get_in_store(self, account: &str) -> Result<Option<ApiKey>, KeyringError> {
         match self.entry(account)?.get_password() {
             Ok(stored) => ApiKey::new(&stored)
                 .map(Some)
@@ -260,16 +264,37 @@ impl KeyStore for OsKeyring {
         }
     }
 
-    fn set(&self, account: &str, key: &ApiKey) -> Result<(), KeyringError> {
+    fn set_in_store(self, account: &str, key: &ApiKey) -> Result<(), KeyringError> {
         Ok(self.entry(account)?.set_password(key.expose())?)
     }
 
-    fn delete(&self, account: &str) -> Result<bool, KeyringError> {
+    fn delete_in_store(self, account: &str) -> Result<bool, KeyringError> {
         match self.entry(account)?.delete_credential() {
             Ok(()) => Ok(true),
             Err(Error::NoEntry) => Ok(false),
             Err(error) => Err(error.into()),
         }
+    }
+}
+
+impl KeyStore for OsKeyring {
+    fn kind(&self) -> KeyringStore {
+        self.store
+    }
+
+    fn get(&self, account: &str) -> Result<Option<ApiKey>, KeyringError> {
+        self.get_in_store(account)
+            .map_err(|error| error.in_store(self.store))
+    }
+
+    fn set(&self, account: &str, key: &ApiKey) -> Result<(), KeyringError> {
+        self.set_in_store(account, key)
+            .map_err(|error| error.in_store(self.store))
+    }
+
+    fn delete(&self, account: &str) -> Result<bool, KeyringError> {
+        self.delete_in_store(account)
+            .map_err(|error| error.in_store(self.store))
     }
 }
 

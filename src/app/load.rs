@@ -16,12 +16,12 @@ pub enum Load {
 /// Why My Issues could not load. Each kind has its own error screen.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LoadError {
-    /// Neither `LINEAR_API_KEY` nor the OS keyring holds a key.
+    /// Neither `LINEAR_API_KEY` nor the configured keyring holds a key.
     NoKey,
     /// Linear did not accept the key: it is wrong, revoked or expired. The
     /// screen names where the key came from.
     KeyRejected,
-    /// The OS keyring could not be read; the message says what to do.
+    /// The configured keyring could not be read; the message says what to do.
     KeyringUnavailable(String),
     /// A key was found but cannot be used, such as a malformed
     /// `LINEAR_API_KEY`.

@@ -611,6 +611,23 @@ async fn an_unavailable_keyring_is_named_and_linear_api_key_suggested() {
 }
 
 #[test]
+fn a_keyring_error_names_the_store_that_failed() {
+    let os = KeyringError::new("no Secret Service");
+    let kernel = KeyringError::new("operation not permitted").in_store(KeyringStore::Keyutils);
+
+    assert_eq!(
+        os.to_string(),
+        "the OS keyring is unavailable (no Secret Service); \
+         set LINEAR_API_KEY to use lrat without it"
+    );
+    assert_eq!(
+        kernel.to_string(),
+        "the Linux kernel keyring is unavailable (operation not permitted); \
+         set LINEAR_API_KEY to use lrat without it"
+    );
+}
+
+#[test]
 fn a_piped_key_is_read_without_its_trailing_newline() {
     let read = auth::read_key(format!("{SECRET}\n").as_bytes()).unwrap();
 

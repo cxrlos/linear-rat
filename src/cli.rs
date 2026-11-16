@@ -22,7 +22,7 @@ pub enum Command {
 
 #[derive(Debug, Subcommand)]
 pub enum AuthCommand {
-    /// Check an API key with Linear and store it in the OS keyring
+    /// Check an API key with Linear and store it in the configured keyring
     Login {
         /// Read the key from standard input instead of prompting for it
         #[arg(long)]
@@ -49,6 +49,6 @@ pub enum AuthCommand {
     },
     /// Show where the API key comes from, and its workspace and viewer
     Status,
-    /// Delete the API key from the OS keyring
+    /// Delete the API key from the configured keyring
     Logout,
 }

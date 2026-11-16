@@ -108,9 +108,27 @@ fn an_unavailable_keyring_says_to_use_the_environment_instead() {
 
     let screen = screen(&failed(error));
 
-    assert!(screen.contains("OS keyring unavailable"), "{screen}");
+    assert!(screen.contains("Keyring unavailable"), "{screen}");
     assert!(screen.contains("The OS keyring is unavailable"), "{screen}");
     assert!(screen.contains("set LINEAR_API_KEY"), "{screen}");
+}
+
+#[test]
+fn an_unavailable_kernel_keyring_is_not_called_the_os_keyring() {
+    let error = LoadError::KeyringUnavailable(
+        "the Linux kernel keyring is unavailable (operation not permitted); \
+         set LINEAR_API_KEY to use lrat without it"
+            .to_owned(),
+    );
+
+    let screen = screen(&failed(error));
+
+    assert!(screen.contains("Keyring unavailable"), "{screen}");
+    assert!(
+        screen.contains("The Linux kernel keyring is unavailable"),
+        "{screen}"
+    );
+    assert!(!screen.contains("OS keyring"), "{screen}");
 }
 
 #[test]

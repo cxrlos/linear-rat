@@ -130,7 +130,7 @@ lrat takes the API key from `LINEAR_API_KEY` when it is set, otherwise from the 
 | `store` | `"os"`, `"keyutils"` | `"os"` | Where `lrat auth login` keeps the key and where lrat reads it. |
 
 - `"os"` is the macOS Keychain, or on Linux the Secret Service (GNOME Keyring, KWallet).
-- `"keyutils"` is the Linux kernel keyring, for machines without a Secret Service, such as SSH boxes and containers. It is Linux only: on macOS it is a config error and lrat uses `"os"`. Kernel keys live in memory and do not survive a reboot; they also expire after some days without use (the kernel's `persistent_keyring_expiry`, three days by default). Run `lrat auth login` again when that happens. It does not suit a laptop you reboot often; there, keep `"os"`.
+- `"keyutils"` is the Linux kernel keyring, for machines without a Secret Service, such as SSH boxes and containers. It is Linux only: on macOS it is a config error and lrat uses `"os"`. Kernel keys live in memory and do not survive a reboot; they also expire after some days without use (the kernel's `persistent_keyring_expiry`, three days by default). Run `lrat auth login` again when that happens. It does not suit a laptop you reboot often; there, keep `"os"`. Docker's default seccomp profile, and that of similar container runtimes, blocks the kernel keyring calls, so inside such a container set `LINEAR_API_KEY` instead.
 
 Changing `store` does not move a stored key: run `lrat auth login` after the change, and `lrat auth logout` before it to remove the key from the old store. `lrat auth login --from-keyring` reads its entry from the Keychain or the Secret Service whatever `store` is.
 
