@@ -13,7 +13,11 @@
 //! canceled muted, unstarted text, started `base0A`, completed `base0B`.
 //! Priorities: urgent `base08`, high `base09`, medium `base0A`, low
 //! `base0D`, none muted.
+//!
+//! `NO_COLOR` replaces whichever theme is configured with
+//! [`Theme::no_color`]; it is read once at startup, never while drawing.
 
+use std::ffi::OsStr;
 use std::fmt;
 
 use ratatui::style::{Color, Modifier, Style};
@@ -23,6 +27,15 @@ use crate::linear::model::{Priority, StateType};
 
 /// The name of the default theme.
 pub const DEFAULT: &str = "terminal";
+
+/// The environment variable that turns color off, per no-color.org.
+pub const NO_COLOR_VAR: &str = "NO_COLOR";
+
+/// Whether `NO_COLOR` with `value` asks for no color: it is set and not
+/// empty. An empty value counts as unset.
+pub fn no_color_requested(value: Option<&OsStr>) -> bool {
+    value.is_some_and(|value| !value.is_empty())
+}
 
 /// The least contrast ratio the muted role keeps against the background in
 /// a Base16 theme, the WCAG minimum for large text and interface parts.
@@ -126,6 +139,36 @@ impl Default for Theme {
 }
 
 impl Theme {
+    /// The theme `NO_COLOR` asks for: every role the terminal's default
+    /// foreground on its default background. Modifiers still mark the
+    /// focused row (reversed) and what the viewer can act on (bold).
+    pub fn no_color() -> Self {
+        Self {
+            background: Color::Reset,
+            text: Color::Reset,
+            muted: Color::Reset,
+            accent: Color::Reset,
+            error: Color::Reset,
+            border: Color::Reset,
+            selection: Style::new().add_modifier(Modifier::REVERSED),
+            states: StateColors {
+                triage: Color::Reset,
+                backlog: Color::Reset,
+                unstarted: Color::Reset,
+                started: Color::Reset,
+                completed: Color::Reset,
+                canceled: Color::Reset,
+            },
+            priorities: PriorityColors {
+                urgent: Color::Reset,
+                high: Color::Reset,
+                medium: Color::Reset,
+                low: Color::Reset,
+                none: Color::Reset,
+            },
+        }
+    }
+
     /// The names of the built-in themes, the default first.
     pub fn built_in_names() -> impl Iterator<Item = &'static str> {
         std::iter::once(DEFAULT).chain(BASE16.iter().map(|(name, _)| *name))

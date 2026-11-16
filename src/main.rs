@@ -12,6 +12,7 @@ use linear_rat::config::{self, Loaded};
 use linear_rat::linear::{FakeClient, HttpClient, LinearClient};
 use linear_rat::snapshot::SnapshotCache;
 use linear_rat::terminal::{self, TerminalGuard};
+use linear_rat::ui::theme;
 use linear_rat::{logging, runtime};
 use ratatui::backend::CrosstermBackend;
 
@@ -32,11 +33,14 @@ async fn main() -> anyhow::Result<()> {
             Loaded::default()
         }
     };
+    let no_color = std::env::var_os(theme::NO_COLOR_VAR);
+    let loaded = loaded.with_no_color(no_color.as_deref());
     for error in &loaded.errors {
         tracing::warn!(%error, "config problem");
     }
     tracing::info!(
         theme = loaded.config.theme,
+        no_color = theme::no_color_requested(no_color.as_deref()),
         icons = loaded.config.ui.icons.name(),
         "config loaded"
     );

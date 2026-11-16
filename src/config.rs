@@ -34,6 +34,7 @@
 //! resets only its `[keys]` context table. Unknown keys and tables are
 //! reported and ignored.
 
+use std::ffi::OsStr;
 use std::fs;
 use std::io;
 use std::ops::RangeInclusive;
@@ -60,7 +61,7 @@ pub struct Config {
     /// `[ui]`.
     pub ui: UiSettings,
     /// The theme `[theme] name` picks, or the default when it does not
-    /// load; [`Loaded::theme`] is that theme.
+    /// load; [`Loaded::theme`] is that theme unless `NO_COLOR` replaced it.
     pub theme: String,
     /// `[sync]`.
     pub sync: SyncSettings,
@@ -155,6 +156,21 @@ pub struct Loaded {
     pub config: Config,
     pub theme: Theme,
     pub errors: Vec<ConfigError>,
+}
+
+impl Loaded {
+    /// This config with [`Theme::no_color`] in place of its theme when
+    /// `no_color`, the value of `NO_COLOR`, asks for it.
+    pub fn with_no_color(self, no_color: Option<&OsStr>) -> Self {
+        if theme::no_color_requested(no_color) {
+            Self {
+                theme: Theme::no_color(),
+                ..self
+            }
+        } else {
+            self
+        }
+    }
 }
 
 /// A problem in the config file or a theme file, located by line where

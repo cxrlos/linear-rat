@@ -43,6 +43,10 @@ In both icon sets every workflow state type and every priority has its own glyph
 
 `catppuccin-mocha`, `dracula`, `everforest-dark`, `gruvbox-dark`, `kanagawa-wave`, `nord`, `one-dark`, `rose-pine`, `solarized-dark`, `tokyo-night`.
 
+### `NO_COLOR`
+
+When the `NO_COLOR` environment variable is set to anything but the empty string ([no-color.org](https://no-color.org)), lrat draws with no color at all, whatever `[theme]` says: every role uses the terminal's default foreground and background. The glyphs of workflow states and priorities still tell them apart, the focused issue's row and the active tab stay reversed, and keys you can use stay bold. lrat reads `NO_COLOR` once, at startup.
+
 ### Your own theme
 
 Put a Base16 scheme in JSON next to the config file, at `~/.config/lrat/themes/<name>.json`, and set `name = "<name>"`. A name is letters, digits, `-` and `_`. A built-in theme wins over a file of the same name.
