@@ -90,6 +90,30 @@ Pushing the tag runs dist and creates the GitHub release with binaries. After th
 
 I worked out steps 3 and 4 from release-plz 0.3.173's source (it skips a package whose tag exists or whose version is already published, and tags only after its own publish); they have not run live yet. I checked step 3's no-follow-up-PR claim with `release-plz update --registry-manifest-path` against a `0.1.0` packaged without `CHANGELOG.md`: it reports "no commit matches the `release_commits` regex" and changes nothing.
 
+## AUR packages
+
+`packaging/aur/` holds two Arch packages: `lrat-bin` installs the dist archive for `x86_64` or `aarch64`, and `lrat` builds the release's `source.tar.gz` with cargo. Both install the binary, both licenses, the completion scripts and the man pages. Nothing publishes them automatically. After each GitHub release, from a clean `main`, I bump both:
+
+```bash
+cd packaging/aur/lrat-bin
+sed -i 's/^pkgver=.*/pkgver=X.Y.Z/; s/^pkgrel=.*/pkgrel=1/' PKGBUILD
+updpkgsums
+makepkg --printsrcinfo > .SRCINFO
+makepkg -si
+lrat --version
+```
+
+Then the same in `packaging/aur/lrat`. `updpkgsums` (from `pacman-contrib`) downloads the sources and writes their checksums; for `lrat-bin` they must equal the release's `linear-rat-<target>.tar.xz.sha256` files, and for `lrat` its `source.tar.gz.sha256`. `namcap PKGBUILD` and `namcap` on the built package should report no errors. I commit the bump here, then, from each package directory, push its `PKGBUILD` and `.SRCINFO` to its AUR repository:
+
+```bash
+git clone ssh://aur@aur.archlinux.org/lrat-bin.git /tmp/aur-lrat-bin
+cp PKGBUILD .SRCINFO /tmp/aur-lrat-bin/
+git -C /tmp/aur-lrat-bin commit -am "Update to X.Y.Z"
+git -C /tmp/aur-lrat-bin push
+```
+
+The first push creates the AUR package, so it needs an AUR account with my SSH key; the first `git commit` there needs `git add PKGBUILD .SRCINFO` instead of `-a`. A packaging-only fix bumps `pkgrel` instead of `pkgver`. The completion scripts and man pages come from the archive (`completions/`, `man/`) and from `assets/` in the source, so the first version either package can build is the first release that ships them.
+
 ## Rolling back
 
 A broken release is never deleted: I yank it with `cargo yank --version X.Y.Z linear-rat` and ship a fix as the next patch version. The version number of a yanked release is burned.

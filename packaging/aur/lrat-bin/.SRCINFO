@@ -1,0 +1,19 @@
+pkgbase = lrat-bin
+	pkgdesc = A fast, keyboard-first terminal client for Linear (prebuilt binary)
+	pkgver = 0.1.0
+	pkgrel = 1
+	url = https://github.com/cxrlos/linear-rat
+	arch = x86_64
+	arch = aarch64
+	license = MIT OR Apache-2.0
+	depends = gcc-libs
+	depends = glibc
+	provides = lrat
+	conflicts = lrat
+	options = !debug
+	source_x86_64 = lrat-0.1.0-x86_64.tar.xz::https://github.com/cxrlos/linear-rat/releases/download/v0.1.0/linear-rat-x86_64-unknown-linux-gnu.tar.xz
+	sha256sums_x86_64 = c310b8c301892de03fd86ebe78dbe1335ea5e3e81de53fe855a6bf1c7e9afff1
+	source_aarch64 = lrat-0.1.0-aarch64.tar.xz::https://github.com/cxrlos/linear-rat/releases/download/v0.1.0/linear-rat-aarch64-unknown-linux-gnu.tar.xz
+	sha256sums_aarch64 = 82c39bfd596e172667c8fcf5ffe71cf9416caf70a89226690d0140add4f92124
+
+pkgname = lrat-bin

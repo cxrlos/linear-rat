@@ -1,0 +1,50 @@
+# Maintainer: Carlos García <31284110+cxrlos at users dot noreply dot github dot com>
+
+pkgname=lrat
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='A fast, keyboard-first terminal client for Linear'
+arch=('x86_64' 'aarch64')
+url='https://github.com/cxrlos/linear-rat'
+license=('MIT OR Apache-2.0')
+depends=('gcc-libs' 'glibc')
+makedepends=('cargo')
+conflicts=('lrat-bin')
+# makepkg's -flto turns aws-lc-sys's C objects into GCC bitcode, which
+# rust-lld cannot link.
+options=('!lto')
+# The source archive dist attaches to each release, with the committed
+# completion scripts and man pages under assets/.
+source=("linear-rat-$pkgver.tar.gz::$url/releases/download/v$pkgver/source.tar.gz")
+sha256sums=('9bcaf5ca53bd30cebb28aeb8878d88016286244e3764822c82f029a5eecfe310')
+
+prepare() {
+  cd "linear-rat-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc --print host-tuple)"
+}
+
+build() {
+  cd "linear-rat-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo build --frozen --release --all-features
+}
+
+check() {
+  cd "linear-rat-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo test --frozen --all-features
+}
+
+package() {
+  cd "linear-rat-$pkgver"
+  install -Dm755 target/release/lrat -t "$pkgdir/usr/bin/"
+  install -Dm644 LICENSE-MIT LICENSE-APACHE -t "$pkgdir/usr/share/licenses/$pkgname/"
+  install -Dm644 README.md -t "$pkgdir/usr/share/doc/$pkgname/"
+  install -Dm644 assets/completions/lrat.bash "$pkgdir/usr/share/bash-completion/completions/lrat"
+  install -Dm644 assets/completions/_lrat -t "$pkgdir/usr/share/zsh/site-functions/"
+  install -Dm644 assets/completions/lrat.fish -t "$pkgdir/usr/share/fish/vendor_completions.d/"
+  install -Dm644 assets/man/*.1 -t "$pkgdir/usr/share/man/man1/"
+}
