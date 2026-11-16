@@ -7,6 +7,7 @@
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use clap::Parser;
@@ -19,7 +20,7 @@ use linear_rat::linear::{
 };
 use serde_json::json;
 use wiremock::matchers::{body_string_contains, method};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
 
 const SECRET: &str = "lin_api_fictional0000000000000000000000000000";
 
@@ -529,4 +530,73 @@ async fn the_real_client_reads_the_role_rate_limits_and_date() {
             server_time: Some(Timestamp::constant(1_793_631_607, 0)),
         }
     );
+}
+
+/// Answers each request and records which query it was, so a test can see
+/// where the local clock was read among them.
+struct Recording {
+    log: Arc<Mutex<Vec<&'static str>>>,
+}
+
+impl Respond for Recording {
+    fn respond(&self, request: &Request) -> ResponseTemplate {
+        let body = String::from_utf8_lossy(&request.body);
+        let (name, data) = if body.contains("query Viewer") {
+            (
+                "viewer",
+                json!({
+                    "viewer": { "id": "u1", "name": "Ada" },
+                    "organization": { "id": "o1", "name": "Acme", "urlKey": "acme" }
+                }),
+            )
+        } else if body.contains("query Diagnostics") {
+            (
+                "diagnostics",
+                json!({
+                    "viewer": { "admin": false, "owner": false, "guest": false },
+                    "rateLimitStatus": { "limits": [] }
+                }),
+            )
+        } else {
+            (
+                "administrableTeams",
+                json!({ "administrableTeams": {
+                    "nodes": [],
+                    "pageInfo": { "hasNextPage": false, "endCursor": null }
+                } }),
+            )
+        };
+        self.log.lock().unwrap().push(name);
+        ResponseTemplate::new(200)
+            .insert_header("date", "Mon, 02 Nov 2026 15:00:07 GMT")
+            .set_body_json(json!({ "data": data }))
+    }
+}
+
+#[tokio::test]
+async fn the_clock_is_read_right_after_the_dated_response() {
+    let server = MockServer::start().await;
+    let log = Arc::new(Mutex::new(Vec::new()));
+    Mock::given(method("POST"))
+        .respond_with(Recording { log: log.clone() })
+        .mount(&server)
+        .await;
+    let client = client_for(&server);
+
+    let clock_log = log.clone();
+    doctor::gather(
+        &credentials(Some(SECRET)),
+        |_| Ok(client),
+        truecolor(),
+        config(None),
+        move || {
+            clock_log.lock().unwrap().push("now");
+            demo::NOW
+        },
+    )
+    .await;
+
+    let log = log.lock().unwrap();
+    let now = log.iter().position(|step| *step == "now").unwrap();
+    assert_eq!(log[now - 1], "diagnostics", "{log:?}");
 }

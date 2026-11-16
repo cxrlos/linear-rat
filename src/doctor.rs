@@ -142,7 +142,7 @@ pub struct Facts {
     pub linear: Linear,
     pub terminal: Terminal,
     pub config: ConfigFacts,
-    /// The local clock after Linear answered.
+    /// The local clock right after Linear's dated diagnostics response.
     pub now: Timestamp,
 }
 
@@ -194,7 +194,8 @@ pub struct ConfigFacts {
 
 /// Collects the facts: the key from `credentials`, Linear through the client
 /// `connect` makes, the terminal from `var`, and the config. `now` is read
-/// after Linear answers, so the clock offset leaves out the wait.
+/// right after the diagnostics response, the last request, so the clock
+/// offset leaves out the time spent on the other requests.
 pub async fn gather<S, C>(
     credentials: &Credentials<S>,
     connect: impl FnOnce(&ApiKey) -> Result<C, ClientError>,
@@ -232,12 +233,14 @@ async fn ask_linear<C: LinearClient>(
         Err(ClientError::InvalidKey) => return Linear::Rejected,
         Err(error) => return Linear::Unreachable(chain(&error)),
     };
-    let diagnostics = client.diagnostics().await.map_err(|error| chain(&error));
     let administrable_teams = client
         .administrable_teams()
         .await
         .map(|teams| teams.len())
         .map_err(|error| chain(&error));
+    // Last, so the caller reads the local clock right after the response whose
+    // Date header the clock check compares it with.
+    let diagnostics = client.diagnostics().await.map_err(|error| chain(&error));
     Linear::Reached {
         viewer,
         workspace,
