@@ -1,6 +1,6 @@
 # Releasing
 
-How I ship linear-rat, and the one-time setup that only I can do. Versions follow SemVer from `0.1.0`; while on `0.x`, a breaking change bumps the minor version and a `feat` bumps the patch version (release-plz's [next_version](https://docs.rs/next_version) rules).
+How I ship linear-rat, and the one-time setup that only I can do. Versions follow SemVer from `0.1.0`; while on `0.x`, a breaking change or a `feat` bumps the minor version (`features_always_increment_minor` in `release-plz.toml`) and a `fix` bumps the patch version. Each milestone lands on `main` as one squash-merged `feat`, so it ships as the next minor version.
 
 ## Pipeline
 

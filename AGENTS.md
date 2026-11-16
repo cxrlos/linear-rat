@@ -11,7 +11,7 @@ A terminal client for Linear, written in Rust with ratatui. One crate; the binar
 
 ## Status
 
-Active, pre-release. Work toward `0.1.0` lands on the `feat/v0.1.0` branch, which is squash-merged into `main`.
+Active. Each milestone's work lands on a `feat/vX.Y.0` branch, which is squash-merged into `main` and ships as that minor version.
 
 ## Critical rules
 
@@ -25,7 +25,7 @@ Active, pre-release. Work toward `0.1.0` lands on the `feat/v0.1.0` branch, whic
 
 ## Workflow
 
-1. Orient: read the issue, `GLOSSARY.md` and the relevant ADRs. Branch `<type>/<issue>-<slug>` off `main` (during 0.1.0, off `feat/v0.1.0`).
+1. Orient: read the issue, `GLOSSARY.md` and the relevant ADRs. Branch `<type>/<issue>-<slug>` off `main` (during a milestone, off `feat/vX.Y.0`).
 2. Agree seams: name the module and public interface you will touch before writing code.
 3. Red then green with `/tdd`. After each slice, run that test target and `cargo clippy`.
 4. Verify: every command under Commands passes.

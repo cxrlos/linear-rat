@@ -11,6 +11,9 @@ release_always = false
 release_commits = '^(feat|fix|perf|refactor|revert)[(:!]|^[a-z]+(\([^)]*\))?!:|(?m:^BREAKING[ -]CHANGE:)'
 # The library exists for tests and the binary; it is not a public API.
 semver_check = false
+# Each milestone ships as one squash-merged feat, which should be a minor release
+# on 0.x, not a patch.
+features_always_increment_minor = true
 
 [changelog]
 protect_breaking_commits = true
