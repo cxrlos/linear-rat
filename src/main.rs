@@ -10,23 +10,31 @@ use linear_rat::auth::{self, Credentials, KeyringStore, OsKeyring, WorkspaceFile
 use linear_rat::cli::{AuthCommand, Cli, Command};
 use linear_rat::config::{self, Loaded};
 use linear_rat::linear::{FakeClient, HttpClient, LinearClient};
+use linear_rat::open::{self, IssueKey};
 use linear_rat::snapshot::SnapshotCache;
 use linear_rat::terminal::{self, TerminalGuard};
 use linear_rat::ui::theme;
-use linear_rat::{completions, logging, runtime};
+use linear_rat::{browser, completions, logging, runtime};
 use ratatui::backend::CrosstermBackend;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    if let Some(Command::Auth(command)) = cli.command {
-        let _log_guard = logging::init().context("setting up the log file")?;
-        return run_auth(command).await;
-    }
-    if let Some(Command::Completions { shell }) = cli.command {
-        return io::stdout()
-            .write_all(&completions::script(shell))
-            .context("writing the completion script");
+    match cli.command {
+        Some(Command::Auth(command)) => {
+            let _log_guard = logging::init().context("setting up the log file")?;
+            return run_auth(command).await;
+        }
+        Some(Command::Open { key }) => {
+            let _log_guard = logging::init().context("setting up the log file")?;
+            return run_open(&key).await;
+        }
+        Some(Command::Completions { shell }) => {
+            return io::stdout()
+                .write_all(&completions::script(shell))
+                .context("writing the completion script");
+        }
+        None => {}
     }
     let _log_guard = logging::init().context("setting up the log file")?;
     tracing::info!(version = env!("CARGO_PKG_VERSION"), "starting");
@@ -180,6 +188,17 @@ async fn run_auth(command: AuthCommand) -> anyhow::Result<()> {
         AuthCommand::Status => auth::status(&credentials, HttpClient::new).await?,
         AuthCommand::Logout => auth::logout(&credentials)?,
     };
+    println!("{output}");
+    Ok(())
+}
+
+async fn run_open(key: &IssueKey) -> anyhow::Result<()> {
+    let credentials = Credentials::new(
+        OsKeyring::default(),
+        WorkspaceFile::in_state_dir()?,
+        std::env::var(auth::KEY_VAR).ok(),
+    );
+    let output = open::open(&credentials, key, HttpClient::new, browser::open).await?;
     println!("{output}");
     Ok(())
 }

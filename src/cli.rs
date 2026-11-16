@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand, ValueEnum};
 
 use crate::auth::KeyringEntry;
+use crate::open::IssueKey;
 
 #[derive(Debug, Parser)]
 #[command(name = "lrat", version, about, args_conflicts_with_subcommands = true)]
@@ -22,6 +23,11 @@ pub enum Command {
     Completions {
         /// The shell to complete in
         shell: CompletionShell,
+    },
+    /// Open an issue's Linear page in the browser
+    Open {
+        /// The issue key, such as ENG-123, in any case
+        key: IssueKey,
     },
 }
 

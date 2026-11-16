@@ -173,6 +173,24 @@ pub trait LinearClient {
         let _ = team_ids;
         futures_util::stream::pending()
     }
+
+    /// The issue whose key is `team_key`-`number`, archived ones included,
+    /// matching the team key whatever its case, or `None` when the workspace
+    /// has no such issue. `lrat open` uses it.
+    fn issue_by_key(
+        &self,
+        team_key: &str,
+        number: u32,
+    ) -> impl Future<Output = Result<Option<IssueLink>, ClientError>> + Send;
+}
+
+/// Enough of an issue to name it and open it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IssueLink {
+    /// The key, for example `ENG-123`.
+    pub identifier: String,
+    pub title: String,
+    pub url: String,
 }
 
 /// Something Linear's websocket delivered.
@@ -997,6 +1015,23 @@ impl LinearClient for FakeClient {
         window: AnalyticsWindow,
     ) -> Result<TeamAnalyticsIssues, ClientError> {
         TeamAnalyticsIssues::demo(team_id, window)
+    }
+
+    async fn issue_by_key(
+        &self,
+        team_key: &str,
+        number: u32,
+    ) -> Result<Option<IssueLink>, ClientError> {
+        let identifier = format!("{team_key}-{number}");
+        Ok(demo::workspace()
+            .issues
+            .into_iter()
+            .find(|issue| issue.identifier.eq_ignore_ascii_case(&identifier))
+            .map(|issue| IssueLink {
+                identifier: issue.identifier,
+                title: issue.title,
+                url: issue.url,
+            }))
     }
 }
 
