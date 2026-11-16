@@ -24,6 +24,8 @@ const ENTER_ALTERNATE_SCREEN: &str = "\x1b[?1049h";
 const LEAVE_ALTERNATE_SCREEN: &str = "\x1b[?1049l";
 /// Text the demo's first frame shows.
 const DRAWN: &str = "My Issues";
+/// An issue the demo assigns to the viewer, so it is listed in My Issues.
+const DEMO_ISSUE: &str = "DES-34";
 
 /// A program running in a pseudo-terminal of 100 by 30 cells.
 struct Pty {
@@ -381,6 +383,11 @@ fn an_editor_that_suspends_its_group_stops_lrat_with_it() {
         &[("LRAT", env!("CARGO_BIN_EXE_lrat")), ("EDITOR", &editor)],
     );
     pty.wait_for_first_frame();
+    // `c` comments on the focused issue, so the demo's issues must be on
+    // screen first; a slow runner is still loading them after the first frame.
+    pty.wait_until("the demo's issues are listed", |pty| {
+        pty.output().contains(DEMO_ISSUE)
+    });
 
     pty.press(b"c");
 
