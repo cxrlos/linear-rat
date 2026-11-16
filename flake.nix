@@ -2,7 +2,8 @@
   description = "lrat, a fast, keyboard-first terminal client for Linear";
 
   inputs = {
-    # nixos-26.05 as of 2026-11-01. Bump to a commit at least two weeks old.
+    # nixos-26.05 as of 2026-11-01. Bump to a commit at least two weeks old,
+    # then run `nix flake lock` and commit flake.lock.
     nixpkgs.url = "github:NixOS/nixpkgs/64aec40e18595d342f25f120069f2cb63c3947b4";
     crane.url = "github:ipetkov/crane/v0.24.0";
   };

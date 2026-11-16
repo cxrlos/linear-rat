@@ -85,12 +85,11 @@ jobs:
         with:
           persist-credentials: false
       - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
-      # Writes flake.lock from the inputs pinned in flake.nix while none is
-      # committed, and prints it so it can be committed.
-      - run: nix flake lock && cat flake.lock
-      - run: nix flake check --print-build-logs
-      - run: nix run . -- --version
-      - run: nix develop --command bash -c 'cargo deny --version && cargo insta --version && cargo +1.88 --version'
+      # --no-update-lock-file fails the job when the committed flake.lock no
+      # longer matches the inputs in flake.nix.
+      - run: nix flake check --no-update-lock-file --print-build-logs
+      - run: nix run --no-update-lock-file . -- --version
+      - run: nix develop --no-update-lock-file --command bash -c 'cargo deny --version && cargo insta --version && cargo +1.88 --version'
 
   gitleaks:
     name: gitleaks
