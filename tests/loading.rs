@@ -7,7 +7,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
 use linear_rat::app::{App, Effect, Event, LoadError, State};
-use linear_rat::auth::KeySource;
+use linear_rat::auth::{KeySource, KeyringStore};
 use linear_rat::linear::{FakeClient, LinearClient};
 use ratatui::backend::TestBackend;
 
@@ -80,6 +80,7 @@ fn a_rejected_key_from_the_environment_says_to_replace_or_unset_it() {
 #[test]
 fn a_rejected_key_from_the_keyring_says_to_log_in_again() {
     let mut app = loading(Some(KeySource::Keyring {
+        store: KeyringStore::Os,
         account: "squeakworks".to_owned(),
     }));
 

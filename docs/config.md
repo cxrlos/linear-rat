@@ -4,7 +4,7 @@ lrat reads one file, `config.toml`, from the XDG config directory: `$XDG_CONFIG_
 
 ## Errors and warnings
 
-A problem in the file shows as a notice above the bottom bar, naming the file and line, and is written to the log. The next key press clears the notice. lrat still starts:
+A problem in the file shows as a notice above the bottom bar, naming the file and line, and is written to the log. The next key press clears the notice. The `lrat auth` commands print it to standard error instead. lrat still starts:
 
 - A syntax error, or a value of the wrong type or out of range, leaves only the section it is in at its defaults. A table that appears twice leaves that table at its defaults. In `[keys]`, a syntax error leaves every context at the default keys, and a bad binding leaves only its context table (`[keys.list]`, for example) at the default keys.
 - A syntax error before the first table header leaves the whole file at its defaults.
@@ -121,6 +121,19 @@ The Analytics screen opens on `default-range-weeks`; `[` and `]` switch to a sho
 | `default-range-weeks` | `4`, `12`, `26` | `12` | How many weeks the Analytics screen opens on. |
 | `stale-days` | 1 to 365 | `14` | Days without an update that make an open issue a stale issue. |
 
+## `[auth]`
+
+lrat takes the API key from `LINEAR_API_KEY` when it is set, otherwise from the keyring `store` names. It never falls back to another store, and it never keeps the key in a plain file. `lrat auth login`, `status` and `logout` use the same store, and `lrat auth status` names it.
+
+| Key | Values | Default | Effect |
+| --- | --- | --- | --- |
+| `store` | `"os"`, `"keyutils"` | `"os"` | Where `lrat auth login` keeps the key and where lrat reads it. |
+
+- `"os"` is the macOS Keychain, or on Linux the Secret Service (GNOME Keyring, KWallet).
+- `"keyutils"` is the Linux kernel keyring, for machines without a Secret Service, such as SSH boxes and containers. It is Linux only: on macOS it is a config error and lrat uses `"os"`. Kernel keys live in memory and do not survive a reboot; they also expire after some days without use (the kernel's `persistent_keyring_expiry`, three days by default). Run `lrat auth login` again when that happens. It does not suit a laptop you reboot often; there, keep `"os"`.
+
+Changing `store` does not move a stored key: run `lrat auth login` after the change, and `lrat auth logout` before it to remove the key from the old store. `lrat auth login --from-keyring` reads its entry from the Keychain or the Secret Service whatever `store` is.
+
 ## Everything at once
 
 ```toml
@@ -143,4 +156,7 @@ live = false
 [analytics]
 default-range-weeks = 12
 stale-days = 14
+
+[auth]
+store = "os"
 ```

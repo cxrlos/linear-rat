@@ -6,7 +6,7 @@ use clap::Parser;
 use crossterm::event::EventStream;
 use jiff::tz::TimeZone;
 use linear_rat::app::{App, Load, LoadError, State};
-use linear_rat::auth::{self, Credentials, OsKeyring, WorkspaceFile};
+use linear_rat::auth::{self, Credentials, KeyringStore, OsKeyring, WorkspaceFile};
 use linear_rat::cli::{AuthCommand, Cli, Command};
 use linear_rat::config::{self, Loaded};
 use linear_rat::linear::{FakeClient, HttpClient, LinearClient};
@@ -26,18 +26,8 @@ async fn main() -> anyhow::Result<()> {
     let _log_guard = logging::init().context("setting up the log file")?;
     tracing::info!(version = env!("CARGO_PKG_VERSION"), "starting");
 
-    let loaded = match config::path() {
-        Ok(path) => config::load(&path),
-        Err(error) => {
-            tracing::warn!("{error:#}; using the default config");
-            Loaded::default()
-        }
-    };
     let no_color = std::env::var_os(theme::NO_COLOR_VAR);
-    let loaded = loaded.with_no_color(no_color.as_deref());
-    for error in &loaded.errors {
-        tracing::warn!(%error, "config problem");
-    }
+    let loaded = load_config().with_no_color(no_color.as_deref());
     tracing::info!(
         theme = loaded.config.theme,
         no_color = theme::no_color_requested(no_color.as_deref()),
@@ -52,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
             .with_time_zone(TimeZone::system());
         run_tui(state, Some(&FakeClient), None, shutdown).await
     } else {
-        let (state, client) = connect();
+        let (state, client) = connect(loaded.config.auth.store);
         let snapshots = snapshot_cache();
         let state = state
             .with_config(&loaded)
@@ -68,15 +58,34 @@ async fn main() -> anyhow::Result<()> {
     result
 }
 
+/// The config file, logging each problem in it, or the default config when
+/// there is no home directory to find it in.
+fn load_config() -> Loaded {
+    let loaded = match config::path() {
+        Ok(path) => config::load(&path),
+        Err(error) => {
+            tracing::warn!("{error:#}; using the default config");
+            Loaded::default()
+        }
+    };
+    for error in &loaded.errors {
+        tracing::warn!(%error, "config problem");
+    }
+    loaded
+}
+
 /// The state to start in and the client to load with: the key from
-/// `LINEAR_API_KEY` or the OS keyring, or, when there is no usable key, the
-/// error screen that says why and no client.
-fn connect() -> (State, Option<HttpClient>) {
+/// `LINEAR_API_KEY` or the configured keyring, or, when there is no usable
+/// key, the error screen that says why and no client.
+fn connect(store: KeyringStore) -> (State, Option<HttpClient>) {
     let resolved = WorkspaceFile::in_state_dir()
         .map_err(|error| LoadError::KeyUnusable(format!("{error:#}")))
         .and_then(|workspace_file| {
-            let credentials =
-                Credentials::new(OsKeyring, workspace_file, std::env::var(auth::KEY_VAR).ok());
+            let credentials = Credentials::new(
+                OsKeyring::new(store),
+                workspace_file,
+                std::env::var(auth::KEY_VAR).ok(),
+            );
             credentials
                 .resolve()
                 .map_err(|error| LoadError::from(&error))
@@ -138,8 +147,12 @@ async fn run_tui<C: LinearClient>(
 }
 
 async fn run_auth(command: AuthCommand) -> anyhow::Result<()> {
+    let loaded = load_config();
+    for error in &loaded.errors {
+        eprintln!("{error}");
+    }
     let credentials = Credentials::new(
-        OsKeyring,
+        OsKeyring::new(loaded.config.auth.store),
         WorkspaceFile::in_state_dir()?,
         std::env::var(auth::KEY_VAR).ok(),
     );
@@ -147,7 +160,10 @@ async fn run_auth(command: AuthCommand) -> anyhow::Result<()> {
         AuthCommand::Login {
             from_keyring: Some(entry),
             ..
-        } => auth::login_from_keyring(&credentials, &OsKeyring, &entry, HttpClient::new).await?,
+        } => {
+            let reader = OsKeyring::default();
+            auth::login_from_keyring(&credentials, &reader, &entry, HttpClient::new).await?
+        }
         AuthCommand::Login { stdin, .. } => {
             let key = if stdin {
                 auth::read_key(io::stdin().lock())?
