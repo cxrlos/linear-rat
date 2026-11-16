@@ -22,8 +22,14 @@ _lrat() {
             lrat,completions)
                 cmd="lrat__subcmd__completions"
                 ;;
+            lrat,doctor)
+                cmd="lrat__subcmd__doctor"
+                ;;
             lrat,help)
                 cmd="lrat__subcmd__help"
+                ;;
+            lrat,open)
+                cmd="lrat__subcmd__open"
                 ;;
             lrat__subcmd__auth,help)
                 cmd="lrat__subcmd__auth__subcmd__help"
@@ -55,8 +61,14 @@ _lrat() {
             lrat__subcmd__help,completions)
                 cmd="lrat__subcmd__help__subcmd__completions"
                 ;;
+            lrat__subcmd__help,doctor)
+                cmd="lrat__subcmd__help__subcmd__doctor"
+                ;;
             lrat__subcmd__help,help)
                 cmd="lrat__subcmd__help__subcmd__help"
+                ;;
+            lrat__subcmd__help,open)
+                cmd="lrat__subcmd__help__subcmd__open"
                 ;;
             lrat__subcmd__help__subcmd__auth,login)
                 cmd="lrat__subcmd__help__subcmd__auth__subcmd__login"
@@ -74,7 +86,7 @@ _lrat() {
 
     case "${cmd}" in
         lrat)
-            opts="-h -V --demo --help --version auth completions help"
+            opts="-h -V --demo --help --version auth completions open doctor help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -231,8 +243,22 @@ _lrat() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
+        lrat__subcmd__doctor)
+            opts="-h --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
         lrat__subcmd__help)
-            opts="auth completions help"
+            opts="auth completions open doctor help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -315,9 +341,51 @@ _lrat() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
+        lrat__subcmd__help__subcmd__doctor)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
         lrat__subcmd__help__subcmd__help)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        lrat__subcmd__help__subcmd__open)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        lrat__subcmd__open)
+            opts="-h --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi

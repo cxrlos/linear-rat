@@ -1,0 +1,15 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH lrat-doctor 1  lrat 
+.SH NAME
+lrat\-doctor \- Check the API key, Linear, the terminal and the config
+.SH SYNOPSIS
+\fBlrat doctor\fR [\fB\-h\fR|\fB\-\-help\fR] 
+.SH DESCRIPTION
+Check the API key, Linear, the terminal and the config
+.PP
+Prints one line per check, marked ● (ok), ▲ (warning) or ✘ (failure), each warning or failure followed by how to fix it. Never prints the API key. Exits non\-zero when any check fails.
+.SH OPTIONS
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help (see a summary with \*(Aq\-h\*(Aq)

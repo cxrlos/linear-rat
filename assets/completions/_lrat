@@ -106,6 +106,19 @@ _arguments "${_arguments_options[@]}" : \
 ':shell -- The shell to complete in:(bash zsh fish)' \
 && ret=0
 ;;
+(open)
+_arguments "${_arguments_options[@]}" : \
+'-h[Print help]' \
+'--help[Print help]' \
+':key -- The issue key, such as ENG-123, in any case:_default' \
+&& ret=0
+;;
+(doctor)
+_arguments "${_arguments_options[@]}" : \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+&& ret=0
+;;
 (help)
 _arguments "${_arguments_options[@]}" : \
 ":: :_lrat__subcmd__help_commands" \
@@ -150,6 +163,14 @@ esac
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
+(open)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(doctor)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
 (help)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
@@ -168,6 +189,8 @@ _lrat_commands() {
     local commands; commands=(
 'auth:Manage the Linear API key' \
 'completions:Print the completion script for a shell' \
+'open:Open an issue'\''s Linear page in the browser' \
+'doctor:Check the API key, Linear, the terminal and the config' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'lrat commands' commands "$@"
@@ -175,9 +198,9 @@ _lrat_commands() {
 (( $+functions[_lrat__subcmd__auth_commands] )) ||
 _lrat__subcmd__auth_commands() {
     local commands; commands=(
-'login:Check an API key with Linear and store it in the OS keyring' \
+'login:Check an API key with Linear and store it in the configured keyring' \
 'status:Show where the API key comes from, and its workspace and viewer' \
-'logout:Delete the API key from the OS keyring' \
+'logout:Delete the API key from the configured keyring' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'lrat auth commands' commands "$@"
@@ -185,9 +208,9 @@ _lrat__subcmd__auth_commands() {
 (( $+functions[_lrat__subcmd__auth__subcmd__help_commands] )) ||
 _lrat__subcmd__auth__subcmd__help_commands() {
     local commands; commands=(
-'login:Check an API key with Linear and store it in the OS keyring' \
+'login:Check an API key with Linear and store it in the configured keyring' \
 'status:Show where the API key comes from, and its workspace and viewer' \
-'logout:Delete the API key from the OS keyring' \
+'logout:Delete the API key from the configured keyring' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'lrat auth help commands' commands "$@"
@@ -232,11 +255,18 @@ _lrat__subcmd__completions_commands() {
     local commands; commands=()
     _describe -t commands 'lrat completions commands' commands "$@"
 }
+(( $+functions[_lrat__subcmd__doctor_commands] )) ||
+_lrat__subcmd__doctor_commands() {
+    local commands; commands=()
+    _describe -t commands 'lrat doctor commands' commands "$@"
+}
 (( $+functions[_lrat__subcmd__help_commands] )) ||
 _lrat__subcmd__help_commands() {
     local commands; commands=(
 'auth:Manage the Linear API key' \
 'completions:Print the completion script for a shell' \
+'open:Open an issue'\''s Linear page in the browser' \
+'doctor:Check the API key, Linear, the terminal and the config' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'lrat help commands' commands "$@"
@@ -244,9 +274,9 @@ _lrat__subcmd__help_commands() {
 (( $+functions[_lrat__subcmd__help__subcmd__auth_commands] )) ||
 _lrat__subcmd__help__subcmd__auth_commands() {
     local commands; commands=(
-'login:Check an API key with Linear and store it in the OS keyring' \
+'login:Check an API key with Linear and store it in the configured keyring' \
 'status:Show where the API key comes from, and its workspace and viewer' \
-'logout:Delete the API key from the OS keyring' \
+'logout:Delete the API key from the configured keyring' \
     )
     _describe -t commands 'lrat help auth commands' commands "$@"
 }
@@ -270,10 +300,25 @@ _lrat__subcmd__help__subcmd__completions_commands() {
     local commands; commands=()
     _describe -t commands 'lrat help completions commands' commands "$@"
 }
+(( $+functions[_lrat__subcmd__help__subcmd__doctor_commands] )) ||
+_lrat__subcmd__help__subcmd__doctor_commands() {
+    local commands; commands=()
+    _describe -t commands 'lrat help doctor commands' commands "$@"
+}
 (( $+functions[_lrat__subcmd__help__subcmd__help_commands] )) ||
 _lrat__subcmd__help__subcmd__help_commands() {
     local commands; commands=()
     _describe -t commands 'lrat help help commands' commands "$@"
+}
+(( $+functions[_lrat__subcmd__help__subcmd__open_commands] )) ||
+_lrat__subcmd__help__subcmd__open_commands() {
+    local commands; commands=()
+    _describe -t commands 'lrat help open commands' commands "$@"
+}
+(( $+functions[_lrat__subcmd__open_commands] )) ||
+_lrat__subcmd__open_commands() {
+    local commands; commands=()
+    _describe -t commands 'lrat open commands' commands "$@"
 }
 
 if [ "$funcstack[1]" = "_lrat" ]; then
