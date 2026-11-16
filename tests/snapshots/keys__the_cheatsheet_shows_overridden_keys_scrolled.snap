@@ -5,7 +5,6 @@ expression: app.backend()
 " [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
 "┌My Issues─────────────────────────────────────────────────────────────────────┐"
 "│No open issues ┌ Keys ────────────────────────────────────────┐               │"
-"│               │  p       Change the priority                 │               │"
 "│               │  L       Add or remove labels                │               │"
 "│               │  e       Change the estimate                 │               │"
 "│               │  E       Edit the title and description      │               │"
