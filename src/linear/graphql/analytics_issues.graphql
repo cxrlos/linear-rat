@@ -1,4 +1,4 @@
-# budget: 850
+# budget: 1050
 # One page of the viewer's assigned issues matching `$filter`, which the
 # client builds for the analytics window: created or completed in it.
 # Archived issues count too, since Linear archives old completed ones. The
@@ -58,6 +58,13 @@ query AnalyticsIssues($filter: IssueFilter, $after: String) {
         project {
           id
         }
+        projectMilestone {
+          id
+        }
+        parent {
+          id
+        }
+        dueDate
       }
       pageInfo {
         hasNextPage

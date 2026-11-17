@@ -3,6 +3,7 @@
 //! share these types.
 
 use jiff::Timestamp;
+use jiff::civil::Date;
 use serde::{Deserialize, Serialize};
 
 /// The person running lrat, identified by the API key in use.
@@ -104,6 +105,14 @@ pub struct Project {
     pub name: String,
 }
 
+/// A stage inside a project that issues can be grouped under.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectMilestone {
+    pub id: String,
+    pub name: String,
+    pub project_id: String,
+}
+
 /// A team's fixed time box of committed issues.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Cycle {
@@ -144,6 +153,14 @@ pub struct Issue {
     pub creator_id: Option<String>,
     pub cycle_id: Option<String>,
     pub project_id: Option<String>,
+    #[serde(default)]
+    pub project_milestone_id: Option<String>,
+    /// The issue this one is a sub-issue of.
+    #[serde(default)]
+    pub parent_id: Option<String>,
+    /// The day the issue is due, with no time of day or time zone.
+    #[serde(default)]
+    pub due_date: Option<Date>,
     pub label_ids: Vec<String>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,

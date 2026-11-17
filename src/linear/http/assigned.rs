@@ -216,6 +216,9 @@ impl IssueNode {
             creator_id: self.creator.map(|person| person.id),
             cycle_id: self.cycle.map(|cycle| cycle.id),
             project_id: self.project.map(|project| project.id),
+            project_milestone_id: self.project_milestone.map(|milestone| milestone.id),
+            parent_id: self.parent.map(|parent| parent.id),
+            due_date: self.due_date,
             label_ids: self.label_ids,
             created_at: self.created_at,
             updated_at: self.updated_at,
@@ -324,6 +327,12 @@ pub(super) struct IssueNode {
     pub(super) creator: Option<PersonNode>,
     pub(super) cycle: Option<CycleNode>,
     pub(super) project: Option<IdNode>,
+    #[serde(default)]
+    pub(super) project_milestone: Option<IdNode>,
+    #[serde(default)]
+    pub(super) parent: Option<IdNode>,
+    #[serde(default)]
+    pub(super) due_date: Option<jiff::civil::Date>,
 }
 
 #[derive(Deserialize)]

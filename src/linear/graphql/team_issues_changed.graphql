@@ -1,4 +1,4 @@
-# budget: 450
+# budget: 550
 # One page of a team's issues updated after `since`, most recently updated
 # first, archived and trashed ones included, for the delta poll. Pages hold 50
 # issues: Linear charges a connection by `first`, not by what comes back, and
@@ -68,6 +68,13 @@ query TeamIssuesChanged(
       project {
         id
       }
+      projectMilestone {
+        id
+      }
+      parent {
+        id
+      }
+      dueDate
     }
     pageInfo {
       hasNextPage

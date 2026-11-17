@@ -1,4 +1,4 @@
-# budget: 1250
+# budget: 1300
 # One page of the viewer's in-progress issues (a started workflow state),
 # with the state history issue age is measured from. Each issue brings at
 # most 20 state spans; past that, issue age falls back to `startedAt`. Pages
@@ -58,6 +58,13 @@ query InProgressIssues($after: String) {
         project {
           id
         }
+        projectMilestone {
+          id
+        }
+        parent {
+          id
+        }
+        dueDate
         stateHistory(first: 20) {
           nodes {
             stateId

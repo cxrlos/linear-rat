@@ -14,6 +14,7 @@ use std::collections::BTreeMap;
 use std::future::Future;
 
 use futures_util::Stream;
+use jiff::civil::Date;
 use jiff::{SignedDuration, Timestamp};
 
 pub use error::{ClientError, GraphQlError, Response};
@@ -311,6 +312,13 @@ pub struct IssueUpdate {
     /// The new Markdown description, or `None` to leave it. An empty one
     /// empties it.
     pub description: Option<String>,
+    pub due_date: Patch<Date>,
+    pub cycle_id: Patch<String>,
+    /// The new project. Linear clears the project milestone when the project
+    /// changes.
+    pub project_id: Patch<String>,
+    pub project_milestone_id: Patch<String>,
+    pub parent_id: Patch<String>,
 }
 
 /// A change to a field that can be empty: leave it, empty it, or set it.
@@ -731,6 +739,9 @@ fn demo_create(
         creator_id: Some(data.viewer.id.clone()),
         cycle_id: None,
         project_id: None,
+        project_milestone_id: None,
+        parent_id: None,
+        due_date: None,
         label_ids: Vec::new(),
         created_at: demo::NOW,
         updated_at: demo::NOW + SignedDuration::from_secs(1),
@@ -740,6 +751,15 @@ fn demo_create(
         triaged_at: None,
         state_history: Vec::new(),
     })
+}
+
+/// Applies `patch` to `field`, leaving it when unchanged.
+fn apply_patch<T: Clone>(field: &mut Option<T>, patch: &Patch<T>) {
+    match patch {
+        Patch::Unchanged => {}
+        Patch::Clear => *field = None,
+        Patch::Set(value) => *field = Some(value.clone()),
+    }
 }
 
 /// `issue` with `update` applied as Linear would apply it in the demo
@@ -773,6 +793,17 @@ fn demo_update(
         Patch::Clear => issue.estimate = None,
         Patch::Set(points) => issue.estimate = Some(f64::from(points)),
     }
+    apply_patch(&mut issue.due_date, &update.due_date);
+    apply_patch(&mut issue.cycle_id, &update.cycle_id);
+    if update.project_id != Patch::Unchanged {
+        issue.project_milestone_id = None;
+    }
+    apply_patch(&mut issue.project_id, &update.project_id);
+    apply_patch(
+        &mut issue.project_milestone_id,
+        &update.project_milestone_id,
+    );
+    apply_patch(&mut issue.parent_id, &update.parent_id);
     for id in update
         .added_label_ids
         .iter()

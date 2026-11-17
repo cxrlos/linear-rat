@@ -1,4 +1,4 @@
-# budget: 750
+# budget: 800
 # The best 25 issues anywhere in the workspace that match a term, closed ones
 # included, with what the detail shows about each and the names of their
 # labels. Linear rate-limits this query to 30 a minute on top of the hourly
@@ -55,6 +55,13 @@ query SearchIssues($term: String!) {
       project {
         id
       }
+      projectMilestone {
+        id
+      }
+      parent {
+        id
+      }
+      dueDate
       labels(first: 10) {
         nodes {
           id

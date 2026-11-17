@@ -1,4 +1,4 @@
-# budget: 850
+# budget: 1050
 # One page of a team's issues matching `$filter`, which the client builds for
 # the analytics window: created, completed or canceled in it. Archived issues
 # count too, since Linear archives old completed ones. Pages hold 100 issues;
@@ -55,6 +55,13 @@ query TeamRangeIssues($teamId: String!, $filter: IssueFilter, $after: String) {
         project {
           id
         }
+        projectMilestone {
+          id
+        }
+        parent {
+          id
+        }
+        dueDate
       }
       pageInfo {
         hasNextPage

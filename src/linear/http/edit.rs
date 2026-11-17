@@ -3,7 +3,7 @@
 //! checks first.
 
 use jiff::Timestamp;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
 use super::assigned::{Connection, IssueNode, LabelsPage, PersonNode, StateNode, timestamp};
@@ -149,7 +149,30 @@ fn input(update: &IssueUpdate) -> Value {
     if let Some(description) = &update.description {
         input.insert("description".to_owned(), json!(description));
     }
+    patch(&mut input, "dueDate", &update.due_date);
+    patch(&mut input, "cycleId", &update.cycle_id);
+    patch(&mut input, "projectId", &update.project_id);
+    patch(
+        &mut input,
+        "projectMilestoneId",
+        &update.project_milestone_id,
+    );
+    patch(&mut input, "parentId", &update.parent_id);
     Value::Object(input)
+}
+
+/// Puts `value` in `input` as `field`: null when cleared, left out when
+/// unchanged.
+fn patch<T: Serialize>(input: &mut Map<String, Value>, field: &str, value: &Patch<T>) {
+    match value {
+        Patch::Unchanged => {}
+        Patch::Clear => {
+            input.insert(field.to_owned(), Value::Null);
+        }
+        Patch::Set(value) => {
+            input.insert(field.to_owned(), json!(value));
+        }
+    }
 }
 
 /// Linear stores priority as 0 (none) and 1 (urgent) to 4 (low).

@@ -1,4 +1,4 @@
-# budget: 500
+# budget: 550
 # One page of a team's issues that match `filter`, most recently updated
 # first, with the team, workflow state, people, cycle and project each one
 # refers to. Pages hold 50 issues; Team Issues asks for the next page only
@@ -55,6 +55,13 @@ query TeamIssues($teamId: String!, $filter: IssueFilter, $after: String) {
         project {
           id
         }
+        projectMilestone {
+          id
+        }
+        parent {
+          id
+        }
+        dueDate
       }
       pageInfo {
         hasNextPage

@@ -392,3 +392,72 @@ async fn the_updated_at_is_read_afresh_for_the_issue_asked_for() {
     );
     assert_eq!(body["variables"], json!({ "id": "issue-1" }));
 }
+
+#[tokio::test]
+async fn due_date_cycle_project_milestone_and_parent_are_sent_by_value_and_cleared_as_null() {
+    let server = server_answering(updated()).await;
+    let client = client_for(&server);
+    let set = IssueUpdate {
+        due_date: Patch::Set(jiff::civil::date(2026, 11, 20)),
+        cycle_id: Patch::Set("cycle-7".to_owned()),
+        project_id: Patch::Set("project-1".to_owned()),
+        project_milestone_id: Patch::Set("milestone-2".to_owned()),
+        parent_id: Patch::Set("issue-9".to_owned()),
+        ..IssueUpdate::default()
+    };
+    let clear = IssueUpdate {
+        due_date: Patch::Clear,
+        cycle_id: Patch::Clear,
+        project_id: Patch::Clear,
+        project_milestone_id: Patch::Clear,
+        parent_id: Patch::Clear,
+        ..IssueUpdate::default()
+    };
+    client.update_issue("issue-1", &set).await.unwrap();
+    client.update_issue("issue-1", &clear).await.unwrap();
+
+    let requests = server.received_requests().await.unwrap();
+    let inputs: Vec<Value> = requests
+        .iter()
+        .map(|request| request.body_json::<Value>().unwrap()["variables"]["input"].clone())
+        .collect();
+    assert_eq!(
+        inputs,
+        [
+            json!({
+                "dueDate": "2026-11-20",
+                "cycleId": "cycle-7",
+                "projectId": "project-1",
+                "projectMilestoneId": "milestone-2",
+                "parentId": "issue-9",
+            }),
+            json!({
+                "dueDate": null,
+                "cycleId": null,
+                "projectId": null,
+                "projectMilestoneId": null,
+                "parentId": null,
+            }),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn an_updated_issue_carries_its_due_date_milestone_and_parent() {
+    let mut node = issue_node();
+    node["dueDate"] = json!("2026-11-20");
+    node["projectMilestone"] = json!({ "id": "milestone-2" });
+    node["parent"] = json!({ "id": "issue-9" });
+    let server =
+        server_answering(json!({ "data": { "issueUpdate": { "success": true, "issue": node } } }))
+            .await;
+
+    let issue = client_for(&server)
+        .update_issue("issue-1", &IssueUpdate::default())
+        .await
+        .unwrap();
+
+    assert_eq!(issue.due_date, Some(jiff::civil::date(2026, 11, 20)));
+    assert_eq!(issue.project_milestone_id.as_deref(), Some("milestone-2"));
+    assert_eq!(issue.parent_id.as_deref(), Some("issue-9"));
+}

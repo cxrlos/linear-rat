@@ -53,6 +53,13 @@ mutation IssueCreate($input: IssueCreateInput!) {
       project {
         id
       }
+      projectMilestone {
+        id
+      }
+      parent {
+        id
+      }
+      dueDate
     }
   }
 }

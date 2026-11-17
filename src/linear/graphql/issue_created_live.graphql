@@ -52,5 +52,12 @@ subscription IssueCreatedLive($teamId: ID!) {
     project {
       id
     }
+    projectMilestone {
+      id
+    }
+    parent {
+      id
+    }
+    dueDate
   }
 }

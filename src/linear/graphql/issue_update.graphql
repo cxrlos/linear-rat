@@ -54,6 +54,13 @@ mutation IssueUpdate($id: String!, $input: IssueUpdateInput!) {
       project {
         id
       }
+      projectMilestone {
+        id
+      }
+      parent {
+        id
+      }
+      dueDate
     }
   }
 }
