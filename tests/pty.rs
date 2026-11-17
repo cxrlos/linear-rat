@@ -7,7 +7,6 @@
 
 use std::fs;
 use std::io::{Read, Write};
-#[cfg(target_os = "linux")]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -26,7 +25,6 @@ const LEAVE_ALTERNATE_SCREEN: &str = "\x1b[?1049l";
 /// Text the demo's first frame shows.
 const DRAWN: &str = "My Issues";
 /// An issue the demo assigns to the viewer, so it is listed in My Issues.
-#[cfg(target_os = "linux")]
 const DEMO_ISSUE: &str = "DES-34";
 
 /// A program running in a pseudo-terminal of 100 by 30 cells.
@@ -149,7 +147,6 @@ impl Pty {
 
     /// The pid of the one process the program started, as a shell starts
     /// lrat.
-    #[cfg(target_os = "linux")]
     fn only_child(&self) -> u32 {
         let pgrep = Command::new("pgrep")
             .args(["-P", &self.pid().to_string()])
@@ -366,11 +363,6 @@ fn a_panic_restores_the_terminal_then_names_its_crash_report() {
 /// An editor that suspends the way classic Vim does, with `kill -TSTP 0` to
 /// its whole process group, lrat included. lrat must stop with it so the
 /// shell gets the terminal back, and `fg` must bring both back.
-///
-/// Linux only: on macOS CI the editor's `kill -TSTP 0` stops nothing and
-/// the editor runs to the end, so the shell never gets the terminal back.
-/// lrat does not hang there; why the stop does not happen is not known yet.
-#[cfg(target_os = "linux")]
 #[test]
 fn an_editor_that_suspends_its_group_stops_lrat_with_it() {
     let scripts = TempDir::new();
@@ -383,11 +375,15 @@ fn an_editor_that_suspends_its_group_stops_lrat_with_it() {
     fs::set_permissions(&editor, fs::Permissions::from_mode(0o755)).unwrap();
     // A shell with job control, as at a prompt: it gives lrat a process
     // group of its own and takes the terminal back when that group stops.
-    let script = "\"$LRAT\" --demo; echo shell-has-the-terminal; read _; fg; echo shell-done";
+    // `set -m` rather than `sh -m`: macOS's /bin/sh (bash 3.2) ignores the
+    // flag with -c, which leaves lrat in the session leader's orphaned group,
+    // where the kernel discards SIGTSTP.
+    let script =
+        "set -m; \"$LRAT\" --demo; echo shell-has-the-terminal; read _; fg; echo shell-done";
     let editor = editor.to_string_lossy();
     let mut pty = Pty::spawn_with(
         Path::new("/bin/sh"),
-        &["-m", "-c", script],
+        &["-c", script],
         &[("LRAT", env!("CARGO_BIN_EXE_lrat")), ("EDITOR", &editor)],
     );
     pty.wait_for_first_frame();
