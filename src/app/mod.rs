@@ -6,6 +6,7 @@ mod compose;
 mod create;
 mod detail;
 mod edit;
+mod edit_text;
 mod effect;
 mod event;
 mod links;
@@ -25,6 +26,7 @@ mod update;
 
 use ratatui::Terminal;
 use ratatui::backend::Backend;
+use ratatui::layout::Rect;
 
 pub use action::{Action, Copyable};
 pub use analytics_screen::{AnalyticsScreen, AnalyticsView};
@@ -32,6 +34,7 @@ pub use compose::{Drafts, IssueDraft, NewComment, NewIssue, Writing, is_local};
 pub use create::{CreateForm, Step};
 pub use detail::{Detail, DetailLoad};
 pub use edit::{Edit, EditPicker, Editable, Write, estimate_scale, focused_team_estimates};
+pub use edit_text::TextOpened;
 pub use effect::Effect;
 pub use event::Event;
 pub use links::{Link, LinkSet, Links};
@@ -94,8 +97,13 @@ impl<B: Backend> App<B> {
     /// terminal's size, as after something else, such as `$EDITOR`, has
     /// drawn over it.
     pub fn redraw_all(&mut self) -> Result<(), B::Error> {
-        self.terminal.clear()?;
         let size = self.terminal.size()?;
+        // Clears and forgets the last frame as `Terminal::clear` does, but
+        // without asking the terminal for the cursor position: after a signal,
+        // crossterm's input thread holds the reader and the answer never
+        // arrives.
+        self.terminal
+            .resize(Rect::new(0, 0, size.width, size.height))?;
         self.handle(Event::Resize {
             columns: size.width,
             rows: size.height,

@@ -1,7 +1,8 @@
-//! Changing an issue's workflow state, assignee, priority, labels or
-//! estimate. A picker chooses the new value (labels are marked in a
-//! multi-select picker); the change shows at once, goes to Linear as one
-//! `issueUpdate`, and is rolled back if Linear rejects it.
+//! Changing an issue's workflow state, assignee, priority, labels,
+//! estimate, or title and description. A picker chooses the new value
+//! (labels are marked in a multi-select picker; the title and description
+//! are written in `$EDITOR`); the change shows at once, goes to Linear as
+//! one `issueUpdate`, and is rolled back if Linear rejects it.
 
 use super::picker::{Entry, Note, Picker};
 use super::{Effect, Modal, State, Store, Update};
@@ -9,7 +10,8 @@ use crate::linear::model::{Estimation, Issue, Priority, WorkflowState};
 use crate::linear::{IssueUpdate, Patch};
 use crate::ui::icons;
 
-/// A field of an issue the viewer can change with a picker.
+/// A field of an issue the viewer can change with a picker, or in the
+/// editor for [`Editable::Text`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Editable {
     State,
@@ -17,6 +19,8 @@ pub enum Editable {
     Priority,
     Labels,
     Estimate,
+    /// The title and the description, edited together in `$EDITOR`.
+    Text,
 }
 
 impl Editable {
@@ -28,6 +32,7 @@ impl Editable {
             Editable::Priority => "priority",
             Editable::Labels => "labels",
             Editable::Estimate => "estimate",
+            Editable::Text => "title and description",
         }
     }
 
@@ -39,6 +44,10 @@ impl Editable {
             Editable::Priority => Edit::Priority(issue.priority),
             Editable::Labels => Edit::Labels(issue.label_ids.clone()),
             Editable::Estimate => Edit::Estimate(issue.estimate.map(points)),
+            Editable::Text => Edit::Text {
+                title: issue.title.clone(),
+                description: super::edit_text::tidy(issue.description.as_deref().unwrap_or("")),
+            },
         }
     }
 }
@@ -55,6 +64,11 @@ pub enum Edit {
     Labels(Vec<String>),
     /// Points, or `None` for no estimate.
     Estimate(Option<u32>),
+    /// A title and a Markdown description; an empty description is none.
+    Text {
+        title: String,
+        description: String,
+    },
 }
 
 impl Edit {
@@ -65,6 +79,7 @@ impl Edit {
             Edit::Priority(_) => Editable::Priority,
             Edit::Labels(_) => Editable::Labels,
             Edit::Estimate(_) => Editable::Estimate,
+            Edit::Text { .. } => Editable::Text,
         }
     }
 
@@ -75,12 +90,16 @@ impl Edit {
             Edit::Priority(priority) => issue.priority = *priority,
             Edit::Labels(ids) => issue.label_ids.clone_from(ids),
             Edit::Estimate(estimate) => issue.estimate = estimate.map(f64::from),
+            Edit::Text { title, description } => {
+                issue.title.clone_from(title);
+                issue.description = (!description.is_empty()).then(|| description.clone());
+            }
         }
     }
 
     /// The `issueUpdate` input that makes this change and no other. Labels
-    /// are all sent as added, as if the issue had none; [`Write::update`]
-    /// sends only what changed.
+    /// are all sent as added, as if the issue had none, and text as both
+    /// title and description; [`Write::update`] sends only what changed.
     pub fn update(&self) -> IssueUpdate {
         match self {
             Edit::State(state) => IssueUpdate {
@@ -101,6 +120,11 @@ impl Edit {
             },
             Edit::Estimate(estimate) => IssueUpdate {
                 estimate: estimate.map_or(Patch::Clear, Patch::Set),
+                ..IssueUpdate::default()
+            },
+            Edit::Text { title, description } => IssueUpdate {
+                title: Some(title.clone()),
+                description: Some(description.clone()),
                 ..IssueUpdate::default()
             },
         }
@@ -125,7 +149,8 @@ pub struct Write {
 impl Write {
     /// The `issueUpdate` input for this write. Labels go as the ones added
     /// and the ones removed since [`Write::previous`], so labels a teammate
-    /// changed meanwhile stay as they are.
+    /// changed meanwhile stay as they are; of the title and description,
+    /// only the ones that differ from [`Write::previous`] go.
     pub fn update(&self) -> IssueUpdate {
         match (&self.edit, &self.previous) {
             (Edit::Labels(now), Edit::Labels(before)) => IssueUpdate {
@@ -139,6 +164,17 @@ impl Write {
                     .filter(|id| !now.contains(id))
                     .cloned()
                     .collect(),
+                ..IssueUpdate::default()
+            },
+            (
+                Edit::Text { title, description },
+                Edit::Text {
+                    title: title_before,
+                    description: description_before,
+                },
+            ) => IssueUpdate {
+                title: (title != title_before).then(|| title.clone()),
+                description: (description != description_before).then(|| description.clone()),
                 ..IssueUpdate::default()
             },
             _ => self.edit.update(),
@@ -165,6 +201,7 @@ impl EditPicker {
             Editable::Priority => "Priority",
             Editable::Labels => "Labels",
             Editable::Estimate => "Estimate",
+            Editable::Text => "Text",
         };
         format!("{field} of {}", self.identifier)
     }
@@ -205,7 +242,7 @@ impl EditPicker {
             Editable::State => state_entries(store, &self.team_id),
             Editable::Assignee => assignee_entries(store, &self.team_id),
             Editable::Priority => (priority_entries(), false),
-            Editable::Labels => (Vec::new(), false),
+            Editable::Labels | Editable::Text => (Vec::new(), false),
             Editable::Estimate => (estimate_entries(store, &self.team_id, issue), false),
         };
         let current = self.field.current(issue);
@@ -419,8 +456,12 @@ pub(super) fn priority_entries() -> Vec<Entry<Edit>> {
 }
 
 /// Opens the picker for `field` of the focused issue, and asks for what it
-/// lists if the store does not have it yet, or for labels, always.
+/// lists if the store does not have it yet, or for labels, always. The
+/// title and description open in the editor instead.
 pub(super) fn open(state: &mut State, field: Editable) -> Update {
+    if field == Editable::Text {
+        return super::edit_text::open(state);
+    }
     if field == Editable::Estimate && !focused_team_estimates(state) {
         return Update::default();
     }
@@ -534,6 +575,7 @@ fn write(state: &mut State, issue_id: &str, edit: Edit) -> Update {
     }
     state.store.apply_edit(issue_id, &edit);
     state.row_errors.remove(issue_id);
+    sent(state, issue_id);
     state.rebuild_my_issues();
     Update {
         redraw: true,
@@ -546,6 +588,14 @@ fn write(state: &mut State, issue_id: &str, edit: Edit) -> Update {
     }
 }
 
+/// Counts a write to `issue_id` as sent until [`finished`] takes its answer.
+pub(super) fn sent(state: &mut State, issue_id: &str) {
+    *state
+        .writes_in_flight
+        .entry(issue_id.to_owned())
+        .or_default() += 1;
+}
+
 /// Takes in Linear's answer to `write`: the issue as stored, or why the edit
 /// was rejected, in which case the previous value comes back and the error
 /// shows on the row and in the notice.
@@ -554,6 +604,12 @@ pub(super) fn finished(
     write: &Write,
     result: Result<Box<Issue>, String>,
 ) -> Update {
+    if let Some(count) = state.writes_in_flight.get_mut(&write.issue_id) {
+        *count = count.saturating_sub(1);
+        if *count == 0 {
+            state.writes_in_flight.remove(&write.issue_id);
+        }
+    }
     match result {
         Ok(issue) => {
             state.store.upsert_issue(*issue);

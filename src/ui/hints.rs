@@ -1,5 +1,6 @@
-//! The bottom bar: the keys for the actions of the active contexts, in two
-//! labelled rows (moves, then everything else).
+//! The bottom bar: the keys for the actions of the active contexts, in three
+//! labelled lines (moves, actions, then the screen's own keys and the issue
+//! edits).
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -11,8 +12,9 @@ use super::style;
 use crate::app::{Modal, State};
 use crate::keys::{self, ACTIONS, HintRow, KeySequence};
 
-/// How many rows the bar takes.
-pub const ROWS: u16 = 2;
+/// How many rows the bar takes, on every screen, so the layout above it
+/// does not jump.
+pub const ROWS: u16 = 3;
 
 /// One item of a row: the keys that run it, its word, and whether any of
 /// its actions can run now.
@@ -32,25 +34,45 @@ impl Item {
 }
 
 pub fn render(state: &State, frame: &mut Frame, area: Rect) {
-    let rows: Vec<(HintRow, Vec<Item>)> = HintRow::ALL
+    let rows: Vec<(HintRow, Vec<Item>)> = HintRow::LINES
         .into_iter()
-        .map(|row| (row, items(state, row)))
+        .map(|rows| line_items(state, rows))
         .collect();
-    let label_width = HintRow::ALL
+    let label_width = HintRow::LINES
         .iter()
+        .flat_map(|rows| rows.iter())
         .map(|row| row.label().len())
         .max()
         .unwrap_or(0);
 
     let columns = column_widths(&rows);
     let grid_width = 1 + label_width + columns.iter().map(|width| width + 3).sum::<usize>();
-    let grid = grid_width <= usize::from(area.width);
+    let width = usize::from(area.width);
+    let grid = grid_width <= width;
 
     let lines: Vec<Line> = rows
         .iter()
-        .map(|(row, items)| line(state, *row, items, label_width, grid.then_some(&columns)))
+        .map(|(row, items)| {
+            let columns = grid.then_some(&columns);
+            line(state, *row, items, label_width, columns, width)
+        })
         .collect();
     frame.render_widget(Paragraph::new(lines), area);
+}
+
+/// The items of one bar line: those of each of its `rows` in turn, under
+/// the label of the first row that has any.
+fn line_items(state: &State, rows: &[HintRow]) -> (HintRow, Vec<Item>) {
+    let mut label = None;
+    let mut all = Vec::new();
+    for &row in rows {
+        let items = items(state, row);
+        if !items.is_empty() {
+            label.get_or_insert(row);
+        }
+        all.extend(items);
+    }
+    (label.or(rows.first().copied()).unwrap_or(HintRow::Do), all)
 }
 
 /// The items of `row` for the active contexts, merged by word in registry
@@ -147,13 +169,15 @@ fn column_widths(rows: &[(HintRow, Vec<Item>)]) -> Vec<usize> {
 }
 
 /// One row: its label, a divider, then its items, either in `columns` with
-/// a divider between each or two spaces apart.
+/// a divider between each or two spaces apart. Items that would not fit in
+/// `width` are left out whole, never cut.
 fn line(
     state: &State,
     row: HintRow,
     items: &[Item],
     label_width: usize,
     columns: Option<&Vec<usize>>,
+    width: usize,
 ) -> Line<'static> {
     let theme = &state.theme;
     let divider = || Span::styled(" │ ", style::border(theme));
@@ -168,7 +192,13 @@ fn line(
         ),
         divider(),
     ];
+    let mut used = 1 + label_width + 3;
     for (index, item) in items.iter().enumerate() {
+        let gap = if index > 0 { 2 } else { 0 };
+        used += gap + item.text().chars().count();
+        if columns.is_none() && used > width {
+            break;
+        }
         if index > 0 {
             spans.push(match columns {
                 Some(_) => divider(),

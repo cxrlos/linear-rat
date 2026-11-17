@@ -1,0 +1,31 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH lrat-auth 1  lrat 
+.SH NAME
+lrat\-auth \- Manage the Linear API key
+.SH SYNOPSIS
+\fBlrat auth\fR [\fB\-h\fR|\fB\-\-help\fR] <\fIsubcommands\fR>
+.SH DESCRIPTION
+Manage the Linear API key
+.SH OPTIONS
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.SH SUBCOMMANDS
+.TP
+lrat\-auth\-login(1)
+Check an API key with Linear and store it in the configured keyring
+.TP
+lrat\-auth\-status(1)
+Show where the API key comes from, and its workspace and viewer
+.TP
+lrat\-auth\-logout(1)
+Delete the API key from the configured keyring
+.SH EXTRA
+Create a personal API key at https://linear.app/settings/account/security, then:
+  lrat auth login                  paste the key at the prompt
+  lrat auth login \-\-stdin          read it from a pipe, as in `pass linear | lrat auth login \-\-stdin`
+  lrat auth login \-\-from\-keyring   copy it from an existing keyring entry (default linear/api\-key)
+  lrat auth status                 check where the key comes from and which workspace it opens
+
+LINEAR_API_KEY, when set, wins over the keyring. `[auth] store` in config.toml picks the keyring.

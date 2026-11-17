@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use linear_rat::analytics::{StaleThreshold, WeekRange};
+use linear_rat::auth::KeyringStore;
 use linear_rat::config::{self, Loaded};
 use linear_rat::ui::icons::IconSet;
 use linear_rat::ui::theme::Theme;
@@ -279,7 +280,7 @@ fn a_misspelt_table_is_reported_instead_of_ignored() {
         messages(&loaded),
         vec![
             "config.toml:1: unknown table `[key]` is ignored; lrat reads [ui], [theme], \
-             [keys], [sync] and [analytics]"
+             [keys], [sync], [analytics] and [auth]"
         ]
     );
     assert_eq!(loaded.config.keys, vec![]);
@@ -384,4 +385,59 @@ fn a_theme_name_cannot_reach_outside_the_themes_directory() {
         "{message}"
     );
     assert_eq!(loaded.theme, Theme::default());
+}
+
+#[test]
+fn without_an_auth_section_the_key_is_kept_in_the_os_keyring() {
+    let loaded = parse("");
+
+    assert_eq!(loaded.config.auth.store, KeyringStore::Os);
+}
+
+#[test]
+fn auth_store_os_is_the_os_keyring() {
+    let loaded = parse("[auth]\nstore = \"os\"\n");
+
+    assert_eq!(loaded.errors, vec![]);
+    assert_eq!(loaded.config.auth.store, KeyringStore::Os);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn auth_store_keyutils_is_the_kernel_keyring_on_linux() {
+    let loaded = parse("[auth]\nstore = \"keyutils\"\n");
+
+    assert_eq!(loaded.errors, vec![]);
+    assert_eq!(loaded.config.auth.store, KeyringStore::Keyutils);
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn auth_store_keyutils_is_an_error_on_macos() {
+    let loaded = parse("[ui]\nicons = \"nerd\"\n\n[auth]\nstore = \"keyutils\"\n");
+
+    assert_eq!(
+        messages(&loaded),
+        vec![
+            "config.toml:5: `auth.store` \"keyutils\" works on Linux only; \
+             [auth] uses its defaults"
+        ]
+    );
+    assert_eq!(loaded.config.auth.store, KeyringStore::Os);
+    assert_eq!(loaded.config.ui.icons, IconSet::Nerd);
+}
+
+#[test]
+fn an_unknown_auth_store_is_reported_and_the_os_keyring_used() {
+    let loaded = parse("[ui]\nicons = \"nerd\"\n\n[auth]\nstore = \"file\"\n");
+
+    assert_eq!(
+        messages(&loaded),
+        vec![
+            "config.toml:5: `auth.store` must be \"os\" or \"keyutils\"; \
+             [auth] uses its defaults"
+        ]
+    );
+    assert_eq!(loaded.config.auth.store, KeyringStore::Os);
+    assert_eq!(loaded.config.ui.icons, IconSet::Nerd);
 }

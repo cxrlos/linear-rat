@@ -1,9 +1,10 @@
 //! The API key: where it comes from, where it is kept, and the `lrat auth`
 //! commands.
 //!
-//! The key comes from `LINEAR_API_KEY` when that is set, otherwise from the OS
-//! keyring entry with service [`SERVICE`] and the workspace's URL key as the
-//! account. Since the account is only known after a login, the URL key of the
+//! The key comes from `LINEAR_API_KEY` when that is set, otherwise from the
+//! entry with service [`SERVICE`] and the workspace's URL key as the account,
+//! in the one keyring `[auth] store` picks ([`KeyringStore`]); there is no
+//! fallback to another store. Since the account is only known after a login, the URL key of the
 //! stored entry is remembered in a [`WorkspaceFile`].
 
 mod key;
@@ -14,7 +15,7 @@ use std::fmt;
 use std::io;
 
 pub use key::{ApiKey, InvalidApiKey};
-pub use keyring::{EntryReader, KeyStore, KeyringEntry, KeyringError, OsKeyring};
+pub use keyring::{EntryReader, KeyStore, KeyringEntry, KeyringError, KeyringStore, OsKeyring};
 pub use workspace_file::WorkspaceFile;
 
 use crate::linear::{ClientError, LinearClient};
@@ -26,13 +27,16 @@ pub const SERVICE: &str = "linear-rat";
 pub const KEY_VAR: &str = "LINEAR_API_KEY";
 
 /// Where a viewer creates personal API keys.
-const KEYS_URL: &str = "https://linear.app/settings/account/security";
+pub(crate) const KEYS_URL: &str = "https://linear.app/settings/account/security";
 
 /// Where the key in use came from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KeySource {
     Env,
-    Keyring { account: String },
+    Keyring {
+        store: KeyringStore,
+        account: String,
+    },
 }
 
 impl KeySource {
@@ -40,7 +44,7 @@ impl KeySource {
     pub fn kind(&self) -> &'static str {
         match self {
             Self::Env => KEY_VAR,
-            Self::Keyring { .. } => "OS keyring",
+            Self::Keyring { store, .. } => store.label(),
         }
     }
 }
@@ -49,8 +53,8 @@ impl fmt::Display for KeySource {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Env => f.write_str(KEY_VAR),
-            Self::Keyring { account } => {
-                write!(f, "the OS keyring (service {SERVICE}, account {account})")
+            Self::Keyring { store, account } => {
+                write!(f, "{store} (service {SERVICE}, account {account})")
             }
         }
     }
@@ -152,7 +156,13 @@ impl<S: KeyStore> Credentials<S> {
             return Err(AuthError::NoKey);
         };
         match self.store.get(&account)? {
-            Some(key) => Ok((key, KeySource::Keyring { account })),
+            Some(key) => Ok((
+                key,
+                KeySource::Keyring {
+                    store: self.store.kind(),
+                    account,
+                },
+            )),
             None => Err(AuthError::NoKey),
         }
     }
@@ -216,7 +226,9 @@ where
         stale = Some(previous);
     }
 
+    let store = credentials.store.kind();
     let source = KeySource::Keyring {
+        store,
         account: account.clone(),
     };
     let mut output = format!(
@@ -225,7 +237,7 @@ where
     );
     if let Some(stale) = stale {
         output.push_str(&format!(
-            "\nCould not delete the previous API key, for {stale}, from the OS keyring; \
+            "\nCould not delete the previous API key, for {stale}, from {store}; \
              delete it there by hand."
         ));
     }
@@ -299,18 +311,19 @@ where
 /// `lrat auth logout`: deletes lrat's keyring entry. `LINEAR_API_KEY` is left
 /// alone.
 pub fn logout<S: KeyStore>(credentials: &Credentials<S>) -> Result<String, AuthError> {
+    let store = credentials.store.kind();
     let Some(account) = credentials.workspace_file.read()? else {
         return Ok(with_env_note(
             credentials,
-            "No API key is stored in the OS keyring.".to_owned(),
+            format!("No API key is stored in {store}."),
         ));
     };
     let deleted = credentials.store.delete(&account)?;
     credentials.workspace_file.remove()?;
     let output = if deleted {
-        format!("Removed the API key for {account} from the OS keyring.")
+        format!("Removed the API key for {account} from {store}.")
     } else {
-        format!("No API key for {account} was in the OS keyring.")
+        format!("No API key for {account} was in {store}.")
     };
     Ok(with_env_note(credentials, output))
 }

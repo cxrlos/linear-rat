@@ -26,6 +26,9 @@
 //! [analytics]
 //! default-range-weeks = 12               # 4, 12 or 26
 //! stale-days = 14
+//!
+//! [auth]
+//! store = "keyutils"                     # or "os", the default
 //! ```
 //!
 //! A problem is reported with its file and line, and only the section it is
@@ -34,6 +37,7 @@
 //! resets only its `[keys]` context table. Unknown keys and tables are
 //! reported and ignored.
 
+use std::ffi::OsStr;
 use std::fs;
 use std::io;
 use std::ops::RangeInclusive;
@@ -48,6 +52,7 @@ use toml::de::{DeTable, DeValue};
 use toml_parser::parser::{Event, EventKind};
 
 use crate::analytics::{StaleThreshold, WeekRange};
+use crate::auth::KeyringStore;
 use crate::keys::{self, Change, Context, KeySequence, Override, Target};
 use crate::ui::icons::IconSet;
 use crate::ui::theme::{self, Theme};
@@ -60,12 +65,14 @@ pub struct Config {
     /// `[ui]`.
     pub ui: UiSettings,
     /// The theme `[theme] name` picks, or the default when it does not
-    /// load; [`Loaded::theme`] is that theme.
+    /// load; [`Loaded::theme`] is that theme unless `NO_COLOR` replaced it.
     pub theme: String,
     /// `[sync]`.
     pub sync: SyncSettings,
     /// `[analytics]`.
     pub analytics: AnalyticsSettings,
+    /// `[auth]`.
+    pub auth: AuthSettings,
 }
 
 impl Default for Config {
@@ -76,8 +83,16 @@ impl Default for Config {
             theme: theme::DEFAULT.to_owned(),
             sync: SyncSettings::default(),
             analytics: AnalyticsSettings::default(),
+            auth: AuthSettings::default(),
         }
     }
+}
+
+/// `[auth]`: where the API key is kept.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct AuthSettings {
+    /// `store`: `"os"` (default) or, on Linux only, `"keyutils"`.
+    pub store: KeyringStore,
 }
 
 /// `[ui]`: how lrat draws.
@@ -155,6 +170,21 @@ pub struct Loaded {
     pub config: Config,
     pub theme: Theme,
     pub errors: Vec<ConfigError>,
+}
+
+impl Loaded {
+    /// This config with [`Theme::no_color`] in place of its theme when
+    /// `no_color`, the value of `NO_COLOR`, asks for it.
+    pub fn with_no_color(self, no_color: Option<&OsStr>) -> Self {
+        if theme::no_color_requested(no_color) {
+            Self {
+                theme: Theme::no_color(),
+                ..self
+            }
+        } else {
+            self
+        }
+    }
 }
 
 /// A problem in the config file or a theme file, located by line where
@@ -271,6 +301,7 @@ pub fn parse(text: &str, path: &Path) -> Loaded {
                 "analytics" => {
                     config.analytics = reader.section("analytics", value, read_analytics);
                 }
+                "auth" => config.auth = reader.section("auth", value, read_auth),
                 _ => {
                     let what = match value.get_ref() {
                         DeValue::Table(_) => format!("table `[{name_str}]`"),
@@ -279,7 +310,7 @@ pub fn parse(text: &str, path: &Path) -> Loaded {
                     reader.error_at(
                         name,
                         format!(
-                            "unknown {what} is ignored; lrat reads [ui], [theme], [keys], [sync] and [analytics]"
+                            "unknown {what} is ignored; lrat reads [ui], [theme], [keys], [sync], [analytics] and [auth]"
                         ),
                     );
                 }
@@ -308,7 +339,7 @@ pub fn parse(text: &str, path: &Path) -> Loaded {
 }
 
 /// The top-level tables lrat reads.
-const SECTIONS: [&str; 5] = ["ui", "theme", "keys", "sync", "analytics"];
+const SECTIONS: [&str; 6] = ["ui", "theme", "keys", "sync", "analytics", "auth"];
 
 /// Where each table header starts and the top-level table it opens, in
 /// file order. TOML's own parser finds them, so a header-like line inside a
@@ -439,6 +470,25 @@ fn read_analytics(
         }),
         _ => return None,
     })
+}
+
+fn read_auth(auth: &mut AuthSettings, key: &str, value: &Spanned<DeValue>) -> Setting {
+    if key != "store" {
+        return None;
+    }
+    Some(
+        match value.get_ref().as_str().and_then(KeyringStore::from_name) {
+            Some(store) if store.is_supported() => {
+                auth.store = store;
+                Ok(())
+            }
+            Some(store) => Err(format!(
+                "`auth.store` \"{}\" works on Linux only",
+                store.name()
+            )),
+            None => Err("`auth.store` must be \"os\" or \"keyutils\"".to_owned()),
+        },
+    )
 }
 
 fn integer(value: &Spanned<DeValue>, key: &str, range: RangeInclusive<u64>) -> Result<u64, String> {

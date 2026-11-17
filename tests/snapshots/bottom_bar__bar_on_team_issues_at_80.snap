@@ -1,0 +1,7 @@
+---
+source: tests/bottom_bar.rs
+expression: "bar(&team_issues((80, 24)).await)"
+---
+ Move │ j down  k up  gg top  G bottom  C-d/C-u page  h/l pane  / search
+ Do   │ Enter open  y yank  o links  Esc close  ? keys  : palette  q quit
+ View │ t team  f filter  m more  s state  a assignee  p priority  L labels

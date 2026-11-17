@@ -6,7 +6,9 @@ mod assigned;
 mod changes;
 mod create;
 mod detail;
+mod diagnostics;
 mod edit;
+mod issue_key;
 mod live;
 mod search;
 mod team;
@@ -27,9 +29,10 @@ use super::governor::{Governor, SystemTimer, Timer, Urgency};
 use super::model::{Issue, Label, Member, Team, Viewer, WorkflowState, Workspace};
 use super::search_bucket::SearchBucket;
 use super::{
-    AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, GraphQlError, IssueCreate,
-    IssueDetail, IssueUpdate, LinearClient, LiveEvent, PostedComment, Response, SearchResults,
-    TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
+    AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, Diagnostics, GraphQlError,
+    IssueCreate, IssueDetail, IssueLink, IssueUpdate, LinearClient, LiveEvent, PostedComment,
+    Response, SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions,
+    TeamQuery,
 };
 use crate::auth::ApiKey;
 
@@ -428,6 +431,22 @@ impl LinearClient for HttpClient {
         window: AnalyticsWindow,
     ) -> Result<TeamAnalyticsIssues, ClientError> {
         team_analytics::load(self, team_id, window).await
+    }
+
+    async fn issue_by_key(
+        &self,
+        team_key: &str,
+        number: u32,
+    ) -> Result<Option<IssueLink>, ClientError> {
+        issue_key::issue_by_key(self, team_key, number).await
+    }
+
+    async fn diagnostics(&self) -> Result<Diagnostics, ClientError> {
+        diagnostics::load(self).await
+    }
+
+    async fn issue_updated_at(&self, issue_id: &str) -> Result<Timestamp, ClientError> {
+        edit::issue_updated_at(self, issue_id).await
     }
 }
 

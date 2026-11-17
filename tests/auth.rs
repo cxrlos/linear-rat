@@ -11,14 +11,14 @@ use std::sync::{Arc, Mutex};
 
 use jiff::Timestamp;
 use linear_rat::auth::{
-    self, ApiKey, AuthError, Credentials, EntryReader, InvalidApiKey, KeyStore, KeyringEntry,
-    KeyringError, WorkspaceFile,
+    self, ApiKey, AuthError, Credentials, EntryReader, InvalidApiKey, KeySource, KeyStore,
+    KeyringEntry, KeyringError, KeyringStore, WorkspaceFile,
 };
 use linear_rat::linear::model::{Issue, Label, Member, Team, Viewer, WorkflowState, Workspace};
 use linear_rat::linear::{
-    AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, FakeClient, IssueDetail,
-    IssueUpdate, LinearClient, SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage,
-    TeamOptions, TeamQuery, Urgency,
+    AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, Diagnostics, FakeClient,
+    IssueDetail, IssueLink, IssueUpdate, LinearClient, SearchResults, TeamAnalyticsIssues,
+    TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery, Urgency,
 };
 
 const SECRET: &str = "lin_api_fictional0000000000000000000000000000";
@@ -27,8 +27,10 @@ const OTHER_SECRET: &str = "lin_api_fictional1111111111111111111111111111";
 /// The fake client's workspace.
 const URL_KEY: &str = "cheddar-works";
 
+/// An in-memory keyring standing in for the store it names, the OS keyring
+/// by default.
 #[derive(Default)]
-struct MemoryStore(Mutex<HashMap<String, String>>);
+struct MemoryStore(Mutex<HashMap<String, String>>, KeyringStore);
 
 impl MemoryStore {
     fn holding(account: &str, key: &str) -> Self {
@@ -41,12 +43,21 @@ impl MemoryStore {
         store
     }
 
+    fn in_store(mut self, kind: KeyringStore) -> Self {
+        self.1 = kind;
+        self
+    }
+
     fn entries(&self) -> HashMap<String, String> {
         self.0.lock().unwrap().clone()
     }
 }
 
 impl KeyStore for MemoryStore {
+    fn kind(&self) -> KeyringStore {
+        self.1
+    }
+
     fn get(&self, account: &str) -> Result<Option<ApiKey>, KeyringError> {
         Ok(self
             .0
@@ -75,6 +86,10 @@ impl KeyStore for MemoryStore {
 struct UnavailableStore;
 
 impl KeyStore for UnavailableStore {
+    fn kind(&self) -> KeyringStore {
+        KeyringStore::Os
+    }
+
     fn get(&self, _: &str) -> Result<Option<ApiKey>, KeyringError> {
         Err(unavailable())
     }
@@ -98,6 +113,10 @@ fn unavailable() -> KeyringError {
 struct UndeletableStore(MemoryStore);
 
 impl KeyStore for UndeletableStore {
+    fn kind(&self) -> KeyringStore {
+        self.0.kind()
+    }
+
     fn get(&self, account: &str) -> Result<Option<ApiKey>, KeyringError> {
         self.0.get(account)
     }
@@ -211,6 +230,18 @@ impl LinearClient for RejectingClient {
         _: &str,
         _: AnalyticsWindow,
     ) -> Result<TeamAnalyticsIssues, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn issue_by_key(&self, _: &str, _: u32) -> Result<Option<IssueLink>, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn diagnostics(&self) -> Result<Diagnostics, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn issue_updated_at(&self, _: &str) -> Result<Timestamp, ClientError> {
         Err(ClientError::InvalidKey)
     }
 }
@@ -592,6 +623,23 @@ async fn an_unavailable_keyring_is_named_and_linear_api_key_suggested() {
 }
 
 #[test]
+fn a_keyring_error_names_the_store_that_failed() {
+    let os = KeyringError::new("no Secret Service");
+    let kernel = KeyringError::new("operation not permitted").in_store(KeyringStore::Keyutils);
+
+    assert_eq!(
+        os.to_string(),
+        "the OS keyring is unavailable (no Secret Service); \
+         set LINEAR_API_KEY to use lrat without it"
+    );
+    assert_eq!(
+        kernel.to_string(),
+        "the Linux kernel keyring is unavailable (operation not permitted); \
+         set LINEAR_API_KEY to use lrat without it"
+    );
+}
+
+#[test]
 fn a_piped_key_is_read_without_its_trailing_newline() {
     let read = auth::read_key(format!("{SECRET}\n").as_bytes()).unwrap();
 
@@ -714,13 +762,119 @@ impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for SharedBuffer {
 
 #[test]
 fn a_key_source_kind_names_where_the_key_came_from_without_the_account() {
-    let keyring = linear_rat::auth::KeySource::Keyring {
+    let keyring = KeySource::Keyring {
+        store: KeyringStore::Os,
+        account: URL_KEY.to_owned(),
+    };
+    let kernel = KeySource::Keyring {
+        store: KeyringStore::Keyutils,
         account: URL_KEY.to_owned(),
     };
 
-    assert_eq!(linear_rat::auth::KeySource::Env.kind(), "LINEAR_API_KEY");
+    assert_eq!(KeySource::Env.kind(), "LINEAR_API_KEY");
     assert_eq!(keyring.kind(), "OS keyring");
+    assert_eq!(kernel.kind(), "kernel keyring");
     assert!(!keyring.kind().contains(URL_KEY));
+}
+
+#[test]
+fn linear_api_key_wins_over_the_configured_store() {
+    let credentials = Credentials::new(
+        MemoryStore::holding(URL_KEY, SECRET).in_store(KeyringStore::Keyutils),
+        workspace_file(),
+        Some(OTHER_SECRET.to_owned()),
+    );
+    credentials.workspace_file().write(URL_KEY).unwrap();
+
+    let (key, source) = credentials.resolve().unwrap();
+
+    assert_eq!(key.expose(), OTHER_SECRET);
+    assert_eq!(source, KeySource::Env);
+}
+
+#[test]
+fn without_linear_api_key_the_key_comes_from_the_configured_store() {
+    let credentials = Credentials::new(
+        MemoryStore::holding(URL_KEY, SECRET).in_store(KeyringStore::Keyutils),
+        workspace_file(),
+        None,
+    );
+    credentials.workspace_file().write(URL_KEY).unwrap();
+
+    let (key, source) = credentials.resolve().unwrap();
+
+    assert_eq!(key.expose(), SECRET);
+    assert_eq!(
+        source,
+        KeySource::Keyring {
+            store: KeyringStore::Keyutils,
+            account: URL_KEY.to_owned(),
+        }
+    );
+}
+
+#[test]
+fn an_empty_configured_store_is_no_key_rather_than_a_fallback() {
+    let credentials = Credentials::new(
+        MemoryStore::default().in_store(KeyringStore::Keyutils),
+        workspace_file(),
+        None,
+    );
+    credentials.workspace_file().write(URL_KEY).unwrap();
+
+    let error = credentials.resolve().unwrap_err();
+
+    assert!(matches!(error, AuthError::NoKey), "{error:?}");
+}
+
+#[tokio::test]
+async fn status_names_the_kernel_keyring_and_never_the_key() {
+    let credentials = Credentials::new(
+        MemoryStore::holding(URL_KEY, SECRET).in_store(KeyringStore::Keyutils),
+        workspace_file(),
+        None,
+    );
+    credentials.workspace_file().write(URL_KEY).unwrap();
+    let used = Mutex::new(Vec::new());
+
+    let output = auth::status(&credentials, fake_connect(&used))
+        .await
+        .unwrap();
+
+    assert_eq!(*used.lock().unwrap(), [SECRET]);
+    assert_eq!(
+        output,
+        "Key source: the Linux kernel keyring (service linear-rat, account cheddar-works)\n\
+         Workspace:  Cheddar Works (cheddar-works)\n\
+         Viewer:     Remy Fromage"
+    );
+}
+
+#[tokio::test]
+async fn login_and_logout_name_the_kernel_keyring_and_never_the_key() {
+    let credentials = Credentials::new(
+        MemoryStore::default().in_store(KeyringStore::Keyutils),
+        workspace_file(),
+        None,
+    );
+
+    let login = auth::login(&credentials, key(SECRET), |_| Ok(FakeClient))
+        .await
+        .unwrap();
+    let logout = auth::logout(&credentials).unwrap();
+
+    assert!(
+        login.ends_with(
+            "The API key is in the Linux kernel keyring (service linear-rat, \
+             account cheddar-works)."
+        ),
+        "{login}"
+    );
+    assert_eq!(
+        logout,
+        "Removed the API key for cheddar-works from the Linux kernel keyring."
+    );
+    assert!(!login.contains(SECRET) && !logout.contains(SECRET));
 }
 
 /// Other keyring entries, by service and account, as the viewer made them.

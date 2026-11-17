@@ -165,6 +165,13 @@ pub trait LinearClient {
         window: AnalyticsWindow,
     ) -> impl Future<Output = Result<TeamAnalyticsIssues, ClientError>> + Send;
 
+    /// When the issue with id `issue_id` was last updated in Linear, read
+    /// afresh, so a save can refuse to overwrite a newer edit.
+    fn issue_updated_at(
+        &self,
+        issue_id: &str,
+    ) -> impl Future<Output = Result<Timestamp, ClientError>> + Send;
+
     /// Live events from Linear's websocket for the issues of `team_ids` and
     /// every new comment, for as long as the stream is polled. It reconnects
     /// by itself after any disconnect and never ends. Without a live
@@ -173,6 +180,60 @@ pub trait LinearClient {
         let _ = team_ids;
         futures_util::stream::pending()
     }
+
+    /// The issue whose key is `team_key`-`number`, archived ones included,
+    /// matching the team key whatever its case, or `None` when the workspace
+    /// has no such issue. `lrat open` uses it.
+    fn issue_by_key(
+        &self,
+        team_key: &str,
+        number: u32,
+    ) -> impl Future<Output = Result<Option<IssueLink>, ClientError>> + Send;
+
+    /// What `lrat doctor` reports about the key beyond its viewer: the
+    /// viewer's role, Linear's `rateLimitStatus` and Linear's clock.
+    fn diagnostics(&self) -> impl Future<Output = Result<Diagnostics, ClientError>> + Send;
+}
+
+/// The viewer's role, the rate limits and Linear's clock, as `lrat doctor`
+/// reports them.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Diagnostics {
+    pub role: Role,
+    pub rate_limits: Vec<RateLimit>,
+    /// From the response's `Date` header, to the second; `None` when Linear
+    /// sent none that could be read.
+    pub server_time: Option<Timestamp>,
+}
+
+/// The viewer's workspace role, as Linear's `User.admin`, `owner` and
+/// `guest`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Role {
+    pub admin: bool,
+    pub owner: bool,
+    pub guest: bool,
+}
+
+/// One of Linear's rate limits, as `RateLimitResultPayload`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RateLimit {
+    /// What it limits, as Linear names it, such as request count or query
+    /// complexity.
+    pub kind: String,
+    pub allowed: f64,
+    pub remaining: f64,
+    /// When the limit is fully replenished.
+    pub reset: Option<Timestamp>,
+}
+
+/// Enough of an issue to name it and open it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IssueLink {
+    /// The key, for example `ENG-123`.
+    pub identifier: String,
+    pub title: String,
+    pub url: String,
 }
 
 /// Something Linear's websocket delivered.
@@ -245,6 +306,11 @@ pub struct IssueUpdate {
     pub added_label_ids: Vec<String>,
     /// Labels to remove, leaving the issue's other labels as they are.
     pub removed_label_ids: Vec<String>,
+    /// The new title, or `None` to leave it.
+    pub title: Option<String>,
+    /// The new Markdown description, or `None` to leave it. An empty one
+    /// empties it.
+    pub description: Option<String>,
 }
 
 /// A change to a field that can be empty: leave it, empty it, or set it.
@@ -731,6 +797,12 @@ fn demo_update(
             issue.label_ids.push(id.clone());
         }
     }
+    if let Some(title) = &update.title {
+        issue.title.clone_from(title);
+    }
+    if let Some(description) = &update.description {
+        issue.description = (!description.is_empty()).then(|| description.clone());
+    }
     issue.updated_at += SignedDuration::from_secs(1);
     Ok(issue)
 }
@@ -997,6 +1069,58 @@ impl LinearClient for FakeClient {
         window: AnalyticsWindow,
     ) -> Result<TeamAnalyticsIssues, ClientError> {
         TeamAnalyticsIssues::demo(team_id, window)
+    }
+
+    async fn issue_by_key(
+        &self,
+        team_key: &str,
+        number: u32,
+    ) -> Result<Option<IssueLink>, ClientError> {
+        let identifier = format!("{team_key}-{number}");
+        Ok(demo::workspace()
+            .issues
+            .into_iter()
+            .find(|issue| issue.identifier.eq_ignore_ascii_case(&identifier))
+            .map(|issue| IssueLink {
+                identifier: issue.identifier,
+                title: issue.title,
+                url: issue.url,
+            }))
+    }
+
+    async fn diagnostics(&self) -> Result<Diagnostics, ClientError> {
+        Ok(Diagnostics {
+            role: Role::default(),
+            rate_limits: vec![
+                RateLimit {
+                    kind: "requests".to_owned(),
+                    allowed: 5_000.0,
+                    remaining: 4_990.0,
+                    reset: demo::NOW.checked_add(SignedDuration::from_mins(40)).ok(),
+                },
+                RateLimit {
+                    kind: "complexity".to_owned(),
+                    allowed: 3_000_000.0,
+                    remaining: 2_996_000.0,
+                    reset: demo::NOW.checked_add(SignedDuration::from_mins(40)).ok(),
+                },
+            ],
+            server_time: Some(demo::NOW),
+        })
+    }
+
+    /// The `updatedAt` of the issue as edits through this client left it.
+    async fn issue_updated_at(&self, issue_id: &str) -> Result<Timestamp, ClientError> {
+        DEMO_EDITS
+            .with_borrow(|edits| edits.get(issue_id).map(|issue| issue.updated_at))
+            .or_else(|| {
+                demo::workspace()
+                    .issues
+                    .into_iter()
+                    .find(|issue| issue.id == issue_id)
+                    .map(|issue| issue.updated_at)
+            })
+            .ok_or_else(|| not_found("issue", issue_id))
     }
 }
 

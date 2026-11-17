@@ -21,6 +21,7 @@ use crate::app::{
 };
 use crate::linear::{AnalyticsWindow, ClientError, LinearClient, LiveEvent, Urgency};
 use crate::snapshot::SnapshotCache;
+use crate::terminal::JobControl;
 use crate::{browser, clipboard, terminal};
 
 /// How often [`Event::Tick`] goes out.
@@ -64,21 +65,19 @@ where
     I: Stream<Item = io::Result<TerminalEvent>> + Unpin,
     S: Future<Output = ()>,
 {
-    let reach = Reach {
-        client,
-        snapshots,
-        live: Cell::new(None),
-    };
-    let result = run_loop(app, &reach, input, shutdown).await;
-    save_snapshot(app, &reach);
-    result
+    let no_job_control = futures_util::stream::pending();
+    run_with_job_control(app, client, snapshots, input, shutdown, no_job_control).await
 }
 
-async fn run_loop<B, C, I, S>(
+/// [`run`], suspending or resuming lrat on each `job_control` signal. The
+/// loop goes on after either.
+pub async fn run_with_job_control<B, C, I, S, J>(
     app: &mut App<B>,
-    reach: &Reach<'_, C>,
-    mut input: I,
+    client: Option<&C>,
+    snapshots: Option<&SnapshotCache>,
+    input: I,
     shutdown: S,
+    job_control: J,
 ) -> anyhow::Result<()>
 where
     B: Backend,
@@ -86,8 +85,35 @@ where
     C: LinearClient,
     I: Stream<Item = io::Result<TerminalEvent>> + Unpin,
     S: Future<Output = ()>,
+    J: Stream<Item = JobControl>,
+{
+    let reach = Reach {
+        client,
+        snapshots,
+        live: Cell::new(None),
+    };
+    let result = run_loop(app, &reach, input, shutdown, job_control).await;
+    save_snapshot(app, &reach);
+    result
+}
+
+async fn run_loop<B, C, I, S, J>(
+    app: &mut App<B>,
+    reach: &Reach<'_, C>,
+    mut input: I,
+    shutdown: S,
+    job_control: J,
+) -> anyhow::Result<()>
+where
+    B: Backend,
+    B::Error: Send + Sync + 'static,
+    C: LinearClient,
+    I: Stream<Item = io::Result<TerminalEvent>> + Unpin,
+    S: Future<Output = ()>,
+    J: Stream<Item = JobControl>,
 {
     tokio::pin!(shutdown);
+    tokio::pin!(job_control);
     let clock = Clock::start();
     let mut ticks = tokio::time::interval(TICK);
     ticks.set_missed_tick_behavior(MissedTickBehavior::Delay);
@@ -109,6 +135,7 @@ where
             }
             Some(event) = in_flight.next(), if !in_flight.is_empty() => Some(event),
             Some(event) = next_live(&mut live) => Some(Event::Live(event)),
+            Some(signal) = job_control.next() => on_job_control(app, signal, &mut System)?,
             terminal_event = input.next() => match terminal_event {
                 Some(event) => from_terminal(event.context("reading terminal input")?),
                 None => return Ok(()),
@@ -157,6 +184,11 @@ trait Outside {
     /// Runs the viewer's editor on `text` until it exits, and returns what
     /// it saved.
     fn edit(&mut self, text: &str) -> anyhow::Result<String>;
+    /// Hands the terminal to the shell and stops lrat until it is
+    /// continued, then takes the terminal back.
+    fn suspend(&mut self) -> anyhow::Result<()>;
+    /// Takes the terminal back after lrat was continued.
+    fn resume(&mut self) -> anyhow::Result<()>;
 }
 
 /// The terminal's clipboard, the viewer's browser and their editor.
@@ -178,6 +210,37 @@ impl Outside for System {
     fn edit(&mut self, text: &str) -> anyhow::Result<String> {
         terminal::edit(text)
     }
+
+    fn suspend(&mut self) -> anyhow::Result<()> {
+        terminal::suspend().context("could not suspend lrat")
+    }
+
+    fn resume(&mut self) -> anyhow::Result<()> {
+        terminal::resume().context("could not take the terminal back")
+    }
+}
+
+/// Suspends or resumes as `signal` asks and draws the whole screen, which
+/// the shell may have drawn over. A failure comes back as the event that
+/// shows it.
+fn on_job_control<B>(
+    app: &mut App<B>,
+    signal: JobControl,
+    outside: &mut impl Outside,
+) -> anyhow::Result<Option<Event>>
+where
+    B: Backend,
+    B::Error: Send + Sync + 'static,
+{
+    tracing::info!(?signal, "job control");
+    let result = match signal {
+        JobControl::Suspend => outside.suspend(),
+        JobControl::Continue => outside.resume(),
+    };
+    app.redraw_all().context("drawing the screen")?;
+    Ok(result
+        .err()
+        .map(|error| Event::EffectFailed(format!("{error:#}"))))
 }
 
 /// Hands `event` to the app and carries out the effects it returns.
@@ -217,6 +280,13 @@ where
 {
     let outcome = match effect {
         Effect::Quit => return Ok(ControlFlow::Break(())),
+        // Like the editor, the stop holds the loop: nothing is read or drawn
+        // until lrat is continued and has the terminal back.
+        Effect::Suspend => {
+            let result = outside.suspend();
+            app.redraw_all().context("drawing the screen")?;
+            result
+        }
         Effect::LoadMyIssues => {
             in_flight.push(Box::pin(load_my_issues(reach.client)));
             Ok(())
@@ -378,6 +448,10 @@ where
             in_flight.push(Box::pin(create_issue(reach.client, issue)));
             Ok(())
         }
+        Effect::UpdateIssueText { write, seen, text } => {
+            in_flight.push(Box::pin(update_issue_text(reach.client, write, seen, text)));
+            Ok(())
+        }
     };
     if let Err(error) = outcome {
         let failed = Event::EffectFailed(format!("{error:#}"));
@@ -501,6 +575,46 @@ async fn update_issue<C: LinearClient>(client: Option<&C>, write: Write) -> Even
         Ok(_) => tracing::info!(issue = %write.identifier, "Linear applied an edit"),
         Err(error) => tracing::warn!(issue = %write.identifier, %error, "Linear rejected an edit"),
     }
+    Event::IssueUpdated { write, result }
+}
+
+/// Reads the issue's `updatedAt` again and sends `write` only if it is still
+/// `seen`. If it moved, `text` is kept in a file and the error names it.
+/// Linear has no compare-and-set, so an edit landing between the read and
+/// the write is not caught.
+async fn update_issue_text<C: LinearClient>(
+    client: Option<&C>,
+    write: Write,
+    seen: Timestamp,
+    text: String,
+) -> Event {
+    let Some(client) = client else {
+        let result = Err(NO_CLIENT.to_owned());
+        return Event::IssueUpdated { write, result };
+    };
+    let result = match client.issue_updated_at(&write.issue_id).await {
+        Err(error) => Err(format!(
+            "could not check it is unchanged in Linear: {}",
+            message(error)
+        )),
+        Ok(now) if now != seen => {
+            tracing::info!(issue = %write.identifier, "refused a save over a newer edit");
+            Err(match terminal::keep(&text, &write.identifier) {
+                Ok(path) => format!(
+                    "it changed in Linear while the editor was open, so nothing was sent; \
+                     your text is in {}",
+                    path.display()
+                ),
+                Err(error) => format!(
+                    "it changed in Linear while the editor was open, so nothing was sent, \
+                     and your text could not be kept: {error:#}"
+                ),
+            })
+        }
+        Ok(_) => {
+            return update_issue(Some(client), write).await;
+        }
+    };
     Event::IssueUpdated { write, result }
 }
 
@@ -641,6 +755,8 @@ mod tests {
         /// What the editor saves.
         saves: String,
         failure: Option<&'static str>,
+        suspended: usize,
+        resumed: usize,
     }
 
     impl Outside for Fake {
@@ -662,6 +778,17 @@ mod tests {
                 Some(failure) => Err(anyhow::anyhow!(failure)),
                 None => Ok(self.saves.clone()),
             }
+        }
+
+        fn suspend(&mut self) -> anyhow::Result<()> {
+            self.suspended += 1;
+            self.failure
+                .map_or(Ok(()), |failure| Err(anyhow::anyhow!(failure)))
+        }
+
+        fn resume(&mut self) -> anyhow::Result<()> {
+            self.resumed += 1;
+            Ok(())
         }
     }
 
@@ -872,6 +999,76 @@ mod tests {
         );
     }
 
+    /// A save of a new title for the demo's DES-34, opened when its
+    /// `updatedAt` was the demo's.
+    fn text_write() -> (Write, Timestamp) {
+        let issue = crate::linear::demo::workspace()
+            .issues
+            .into_iter()
+            .find(|issue| issue.identifier == "DES-34")
+            .unwrap();
+        let write = Write {
+            issue_id: issue.id.clone(),
+            identifier: issue.identifier.clone(),
+            edit: crate::app::Edit::Text {
+                title: "Autumn release, take two".to_owned(),
+                description: "Body".to_owned(),
+            },
+            previous: crate::app::Editable::Text.current(&issue),
+        };
+        (write, issue.updated_at)
+    }
+
+    #[tokio::test]
+    async fn a_text_save_over_a_newer_edit_sends_nothing_and_keeps_the_text_in_a_file() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (write, seen) = text_write();
+        let teammate = crate::linear::IssueUpdate {
+            priority: Some(crate::linear::model::Priority::Urgent),
+            ..crate::linear::IssueUpdate::default()
+        };
+        FakeClient
+            .update_issue(&write.issue_id, &teammate)
+            .await
+            .unwrap();
+        let text = "Autumn release, take two\n\nBody\n".to_owned();
+
+        let event = update_issue_text(Some(&FakeClient), write.clone(), seen, text.clone()).await;
+
+        let Event::IssueUpdated { result, .. } = event else {
+            panic!("{event:?}");
+        };
+        let error = result.unwrap_err();
+        let path = error.rsplit("your text is in ").next().unwrap();
+        let kept = std::fs::read_to_string(path).unwrap();
+        let mode = std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        std::fs::remove_file(path).unwrap();
+        assert!(error.starts_with("it changed in Linear while the editor was open"));
+        assert_eq!(kept, text);
+        assert_eq!(mode, 0o600);
+        let checked = FakeClient.issue_updated_at(&write.issue_id).await.unwrap();
+        assert_eq!(
+            checked,
+            seen + SignedDuration::from_secs(1),
+            "a second write went out"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_text_save_over_an_unchanged_issue_goes_to_linear() {
+        let (write, seen) = text_write();
+
+        let event = update_issue_text(Some(&FakeClient), write, seen, String::new()).await;
+
+        let Event::IssueUpdated { result, .. } = event else {
+            panic!("{event:?}");
+        };
+        let stored = result.unwrap();
+        assert_eq!(stored.title, "Autumn release, take two");
+        assert_eq!(stored.description.as_deref(), Some("Body"));
+    }
+
     #[test]
     fn quit_ends_the_loop_without_going_outside() {
         let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
@@ -881,5 +1078,87 @@ mod tests {
 
         assert_eq!(flow, ControlFlow::Break(()));
         assert!(outside.copied.is_empty() && outside.opened.is_empty());
+    }
+
+    #[test]
+    fn suspend_stops_lrat_then_draws_the_whole_screen_and_the_loop_goes_on() {
+        let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+        let mut outside = Fake::default();
+        let frames = app.frames_drawn();
+
+        let flow = run_effect(&mut app, Effect::Suspend, &mut outside);
+
+        assert_eq!(flow, ControlFlow::Continue(()));
+        assert_eq!(outside.suspended, 1);
+        assert!(
+            app.frames_drawn() > frames,
+            "the screen was not drawn again"
+        );
+    }
+
+    #[test]
+    fn a_suspend_that_fails_says_why() {
+        let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+        let mut outside = Fake {
+            failure: Some("could not suspend lrat: Operation not permitted"),
+            ..Fake::default()
+        };
+
+        let flow = run_effect(&mut app, Effect::Suspend, &mut outside);
+
+        assert_eq!(flow, ControlFlow::Continue(()));
+        assert!(
+            screen(&app).contains("could not suspend lrat"),
+            "{}",
+            screen(&app)
+        );
+    }
+
+    #[test]
+    fn sigtstp_from_outside_suspends_as_the_key_does() {
+        let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+        let mut outside = Fake::default();
+        let frames = app.frames_drawn();
+
+        let next = on_job_control(&mut app, JobControl::Suspend, &mut outside).unwrap();
+
+        assert_eq!(next, None);
+        assert_eq!((outside.suspended, outside.resumed), (1, 0));
+        assert!(
+            app.frames_drawn() > frames,
+            "the screen was not drawn again"
+        );
+    }
+
+    #[test]
+    fn sigcont_takes_the_terminal_back_and_draws_the_whole_screen() {
+        let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+        let mut outside = Fake::default();
+        let frames = app.frames_drawn();
+
+        let next = on_job_control(&mut app, JobControl::Continue, &mut outside).unwrap();
+
+        assert_eq!(next, None);
+        assert_eq!((outside.suspended, outside.resumed), (0, 1));
+        assert!(
+            app.frames_drawn() > frames,
+            "the screen was not drawn again"
+        );
+    }
+
+    #[test]
+    fn a_failed_sigtstp_suspend_comes_back_as_the_notice() {
+        let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+        let mut outside = Fake {
+            failure: Some("could not suspend lrat"),
+            ..Fake::default()
+        };
+
+        let next = on_job_control(&mut app, JobControl::Suspend, &mut outside).unwrap();
+
+        assert_eq!(
+            next,
+            Some(Event::EffectFailed("could not suspend lrat".to_owned()))
+        );
     }
 }

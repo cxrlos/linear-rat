@@ -1,30 +1,97 @@
 use std::future::Future;
-use std::io;
+use std::io::{self, IsTerminal, Write};
 
 use anyhow::Context;
 use clap::Parser;
 use crossterm::event::EventStream;
+use futures_util::Stream;
 use jiff::tz::TimeZone;
 use linear_rat::app::{App, Load, LoadError, State};
-use linear_rat::auth::{self, Credentials, OsKeyring, WorkspaceFile};
+use linear_rat::auth::{self, Credentials, KeyringStore, OsKeyring, WorkspaceFile};
 use linear_rat::cli::{AuthCommand, Cli, Command};
 use linear_rat::config::{self, Loaded};
 use linear_rat::linear::{FakeClient, HttpClient, LinearClient};
+use linear_rat::open::{self, IssueKey};
 use linear_rat::snapshot::SnapshotCache;
-use linear_rat::terminal::{self, TerminalGuard};
-use linear_rat::{logging, runtime};
+use linear_rat::terminal::{self, JobControl, TerminalGuard};
+use linear_rat::ui::theme;
+use linear_rat::{browser, completions, doctor, logging, runtime};
 use ratatui::backend::CrosstermBackend;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    if let Some(Command::Auth(command)) = cli.command {
-        let _log_guard = logging::init().context("setting up the log file")?;
-        return run_auth(command).await;
+    match cli.command {
+        Some(Command::Auth(command)) => {
+            let _log_guard = logging::init().context("setting up the log file")?;
+            return run_auth(command).await;
+        }
+        Some(Command::Open { key }) => {
+            let _log_guard = logging::init().context("setting up the log file")?;
+            return run_open(&key).await;
+        }
+        Some(Command::Completions { shell }) => {
+            return io::stdout()
+                .write_all(&completions::script(shell))
+                .context("writing the completion script");
+        }
+        Some(Command::Doctor) => {
+            let log_guard = logging::init().context("setting up the log file")?;
+            let failed = run_doctor().await?;
+            if failed {
+                drop(log_guard);
+                std::process::exit(1);
+            }
+            return Ok(());
+        }
+        None => {}
     }
     let _log_guard = logging::init().context("setting up the log file")?;
     tracing::info!(version = env!("CARGO_PKG_VERSION"), "starting");
 
+    let no_color = std::env::var_os(theme::NO_COLOR_VAR);
+    let loaded = load_config().with_no_color(no_color.as_deref());
+    tracing::info!(
+        theme = loaded.config.theme,
+        no_color = theme::no_color_requested(no_color.as_deref()),
+        icons = loaded.config.ui.icons.name(),
+        "config loaded"
+    );
+    let shutdown =
+        terminal::shutdown_signal().context("listening for SIGINT, SIGTERM and SIGHUP")?;
+    let job_control = terminal::job_control().context("listening for SIGTSTP and SIGCONT")?;
+    let result = if cli.demo {
+        let state = State::loading(None)
+            .with_config(&loaded)
+            .with_time_zone(TimeZone::system());
+        run_tui(state, Some(&FakeClient), None, shutdown, job_control).await
+    } else {
+        let (state, client) = connect(loaded.config.auth.store);
+        let snapshots = snapshot_cache();
+        let state = state
+            .with_config(&loaded)
+            .with_time_zone(TimeZone::system());
+        let state = from_snapshot(state, snapshots.as_ref());
+        run_tui(
+            state,
+            client.as_ref(),
+            snapshots.as_ref(),
+            shutdown,
+            job_control,
+        )
+        .await
+    };
+
+    match &result {
+        Ok(()) => tracing::info!("quit"),
+        Err(error) => tracing::error!("{error:#}"),
+    }
+    result
+}
+
+/// The config file, logging each problem in it, or the default config when
+/// there is no home directory to find it in.
+fn load_config() -> Loaded {
     let loaded = match config::path() {
         Ok(path) => config::load(&path),
         Err(error) => {
@@ -35,44 +102,21 @@ async fn main() -> anyhow::Result<()> {
     for error in &loaded.errors {
         tracing::warn!(%error, "config problem");
     }
-    tracing::info!(
-        theme = loaded.config.theme,
-        icons = loaded.config.ui.icons.name(),
-        "config loaded"
-    );
-    let shutdown =
-        terminal::shutdown_signal().context("listening for SIGINT, SIGTERM and SIGHUP")?;
-    let result = if cli.demo {
-        let state = State::loading(None)
-            .with_config(&loaded)
-            .with_time_zone(TimeZone::system());
-        run_tui(state, Some(&FakeClient), None, shutdown).await
-    } else {
-        let (state, client) = connect();
-        let snapshots = snapshot_cache();
-        let state = state
-            .with_config(&loaded)
-            .with_time_zone(TimeZone::system());
-        let state = from_snapshot(state, snapshots.as_ref());
-        run_tui(state, client.as_ref(), snapshots.as_ref(), shutdown).await
-    };
-
-    match &result {
-        Ok(()) => tracing::info!("quit"),
-        Err(error) => tracing::error!("{error:#}"),
-    }
-    result
+    loaded
 }
 
 /// The state to start in and the client to load with: the key from
-/// `LINEAR_API_KEY` or the OS keyring, or, when there is no usable key, the
-/// error screen that says why and no client.
-fn connect() -> (State, Option<HttpClient>) {
+/// `LINEAR_API_KEY` or the configured keyring, or, when there is no usable
+/// key, the error screen that says why and no client.
+fn connect(store: KeyringStore) -> (State, Option<HttpClient>) {
     let resolved = WorkspaceFile::in_state_dir()
         .map_err(|error| LoadError::KeyUnusable(format!("{error:#}")))
         .and_then(|workspace_file| {
-            let credentials =
-                Credentials::new(OsKeyring, workspace_file, std::env::var(auth::KEY_VAR).ok());
+            let credentials = Credentials::new(
+                OsKeyring::new(store),
+                workspace_file,
+                std::env::var(auth::KEY_VAR).ok(),
+            );
             credentials
                 .resolve()
                 .map_err(|error| LoadError::from(&error))
@@ -121,11 +165,20 @@ async fn run_tui<C: LinearClient>(
     client: Option<&C>,
     snapshots: Option<&SnapshotCache>,
     shutdown: impl Future<Output = ()>,
+    job_control: impl Stream<Item = JobControl>,
 ) -> anyhow::Result<()> {
     let guard = TerminalGuard::enter().context("preparing the terminal")?;
     let result = match App::new(CrosstermBackend::new(io::stdout()), state) {
         Ok(mut app) => {
-            runtime::run(&mut app, client, snapshots, EventStream::new(), shutdown).await
+            runtime::run_with_job_control(
+                &mut app,
+                client,
+                snapshots,
+                EventStream::new(),
+                shutdown,
+                job_control,
+            )
+            .await
         }
         Err(error) => Err(error).context("drawing the first frame"),
     };
@@ -134,8 +187,12 @@ async fn run_tui<C: LinearClient>(
 }
 
 async fn run_auth(command: AuthCommand) -> anyhow::Result<()> {
+    let loaded = load_config();
+    for error in &loaded.errors {
+        eprintln!("{error}");
+    }
     let credentials = Credentials::new(
-        OsKeyring,
+        OsKeyring::new(loaded.config.auth.store),
         WorkspaceFile::in_state_dir()?,
         std::env::var(auth::KEY_VAR).ok(),
     );
@@ -143,7 +200,10 @@ async fn run_auth(command: AuthCommand) -> anyhow::Result<()> {
         AuthCommand::Login {
             from_keyring: Some(entry),
             ..
-        } => auth::login_from_keyring(&credentials, &OsKeyring, &entry, HttpClient::new).await?,
+        } => {
+            let reader = OsKeyring::default();
+            auth::login_from_keyring(&credentials, &reader, &entry, HttpClient::new).await?
+        }
         AuthCommand::Login { stdin, .. } => {
             let key = if stdin {
                 auth::read_key(io::stdin().lock())?
@@ -157,4 +217,39 @@ async fn run_auth(command: AuthCommand) -> anyhow::Result<()> {
     };
     println!("{output}");
     Ok(())
+}
+
+async fn run_open(key: &IssueKey) -> anyhow::Result<()> {
+    let loaded = load_config();
+    let credentials = Credentials::new(
+        OsKeyring::new(loaded.config.auth.store),
+        WorkspaceFile::in_state_dir()?,
+        std::env::var(auth::KEY_VAR).ok(),
+    );
+    let output = open::open(&credentials, key, HttpClient::new, browser::open).await?;
+    println!("{output}");
+    Ok(())
+}
+
+/// Prints the doctor's report and returns whether any check failed.
+async fn run_doctor() -> anyhow::Result<bool> {
+    let config = doctor::ConfigFacts::load();
+    let credentials = Credentials::new(
+        OsKeyring::new(config.loaded.config.auth.store),
+        WorkspaceFile::in_state_dir()?,
+        std::env::var(auth::KEY_VAR).ok(),
+    );
+    let var = |name: &str| std::env::var(name).ok();
+    let facts = doctor::gather(
+        &credentials,
+        HttpClient::new,
+        doctor::Terminal::from_env(var),
+        config,
+        jiff::Timestamp::now,
+    )
+    .await;
+    let report = doctor::report(&facts);
+    let color = doctor::use_color(io::stdout().is_terminal(), var("NO_COLOR").as_deref());
+    print!("{}", report.render(color));
+    Ok(report.failed())
 }

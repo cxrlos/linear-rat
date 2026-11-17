@@ -77,6 +77,20 @@ jobs:
         with:
           rust-version: '1.88'
 
+  nix:
+    name: nix flake check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+      # --no-update-lock-file fails the job when the committed flake.lock no
+      # longer matches the inputs in flake.nix.
+      - run: nix flake check --no-update-lock-file --print-build-logs
+      - run: nix run --no-update-lock-file . -- --version
+      - run: nix develop --no-update-lock-file --command bash -c 'cargo deny --version && cargo insta --version && cargo +1.88 --version'
+
   gitleaks:
     name: gitleaks
     runs-on: ubuntu-latest

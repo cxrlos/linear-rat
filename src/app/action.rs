@@ -5,6 +5,8 @@ use super::{Editable, FilterField, LinkSet, Screen};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
     Quit,
+    /// Hand the terminal back to the shell and stop lrat until `fg`.
+    Suspend,
     ShowScreen(Screen),
     MoveDown,
     MoveUp,

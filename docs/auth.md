@@ -2,6 +2,8 @@
 
 lrat needs a Linear personal API key, created at <https://linear.app/settings/account/security>. `lrat auth login` checks the key with Linear, then keeps it in the OS keyring under service `linear-rat` and the workspace's URL key as the account: the Secret Service (GNOME Keyring, KWallet) on Linux, the Keychain on macOS. A key Linear rejects is never stored.
 
+On a Linux machine without a Secret Service, such as an SSH box or a container, set `store = "keyutils"` under `[auth]` in the config to keep the key in the kernel keyring instead. Kernel keys do not survive a reboot; [docs/config.md](config.md#auth) has the details.
+
 There are three ways to hand it the key:
 
 | Command | Where the key comes from |

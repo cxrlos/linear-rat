@@ -1,12 +1,14 @@
 //! The terminal guard: the one owner of raw mode, the alternate screen and
-//! focus reporting, which it also hands to `$EDITOR` and takes back.
+//! focus reporting, which it also hands to `$EDITOR` and to the shell on
+//! suspend, and takes back.
 
+use std::backtrace::Backtrace;
 use std::fs::{self, DirBuilder, OpenOptions};
 use std::future::Future;
 use std::io::{self, Write};
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::panic;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Once;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -16,6 +18,9 @@ use anyhow::{Context, bail};
 use crossterm::event::{DisableFocusChange, EnableFocusChange};
 use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::{cursor, execute};
+use futures_util::{Stream, stream};
+use jiff::Timestamp;
+use rustix::process::{Signal, kill_current_process_group};
 use tokio::signal::unix::{SignalKind, signal};
 
 static ACTIVE: AtomicBool = AtomicBool::new(false);
@@ -101,6 +106,7 @@ fn edit_with(editor: &str, text: &str) -> anyhow::Result<String> {
 
     let status = {
         let _handed_over = HandedOver::begin();
+        let _stops_with_the_editor = DefaultStop::begin();
         Command::new("sh")
             .arg("-c")
             .arg(format!("{editor} \"$1\""))
@@ -113,6 +119,40 @@ fn edit_with(editor: &str, text: &str) -> anyhow::Result<String> {
         bail!("`{editor}` exited with {status}");
     }
     fs::read_to_string(&path).with_context(|| format!("could not read {}", path.display()))
+}
+
+/// Writes `text` to a new file under the system temp directory that only
+/// the viewer can read, named after `stem`, and returns its path. The file
+/// stays: it holds what the viewer wrote that lrat could not save.
+pub fn keep(text: &str, stem: &str) -> anyhow::Result<PathBuf> {
+    static NEXT: AtomicU32 = AtomicU32::new(0);
+    let base = std::env::temp_dir();
+    let mut attempts = 0;
+    loop {
+        let n = NEXT.fetch_add(1, Ordering::SeqCst);
+        let path = base.join(format!("lrat-{stem}-{}-{n}.md", std::process::id()));
+        // A name already taken, perhaps by another user, is skipped rather
+        // than written through.
+        let mut file = match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&path)
+        {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists && attempts < 100 => {
+                attempts += 1;
+                continue;
+            }
+            Err(error) => {
+                return Err(error).with_context(|| format!("could not create {}", path.display()));
+            }
+        };
+        file.write_all(text.as_bytes())
+            .and_then(|()| file.sync_all())
+            .with_context(|| format!("could not write {}", path.display()))?;
+        return Ok(path);
+    }
 }
 
 /// The editor to run: the first of `visual` and `editor` that is set and
@@ -181,18 +221,163 @@ impl Drop for HandedOver {
         if self.held
             && let Err(error) = take_over()
         {
-            tracing::warn!(%error, "could not take the terminal back after the editor");
+            tracing::warn!(%error, "could not take the terminal back");
         }
     }
 }
 
+/// SIGTSTP back at its default action, stopping lrat, until dropped.
+///
+/// [`job_control`] catches SIGTSTP for lrat's whole life. While the editor
+/// runs, lrat must not: an editor that suspends with `kill(0, SIGTSTP)`, as
+/// classic Vim does, stops itself, and a lrat that only noted the signal
+/// would keep the shell waiting with no way back, then suspend unprompted
+/// once the editor exits. With the default action lrat stops with the
+/// editor, and the terminal is already handed over.
+struct DefaultStop {
+    caught: Option<libc::sigaction>,
+}
+
+impl DefaultStop {
+    fn begin() -> Self {
+        // SAFETY: an all-zero sigaction is a valid value: no flags, an empty
+        // mask, and a handler of SIG_DFL, which is 0.
+        let mut default: libc::sigaction = unsafe { std::mem::zeroed() };
+        default.sa_sigaction = libc::SIG_DFL;
+        // SAFETY: as above.
+        let mut caught: libc::sigaction = unsafe { std::mem::zeroed() };
+        // SAFETY: both pointers are to live sigaction values, and SIG_DFL
+        // runs no code in this process.
+        if unsafe { libc::sigaction(libc::SIGTSTP, &default, &mut caught) } != 0 {
+            let error = io::Error::last_os_error();
+            tracing::warn!(%error, "could not let SIGTSTP stop lrat with the editor");
+            return Self { caught: None };
+        }
+        Self {
+            caught: Some(caught),
+        }
+    }
+}
+
+impl Drop for DefaultStop {
+    fn drop(&mut self) {
+        let Some(caught) = &self.caught else {
+            return;
+        };
+        // SAFETY: `caught` is the action sigaction returned, tokio's handler,
+        // put back as it was.
+        if unsafe { libc::sigaction(libc::SIGTSTP, caught, std::ptr::null_mut()) } != 0 {
+            let error = io::Error::last_os_error();
+            tracing::warn!(%error, "could not catch SIGTSTP again after the editor");
+        }
+    }
+}
+
+/// Suspends lrat as a shell's job: hands the terminal back as for the
+/// editor, stops lrat's process group with SIGSTOP, and once something
+/// continues it, such as `fg`, takes the terminal back. The caller must draw
+/// the whole screen again. Raw mode turns Ctrl-Z into a key press, so this is
+/// the only way lrat stops with the terminal restored.
+pub fn suspend() -> io::Result<()> {
+    let _handed_over = HandedOver::begin();
+    // The whole group, so a wrapper such as `cargo run` stops too and the
+    // shell gets the terminal back.
+    kill_current_process_group(Signal::STOP)?;
+    Ok(())
+}
+
+/// Takes the terminal again if the guard holds it, for after a stop lrat did
+/// not ask for, such as `kill -STOP`, in case the shell reset the terminal
+/// meanwhile. The caller must draw the whole screen again.
+pub fn resume() -> io::Result<()> {
+    if ACTIVE.load(Ordering::SeqCst) {
+        take_over()?;
+    }
+    Ok(())
+}
+
+/// What job control signals ask of lrat. Neither ends the runtime.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JobControl {
+    /// SIGTSTP from outside, as `kill -TSTP` sends: [`suspend`], as the key
+    /// does.
+    Suspend,
+    /// SIGCONT: lrat runs again, so it [`resume`]s and draws everything.
+    Continue,
+}
+
+/// SIGTSTP and SIGCONT as [`JobControl`]. Listening replaces the default
+/// stop on SIGTSTP, which would leave the terminal in raw mode.
+pub fn job_control() -> io::Result<impl Stream<Item = JobControl>> {
+    let each = |kind, what| {
+        Ok::<_, io::Error>(stream::unfold(
+            signal(kind)?,
+            move |mut signal| async move { signal.recv().await.map(|()| (what, signal)) },
+        ))
+    };
+    Ok(stream::select(
+        Box::pin(each(
+            SignalKind::from_raw(Signal::TSTP.as_raw()),
+            JobControl::Suspend,
+        )?),
+        Box::pin(each(
+            SignalKind::from_raw(Signal::CONT.as_raw()),
+            JobControl::Continue,
+        )?),
+    ))
+}
+
+/// Restores the terminal before the panic message prints, then saves a crash
+/// report and names it last, so it is the line the viewer sees.
 fn restore_before_panic_message() {
     let print_panic = panic::take_hook();
     panic::set_hook(Box::new(move |info| {
         restore();
         tracing::error!("{info}");
         print_panic(info);
+        let report = crash_report(&info.to_string(), &Backtrace::force_capture().to_string());
+        let saved = crate::logging::state_dir()
+            .and_then(|dir| Ok(save_crash_report(&dir, &report, Timestamp::now())?));
+        match saved {
+            Ok(path) => eprintln!("lrat crashed; the crash report is in {}", path.display()),
+            Err(error) => eprintln!("lrat crashed and could not save a crash report: {error:#}"),
+        }
     }));
+}
+
+/// What a crash report says: the version, the panic's message and place,
+/// and the backtrace. Nothing else goes in: not the config, not the
+/// environment, not the key.
+fn crash_report(panic: &str, backtrace: &str) -> String {
+    format!(
+        "lrat {} crashed.\n\n{panic}\n\nBacktrace:\n{backtrace}\n",
+        env!("CARGO_PKG_VERSION")
+    )
+}
+
+/// Writes `report` to a new file, readable only by the viewer, in `dir`,
+/// named for the time `at`, and returns its path.
+fn save_crash_report(dir: &Path, report: &str, at: Timestamp) -> io::Result<PathBuf> {
+    fs::create_dir_all(dir)?;
+    let stamp = at.strftime("%Y%m%dT%H%M%SZ");
+    let pid = std::process::id();
+    let mut n = 0;
+    loop {
+        let path = dir.join(format!("crash-{stamp}-{pid}-{n}.txt"));
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&path)
+        {
+            Ok(mut file) => {
+                file.write_all(report.as_bytes())?;
+                return Ok(path);
+            }
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists && n < 100 => n += 1,
+            Err(error) => return Err(error),
+        }
+    }
 }
 
 /// Resolves on SIGINT, SIGTERM or SIGHUP, so the runtime can return and the
@@ -214,6 +399,8 @@ pub fn shutdown_signal() -> io::Result<impl Future<Output = ()>> {
 
 #[cfg(test)]
 mod tests {
+    use std::os::unix::fs::PermissionsExt;
+
     use super::*;
 
     #[test]
@@ -239,6 +426,25 @@ mod tests {
     }
 
     #[test]
+    fn kept_text_lands_in_a_file_only_the_viewer_can_read() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = keep("Title\n\nBody\n", "DES-34").unwrap();
+        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        let text = fs::read_to_string(&path).unwrap();
+        fs::remove_file(&path).unwrap();
+
+        assert_eq!(mode, 0o600);
+        assert_eq!(text, "Title\n\nBody\n");
+        assert!(
+            path.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("lrat-DES-34-")
+        );
+    }
+
+    #[test]
     fn the_file_is_only_readable_by_the_viewer() {
         let editor = r#"f() { ls -ld "$1" "$(dirname "$1")" | cut -c1-10 > "$1"; }; f"#;
 
@@ -257,6 +463,49 @@ mod tests {
             format!("{error:#}").contains("`false` exited with"),
             "{error:#}"
         );
+    }
+
+    #[test]
+    fn a_crash_report_is_saved_where_only_the_viewer_can_read_it() {
+        let dir = PrivateDir::create().unwrap();
+        let state = dir.0.join("state");
+        let at: Timestamp = "2026-11-16T09:30:05Z".parse().unwrap();
+
+        let path = save_crash_report(&state, "panicked at src/x.rs:1:1:\nboom", at).unwrap();
+
+        let name = path.file_name().unwrap().to_str().unwrap();
+        assert!(
+            name.starts_with("crash-20261116T093005Z-") && name.ends_with(".txt"),
+            "{name}"
+        );
+        assert_eq!(path.parent(), Some(state.as_path()));
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            "panicked at src/x.rs:1:1:\nboom"
+        );
+        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+    }
+
+    #[test]
+    fn two_crashes_in_one_second_keep_both_reports() {
+        let dir = PrivateDir::create().unwrap();
+        let at: Timestamp = "2026-11-16T09:30:05Z".parse().unwrap();
+
+        let first = save_crash_report(&dir.0, "one", at).unwrap();
+        let second = save_crash_report(&dir.0, "two", at).unwrap();
+
+        assert_ne!(first, second);
+        assert_eq!(fs::read_to_string(first).unwrap(), "one");
+    }
+
+    #[test]
+    fn the_report_names_the_version_the_panic_and_the_backtrace() {
+        let report = crash_report("panicked at src/x.rs:1:1:\nboom", "0: main");
+
+        assert!(report.starts_with(&format!("lrat {} crashed.\n", env!("CARGO_PKG_VERSION"))));
+        assert!(report.contains("panicked at src/x.rs:1:1:\nboom\n"));
+        assert!(report.ends_with("Backtrace:\n0: main\n"));
     }
 
     #[test]

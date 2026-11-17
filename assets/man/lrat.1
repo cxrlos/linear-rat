@@ -1,0 +1,39 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH lrat 1  lrat 
+.SH NAME
+lrat \- A fast, keyboard\-first terminal client for Linear
+.SH SYNOPSIS
+\fBlrat\fR [\fB\-\-demo\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIsubcommands\fR]
+.SH DESCRIPTION
+A fast, keyboard\-first terminal client for Linear
+.SH OPTIONS
+.TP
+\fB\-\-demo\fR
+Run without a Linear account or API key
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Print version
+.SH SUBCOMMANDS
+.TP
+lrat\-auth(1)
+Manage the Linear API key
+.TP
+lrat\-completions(1)
+Print the completion script for a shell
+.TP
+lrat\-open(1)
+Open an issue\*(Aqs Linear page in the browser
+.TP
+lrat\-doctor(1)
+Check the API key, Linear, the terminal and the config
+.SH EXTRA
+Getting started:
+  lrat auth login    store a Linear API key in the keyring (see `lrat auth \-\-help`)
+  lrat               open My Issues
+  lrat \-\-demo        try lrat without an account
+
+LINEAR_API_KEY, when set, is used instead of the keyring.

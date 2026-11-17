@@ -59,7 +59,7 @@ fn explain(error: &LoadError, key_source: Option<&KeySource>) -> (&'static str, 
             };
             ("API key rejected", sentence(&message))
         }
-        LoadError::KeyringUnavailable(message) => ("OS keyring unavailable", sentence(message)),
+        LoadError::KeyringUnavailable(message) => ("Keyring unavailable", sentence(message)),
         LoadError::KeyUnusable(message) => ("Cannot use the API key", sentence(message)),
         LoadError::Unreachable(message) => (
             "Cannot reach Linear",

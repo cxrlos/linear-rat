@@ -18,6 +18,7 @@ The Team Issues list also takes the Issue list keys. While an overlay has a text
 | `show-palette` | `:`, `<C-k>` | Find an action or loaded issue |
 | `show-search` | `/` | Search all issues in Linear |
 | `quit` | `q` | Quit lrat |
+| `suspend` | `<C-z>` | Suspend lrat to the shell |
 
 ## Issue list (`[keys.list]`)
 
@@ -43,6 +44,7 @@ The Team Issues list also takes the Issue list keys. While an overlay has a text
 | `edit-priority` | `p` | Change the priority |
 | `edit-labels` | `L` | Add or remove labels |
 | `edit-estimate` | `e` | Change the estimate |
+| `edit-text` | `E` | Edit the title and description |
 | `comment` | `c` | Comment in $EDITOR |
 | `create-issue` | `n` | Create an issue |
 | `close` | `<Esc>` | Close the top overlay or step back |
@@ -82,6 +84,7 @@ The Team Issues list also takes the Issue list keys. While an overlay has a text
 | `edit-priority` | `p` | Change the priority |
 | `edit-labels` | `L` | Add or remove labels |
 | `edit-estimate` | `e` | Change the estimate |
+| `edit-text` | `E` | Edit the title and description |
 | `comment` | `c` | Comment in $EDITOR |
 | `create-issue` | `n` | Create an issue |
 | `close` | `<Esc>` | Close the top overlay or step back |
@@ -101,8 +104,8 @@ The Team Issues list also takes the Issue list keys. While an overlay has a text
 | `pick-9` | `9` | Pick entry 9 of the list |
 | `scroll-down` | `j`, `<Down>`, `<C-n>` | Scroll down |
 | `scroll-up` | `k`, `<Up>`, `<C-p>` | Scroll up |
-| `toggle-entry` | `<Tab>` | Mark or unmark the highlighted entry |
 | `accept` | `<Enter>` | Choose the highlighted entry |
+| `toggle-entry` | `<Tab>` | Mark or unmark the highlighted entry |
 | `close` | `<Esc>` | Close the top overlay or step back |
 
 ## Analytics (`[keys.analytics]`)

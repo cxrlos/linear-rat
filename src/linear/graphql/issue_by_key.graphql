@@ -1,0 +1,16 @@
+# budget: 2
+# The issue with key `$team`-`$number`, for `lrat open`. The team key matches
+# whatever its case, and archived issues count, so an old key still opens.
+query IssueByKey($team: String!, $number: Float!) {
+  issues(
+    first: 1
+    includeArchived: true
+    filter: { team: { key: { eqIgnoreCase: $team } }, number: { eq: $number } }
+  ) {
+    nodes {
+      identifier
+      title
+      url
+    }
+  }
+}

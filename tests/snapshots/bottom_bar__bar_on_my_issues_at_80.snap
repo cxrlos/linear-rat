@@ -1,0 +1,7 @@
+---
+source: tests/bottom_bar.rs
+expression: "bar(&my_issues((80, 24)))"
+---
+ Move │ j down  k up  gg top  G bottom  C-d/C-u page  h/l pane  / search
+ Do   │ Enter open  y yank  o links  Esc close  ? keys  : palette  q quit
+ Edit │ s state  a assignee  p priority  L labels  e estimate  E text  c comment

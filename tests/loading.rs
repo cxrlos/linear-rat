@@ -7,7 +7,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
 use linear_rat::app::{App, Effect, Event, LoadError, State};
-use linear_rat::auth::KeySource;
+use linear_rat::auth::{KeySource, KeyringStore};
 use linear_rat::linear::{FakeClient, LinearClient};
 use ratatui::backend::TestBackend;
 
@@ -80,6 +80,7 @@ fn a_rejected_key_from_the_environment_says_to_replace_or_unset_it() {
 #[test]
 fn a_rejected_key_from_the_keyring_says_to_log_in_again() {
     let mut app = loading(Some(KeySource::Keyring {
+        store: KeyringStore::Os,
         account: "squeakworks".to_owned(),
     }));
 
@@ -107,9 +108,27 @@ fn an_unavailable_keyring_says_to_use_the_environment_instead() {
 
     let screen = screen(&failed(error));
 
-    assert!(screen.contains("OS keyring unavailable"), "{screen}");
+    assert!(screen.contains("Keyring unavailable"), "{screen}");
     assert!(screen.contains("The OS keyring is unavailable"), "{screen}");
     assert!(screen.contains("set LINEAR_API_KEY"), "{screen}");
+}
+
+#[test]
+fn an_unavailable_kernel_keyring_is_not_called_the_os_keyring() {
+    let error = LoadError::KeyringUnavailable(
+        "the Linux kernel keyring is unavailable (operation not permitted); \
+         set LINEAR_API_KEY to use lrat without it"
+            .to_owned(),
+    );
+
+    let screen = screen(&failed(error));
+
+    assert!(screen.contains("Keyring unavailable"), "{screen}");
+    assert!(
+        screen.contains("The Linux kernel keyring is unavailable"),
+        "{screen}"
+    );
+    assert!(!screen.contains("OS keyring"), "{screen}");
 }
 
 #[test]
@@ -148,7 +167,8 @@ fn q_still_quits_from_an_error_screen() {
 fn with_no_list_the_bottom_bar_offers_only_what_can_run() {
     for app in [loading(None), failed(LoadError::NoKey)] {
         let screen = screen(&app);
-        let bar = screen.lines().last().unwrap();
+        let lines: Vec<&str> = screen.lines().collect();
+        let bar = lines[lines.len() - 3..].join("\n");
 
         assert!(bar.contains("q quit"), "{bar}");
         assert!(!bar.contains("down"), "{bar}");

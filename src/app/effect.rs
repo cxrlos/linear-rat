@@ -1,3 +1,5 @@
+use jiff::Timestamp;
+
 use super::{NewComment, NewIssue, TeamPoll, Write, Writing};
 use crate::linear::{AnalyticsWindow, TeamQuery, Urgency};
 
@@ -6,6 +8,9 @@ use crate::linear::{AnalyticsWindow, TeamQuery, Urgency};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Effect {
     Quit,
+    /// Restore the terminal, stop lrat until it is continued, then take the
+    /// terminal back and draw the whole screen.
+    Suspend,
     /// Load the viewer's open assigned issues; the result comes back as
     /// [`Event::MyIssuesLoaded`](super::Event::MyIssuesLoaded).
     LoadMyIssues,
@@ -100,4 +105,14 @@ pub enum Effect {
     /// Send one `issueCreate`; the result comes back as
     /// [`Event::IssueCreated`](super::Event::IssueCreated).
     CreateIssue(NewIssue),
+    /// Read the issue's `updatedAt` again and, if it is still `seen`, send
+    /// one `issueUpdate` making [`Write::edit`]; the result comes back as
+    /// [`Event::IssueUpdated`](super::Event::IssueUpdated). If it moved,
+    /// nothing is sent: `text`, the buffer as the viewer saved it, goes to a
+    /// file only the viewer can read, and the error names that file.
+    UpdateIssueText {
+        write: Write,
+        seen: Timestamp,
+        text: String,
+    },
 }

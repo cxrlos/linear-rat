@@ -15,6 +15,9 @@ tap = "cxrlos/homebrew-tap"
 publish-jobs = ["homebrew"]
 # Target platforms to build apps for (Rust target-triple syntax)
 targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu"]
+# Extra files for each archive: the completion scripts and man pages that
+# tests/generated_assets.rs keeps in step with the CLI
+include = ["assets/completions", "assets/man"]
 # Path that installers should place binaries in
 install-path = "CARGO_HOME"
 # Whether to install an updater program

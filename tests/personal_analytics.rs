@@ -336,7 +336,7 @@ fn the_cheatsheet_lists_the_analytics_keys() {
     app.handle(key('?')).unwrap();
 
     let shown = screen(&app);
-    for action in ["Show a shorter range", "Show a longer range", "Scroll down"] {
+    for action in ["[/]  shorter / longer range", "C-p  down / up"] {
         assert!(shown.contains(action), "{action}:\n{shown}");
     }
 }

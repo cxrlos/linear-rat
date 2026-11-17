@@ -11,9 +11,9 @@ use linear_rat::app::{App, Event, State};
 use linear_rat::auth::KeySource;
 use linear_rat::linear::model::{Issue, Label, Member, Team, Viewer, WorkflowState, Workspace};
 use linear_rat::linear::{
-    AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, FakeClient, IssueDetail,
-    IssueUpdate, LinearClient, LiveEvent, SearchResults, TeamAnalyticsIssues, TeamChanges,
-    TeamIssuesPage, TeamOptions, TeamQuery, Urgency, demo,
+    AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, Diagnostics, FakeClient,
+    IssueDetail, IssueLink, IssueUpdate, LinearClient, LiveEvent, SearchResults,
+    TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery, Urgency, demo,
 };
 use linear_rat::runtime;
 use linear_rat::snapshot::SnapshotCache;
@@ -174,6 +174,18 @@ impl LinearClient for RejectingClient {
     ) -> Result<TeamAnalyticsIssues, ClientError> {
         Err(ClientError::InvalidKey)
     }
+
+    async fn issue_by_key(&self, _: &str, _: u32) -> Result<Option<IssueLink>, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn diagnostics(&self) -> Result<Diagnostics, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn issue_updated_at(&self, _: &str) -> Result<Timestamp, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
 }
 
 #[tokio::test]
@@ -319,6 +331,18 @@ async fn q_quits_while_the_load_is_still_in_flight() {
         ) -> Result<TeamAnalyticsIssues, ClientError> {
             future::pending().await
         }
+
+        async fn issue_by_key(&self, _: &str, _: u32) -> Result<Option<IssueLink>, ClientError> {
+            future::pending().await
+        }
+
+        async fn diagnostics(&self) -> Result<Diagnostics, ClientError> {
+            future::pending().await
+        }
+
+        async fn issue_updated_at(&self, _: &str) -> Result<Timestamp, ClientError> {
+            future::pending().await
+        }
     }
     let mut app = App::new(TestBackend::new(80, 24), State::loading(None)).unwrap();
 
@@ -452,6 +476,22 @@ impl LinearClient for CountingClient {
     ) -> Result<TeamAnalyticsIssues, ClientError> {
         FakeClient.team_analytics(team_id, window).await
     }
+
+    async fn issue_by_key(
+        &self,
+        team_key: &str,
+        number: u32,
+    ) -> Result<Option<IssueLink>, ClientError> {
+        FakeClient.issue_by_key(team_key, number).await
+    }
+
+    async fn diagnostics(&self) -> Result<Diagnostics, ClientError> {
+        FakeClient.diagnostics().await
+    }
+
+    async fn issue_updated_at(&self, issue_id: &str) -> Result<Timestamp, ClientError> {
+        FakeClient.issue_updated_at(issue_id).await
+    }
 }
 
 #[tokio::test(start_paused = true)]
@@ -479,7 +519,7 @@ async fn polls_every_team_after_the_load_and_then_every_active_interval() {
 async fn run_live(client: &CountingClient, live: bool) -> String {
     let mut state = State::loading(None);
     state.sync.live = live;
-    let mut app = App::new(TestBackend::new(80, 24), state).unwrap();
+    let mut app = App::new(TestBackend::new(80, 30), state).unwrap();
     let running = runtime::run(
         &mut app,
         Some(client),
