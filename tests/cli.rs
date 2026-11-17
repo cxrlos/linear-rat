@@ -181,3 +181,70 @@ fn auth_help_shows_each_way_to_log_in() {
         assert!(help.contains(way), "missing {way:?} in:\n{help}");
     }
 }
+
+/// The help of `path`, from `lrat` down, as a terminal would get it,
+/// escape codes and all.
+fn styled_help(path: &[&str]) -> String {
+    use clap::CommandFactory;
+    let mut command = Cli::command();
+    command.build();
+    let mut command = &mut command;
+    for name in path {
+        command = command.find_subcommand_mut(name).unwrap();
+    }
+    command.render_help().ansi().to_string()
+}
+
+const BOLD_UNDERLINED: &str = "\x1b[1m\x1b[4m";
+const ACCENT: &str = "\x1b[1m\x1b[36m";
+const MUTED: &str = "\x1b[2m";
+
+#[test]
+fn help_headings_are_bold_and_underlined() {
+    let help = styled_help(&[]);
+    for heading in ["Usage:", "Commands:", "Options:", "Getting started:"] {
+        assert!(
+            help.contains(&format!("{BOLD_UNDERLINED}{heading}")),
+            "{heading} in {help:?}"
+        );
+    }
+}
+
+#[test]
+fn help_accents_commands_and_flags_and_mutes_placeholders() {
+    let help = styled_help(&[]);
+    for literal in ["--demo", "auth", "lrat auth login", "lrat --demo"] {
+        assert!(
+            help.contains(&format!("{ACCENT}{literal}")),
+            "{literal} in {help:?}"
+        );
+    }
+    let login = styled_help(&["auth", "login"]);
+    assert!(
+        login.contains(&format!("{MUTED}<SERVICE/ACCOUNT>")),
+        "{login:?}"
+    );
+}
+
+#[test]
+fn auth_help_accents_each_way_to_log_in() {
+    let help = styled_help(&["auth"]);
+    for way in ["lrat auth login --stdin", "lrat auth status"] {
+        assert!(
+            help.contains(&format!("{ACCENT}{way}")),
+            "{way} in {help:?}"
+        );
+    }
+}
+
+#[test]
+fn piped_help_has_no_escape_codes() {
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_lrat"))
+        .arg("--help")
+        .env_remove("CLICOLOR_FORCE")
+        .output()
+        .unwrap();
+    let help = String::from_utf8(output.stdout).unwrap();
+    assert!(help.contains("Getting started"), "{help}");
+    assert!(!help.contains('\x1b'), "{help:?}");
+}

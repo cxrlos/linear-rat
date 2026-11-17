@@ -314,6 +314,28 @@ fn panics_inside_the_guard_when_asked() {
     panic!("{PANIC_MESSAGE}");
 }
 
+/// `lrat --help` printed to a terminal, with `env` set.
+fn help_in_a_terminal(env: &[(&str, &str)]) -> String {
+    let mut pty = Pty::spawn_with(Path::new(env!("CARGO_BIN_EXE_lrat")), &["--help"], env);
+    pty.wait_until("the help is printed", |pty| {
+        pty.exited() && pty.output().contains("LINEAR_API_KEY, when set")
+    });
+    pty.output()
+}
+
+#[test]
+fn help_in_a_terminal_is_styled() {
+    let help = help_in_a_terminal(&[]);
+    assert!(help.contains("\x1b[1m\x1b[4mGetting started:"), "{help:?}");
+}
+
+#[test]
+fn help_with_no_color_has_no_escape_codes_in_a_terminal() {
+    let help = help_in_a_terminal(&[("NO_COLOR", "1")]);
+    assert!(help.contains("Getting started:"), "{help:?}");
+    assert!(!help.contains('\x1b'), "{help:?}");
+}
+
 #[test]
 fn a_panic_restores_the_terminal_then_names_its_crash_report() {
     let this_test_binary = std::env::current_exe().unwrap();
