@@ -9,7 +9,7 @@ use std::collections::VecDeque;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
-use linear_rat::app::{App, Edit, Effect, Event, Screen, State};
+use linear_rat::app::{App, Edit, Effect, Event, Screen, State, cycle_title};
 use linear_rat::linear::model::Priority;
 use linear_rat::linear::{FakeClient, LinearClient, demo};
 use ratatui::backend::TestBackend;
@@ -218,4 +218,65 @@ async fn the_cheatsheet_on_the_cycles_screen_lists_its_keys() {
     press(&mut app, "?");
 
     assert_snapshot!(app.backend());
+}
+
+/// The answers to the issue-list loads in `effects`, as events not yet
+/// handled.
+async fn answers(effects: Vec<Effect>) -> Vec<Event> {
+    let client = FakeClient;
+    let mut events = Vec::new();
+    for effect in effects {
+        events.push(match effect {
+            Effect::LoadCycleIssues(cycle_id) => {
+                let result = Ok(client.cycle_issues(&cycle_id).await.unwrap());
+                Event::CycleIssuesLoaded { cycle_id, result }
+            }
+            Effect::LoadProjectIssues(project_id) => {
+                let result = Ok(client.project_issues(&project_id).await.unwrap());
+                Event::ProjectIssuesLoaded { project_id, result }
+            }
+            other => panic!("not an issue list: {other:?}"),
+        });
+    }
+    events
+}
+
+#[tokio::test]
+async fn a_cycles_issues_arriving_after_enter_on_another_cycle_do_not_open() {
+    let mut app = sized(100, 24);
+    run(&mut app, "4").await;
+    let first = answers(press(&mut app, "\n")).await;
+    let second = answers(press(&mut app, "j\n")).await;
+    let wanted = cycle_title(app.state().cycles.focused().unwrap());
+
+    for event in first {
+        app.handle(event).unwrap();
+    }
+    assert_eq!(app.state().screen, Screen::Cycles);
+
+    for event in second {
+        app.handle(event).unwrap();
+    }
+    assert_eq!(app.state().screen, Screen::Results);
+    assert_eq!(app.state().results.title(), wanted);
+}
+
+#[tokio::test]
+async fn a_projects_issues_arriving_after_enter_on_another_project_do_not_open() {
+    let mut app = sized(100, 24);
+    run(&mut app, "5").await;
+    let first = answers(press(&mut app, "\n")).await;
+    let second = answers(press(&mut app, "j\n")).await;
+    let wanted = app.state().projects.focused().unwrap().project.name.clone();
+
+    for event in first {
+        app.handle(event).unwrap();
+    }
+    assert_eq!(app.state().screen, Screen::Projects);
+
+    for event in second {
+        app.handle(event).unwrap();
+    }
+    assert_eq!(app.state().screen, Screen::Results);
+    assert_eq!(app.state().results.title(), wanted);
 }
