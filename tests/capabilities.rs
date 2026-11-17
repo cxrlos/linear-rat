@@ -274,6 +274,28 @@ fn the_palette_mutes_denied_actions_with_the_reason() {
 }
 
 #[test]
+fn a_narrow_palette_cuts_the_reason_and_keeps_the_key() {
+    let mut app = refused();
+    app.backend_mut().resize(40, 24);
+    app.handle(Event::Resize {
+        columns: 40,
+        rows: 24,
+    })
+    .unwrap();
+    press(&mut app, ":");
+    for c in "change the assignee".chars() {
+        app.handle(key(KeyCode::Char(c))).unwrap();
+    }
+
+    let lines = screen(&app);
+    let row = lines
+        .iter()
+        .find(|line| line.contains("Change the assignee"))
+        .unwrap_or_else(|| panic!("{}", lines.join("\n")));
+    assert!(row.contains("… a │"), "{row}");
+}
+
+#[test]
 fn the_cheatsheet_mutes_denied_actions_and_lists_the_reason() {
     let mut app = App::new(TestBackend::new(120, 40), State::demo()).unwrap();
     app.handle(Event::Start).unwrap();
