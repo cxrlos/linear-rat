@@ -25,7 +25,7 @@ A grouping is `"state"` (workflow state type: started, unstarted, backlog, triag
 
 A sort is `"updated"`, `"created"`, `"priority"`, `"due-date"` or `"estimate"`. On its own each sorts the way you usually want it: newest, most urgent, soonest due and largest estimate first. Add `-asc` or `-desc` to choose: ascending is oldest, urgent, soonest and smallest first. Issues missing the field go last either way, and issues that tie keep the list's own order.
 
-`vg` and `vs` change the grouping and sort of the list on screen for the rest of the session, and the list's title says which are in force. Team Issues sorts what it has loaded: sorted by `"updated"` or `"created"` newest first, Linear sends its pages in that order, so the sort covers every issue. Any other sort covers only the pages loaded so far, and the title says so, as `sort: priority, urgent first, loaded 50 of 70`.
+`vg` and `vs` change the grouping and sort of the list on screen for the rest of the session, and the list's title says which are in force. Team Issues sorts what it has loaded: sorted by `"updated"` or `"created"` newest first, Linear sends its pages in that order, so the sort covers every issue. A change between these sorts loads the pages again in the new order: the focus stays on the issue it was on if that issue is on the first page, and otherwise starts at the top and goes back to it when `m` loads its page, unless you have moved since. Any other sort covers only the pages loaded so far, and the title says so, as `sort: priority, urgent first, loaded 50 of 70`.
 
 In both icon sets every workflow state type and every priority has its own glyph, so none is told apart by color alone:
 

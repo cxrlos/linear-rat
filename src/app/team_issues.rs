@@ -174,9 +174,14 @@ impl TeamIssues {
     }
 
     /// Carries out a navigation action on a list that shows `rows` rows at
-    /// once. Returns whether anything changed.
+    /// once. Returns whether anything changed. Once the viewer moves, a
+    /// reload no longer brings the focus back to the issue it was on.
     pub fn perform(&mut self, action: Action, rows: usize) -> bool {
-        self.list.perform(action, rows)
+        let changed = self.list.perform(action, rows);
+        if changed {
+            self.refocus = None;
+        }
+        changed
     }
 
     /// Scrolls the least that brings the focused issue on screen in a list

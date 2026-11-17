@@ -708,6 +708,28 @@ async fn a_created_sort_reloads_in_that_order_and_keeps_the_focus() {
 }
 
 #[tokio::test]
+async fn moving_after_a_reloading_sort_keeps_the_focus_when_more_pages_load() {
+    let mut app = team_issues(160, 30).await;
+    // Far enough down that the issue is not on the first page newest first.
+    press(&mut app, &"j".repeat(42));
+    let focused = app.state().team_issues.focused_id().unwrap().to_owned();
+    let effects = press(&mut app, "vs3");
+    settle(&mut app, effects).await;
+    assert!(!app.state().team_issues.ids().contains(&focused));
+
+    press(&mut app, "jj");
+    let moved_to = app.state().team_issues.focused_id().unwrap().to_owned();
+    let effects = press(&mut app, "m");
+    settle(&mut app, effects).await;
+
+    assert!(app.state().team_issues.ids().contains(&focused));
+    assert_eq!(
+        app.state().team_issues.focused_id(),
+        Some(moved_to.as_str())
+    );
+}
+
+#[tokio::test]
 async fn team_issues_grouped_by_assignee_and_sorted_by_priority() {
     let mut app = team_issues(160, 30).await;
 
