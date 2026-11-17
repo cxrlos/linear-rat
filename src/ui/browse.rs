@@ -63,18 +63,28 @@ pub fn render_cycles(state: &State, frame: &mut Frame, area: Rect) {
     }
 
     let now = state.store.as_of().unwrap_or_default();
+    let counts: Vec<String> = cycles
+        .cycles()
+        .iter()
+        .map(|cycle| {
+            cycle_counts(cycle)
+                .map(|(done, total)| format!("{done} of {total} done"))
+                .unwrap_or_default()
+        })
+        .collect();
+    let count_width = counts.iter().map(|count| count.len()).max().unwrap_or(0);
     let cells = Layout::horizontal([
         Constraint::Length(1),
         Constraint::Fill(1),
         Constraint::Length(15),
         Constraint::Length(6),
-        Constraint::Length(12),
+        Constraint::Length(u16::try_from(count_width).unwrap_or(u16::MAX)),
     ])
     .spacing(1);
     let offset = offset(cycles.focused_index(), inner);
-    for (index, (line_area, cycle)) in inner
+    for (index, (line_area, (cycle, done))) in inner
         .rows()
-        .zip(cycles.cycles().iter().skip(offset))
+        .zip(cycles.cycles().iter().zip(counts).skip(offset))
         .enumerate()
     {
         let is_focused = index + offset == cycles.focused_index();
@@ -89,9 +99,6 @@ pub fn render_cycles(state: &State, frame: &mut Frame, area: Rect) {
             dates,
         );
         frame.render_widget(cycle_tag(state, cycle, now), tag);
-        let done = cycle_counts(cycle)
-            .map(|(done, total)| format!("{done} of {total} done"))
-            .unwrap_or_default();
         frame.render_widget(Line::from(done).alignment(Alignment::Right), count);
         if is_focused {
             frame

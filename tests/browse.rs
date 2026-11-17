@@ -280,3 +280,21 @@ async fn a_projects_issues_arriving_after_enter_on_another_project_do_not_open()
     assert_eq!(app.state().screen, Screen::Results);
     assert_eq!(app.state().results.title(), wanted);
 }
+
+#[tokio::test]
+async fn a_cycle_with_many_issues_shows_its_whole_count() {
+    let mut app = sized(100, 24);
+    run(&mut app, "4").await;
+    let team_id = app.state().cycles.team_id().unwrap().to_owned();
+    let mut cycle = app.state().cycles.cycles()[0].clone();
+    cycle.issue_count_history = vec![140];
+    cycle.completed_issue_count_history = vec![123];
+
+    app.handle(Event::CyclesLoaded {
+        team_id,
+        result: Ok(vec![cycle]),
+    })
+    .unwrap();
+
+    assert!(shows(&app, " 123 of 140 done"), "{:#?}", screen(&app));
+}
