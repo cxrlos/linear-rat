@@ -353,3 +353,71 @@ fn nothing_opens_without_a_focused_issue() {
     assert!(effects.is_empty(), "{effects:?}");
     assert!(app.state().modals.top().is_none());
 }
+
+fn ctrl(c: char) -> Event {
+    Event::Key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::CONTROL))
+}
+
+fn down() -> Event {
+    Event::Key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE))
+}
+
+#[test]
+fn ctrl_y_in_the_issue_picker_copies_the_selected_url_and_closes_it() {
+    let mut app = focused_on("DES-34");
+    open(&mut app, "o");
+    app.handle(down()).unwrap();
+
+    let effects = app.handle(ctrl('y')).unwrap();
+
+    assert_eq!(
+        effects,
+        [Effect::Copy(
+            "https://github.com/squeakworks/nibble/pull/412".to_owned()
+        )]
+    );
+    assert!(app.state().modals.top().is_none());
+    assert_eq!(notice(&app), "Copied the URL of nibble#412");
+}
+
+#[test]
+fn ctrl_y_in_the_other_links_picker_copies_the_selected_url() {
+    let mut app = focused_on("DES-34");
+    open(&mut app, "O");
+
+    let effects = app.handle(ctrl('y')).unwrap();
+
+    assert_eq!(
+        effects,
+        [Effect::Copy(
+            "https://www.figma.com/file/nibble-autumn-qa".to_owned()
+        )]
+    );
+    assert!(app.state().modals.top().is_none());
+    assert_eq!(
+        notice(&app),
+        "Copied https://www.figma.com/file/nibble-autumn-qa"
+    );
+}
+
+#[test]
+fn ctrl_y_copies_nothing_when_the_filter_leaves_no_entry() {
+    let mut app = focused_on("DES-34");
+    open(&mut app, "o");
+    press(&mut app, "zzzz");
+
+    let effects = app.handle(ctrl('y')).unwrap();
+
+    assert!(effects.is_empty(), "{effects:?}");
+    assert!(matches!(app.state().modals.top(), Some(Modal::Links(_))));
+}
+
+#[test]
+fn the_links_picker_footer_names_the_copy_key() {
+    let mut app = focused_on("DES-34");
+
+    open(&mut app, "o");
+
+    let shown = format!("{:?}", app.backend());
+    assert!(shown.contains("C-y copy"), "{shown}");
+}

@@ -118,7 +118,24 @@ fn edit_glyph(state: &State) -> impl Fn(&Edit) -> Option<Span<'static>> + '_ {
 
 /// Draws a picker of an issue's links centered inside `area`'s border.
 pub fn render_links(state: &State, links: &Links, frame: &mut Frame, area: Rect) {
-    render(state, &links.title(), &links.list, |_| None, frame, area);
+    let bottom = keys_line(
+        state,
+        &[
+            (&[Action::ScrollDown, Action::ScrollUp], "select"),
+            (&[Action::Accept], "open"),
+            (&[Action::CopyLink], "copy"),
+            (&[Action::Close], "close"),
+        ],
+    );
+    render_with(
+        state,
+        &links.title(),
+        &links.list,
+        |_| None,
+        bottom,
+        frame,
+        area,
+    );
 }
 
 /// Draws a team switcher or filter centered inside `area`'s border.
@@ -133,6 +150,20 @@ fn render<T>(
     title: &str,
     picker: &Picker<T>,
     glyph: impl Fn(&T) -> Option<Span<'static>>,
+    frame: &mut Frame,
+    area: Rect,
+) {
+    let bottom = bottom_keys(state, picker.is_multi());
+    render_with(state, title, picker, glyph, bottom, frame, area);
+}
+
+/// Draws `picker` as [`render`] does, with `bottom` as the keys under it.
+fn render_with<T>(
+    state: &State,
+    title: &str,
+    picker: &Picker<T>,
+    glyph: impl Fn(&T) -> Option<Span<'static>>,
+    bottom: Line<'static>,
     frame: &mut Frame,
     area: Rect,
 ) {
@@ -211,7 +242,6 @@ fn render<T>(
         None => None,
     };
 
-    let bottom = bottom_keys(state, picker.is_multi());
     let width = rows
         .iter()
         .chain(note.iter())

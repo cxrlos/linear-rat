@@ -29,9 +29,9 @@ t ENG Engineering · 50 of 70 m more · f Filters none
 ┃│                                      │                                      │                                      │  fp  filter by project               │ │
 ┃│                                      │                                      │                                      │  m   load more                       │ │
 ┃└ Esc close ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘ │
-┃  ENG-42 Add a webhook for ripening milestones            ● Done        ▮▮▯ Medium  1 Cycle 6 ┃│                                                              │
-┃  ENG-32 Validate humidity readings from sensors          ◌ Backlog     ▮▮▮ High    2         ┃│                                                              │
-┃  ENG-57 Throttle sensor writes during bursts             ○ Todo        ▮▮▯ Medium  2 Cycle 7 ┃│                                                              │
+┃  ENG-42 Add a webhook for ripening milestones            ● Done        ▮▮▯ Medium  1 Cycle 6 ┃│Creator   Ada Roquefort                                       │
+┃  ENG-32 Validate humidity readings from sensors          ◌ Backlog     ▮▮▮ High    2         ┃│Created   2026-10-29 12:02 UTC (4 days ago)                   │
+┃  ENG-57 Throttle sensor writes during bursts             ○ Todo        ▮▮▯ Medium  2 Cycle 7 ┃│Updated   2026-11-02 13:07 UTC (1 hour ago)                   │
 ┃  ENG-54 Track aging time per shelf                       ◌ Backlog     ▮▮▮ High    1         ┃│                                                              │
 ┃  ENG-56 Notification settings reset after update         ○ Todo        ▮▮▮ High    2         ┃│                                                              │
 ┃  ENG-52 Cellar map renders blank on tablets              ⊘ Canceled    ▮▮▮ High    2 Cycle 6 ┃│                                                              │
@@ -40,4 +40,4 @@ t ENG Engineering · 50 of 70 m more · f Filters none
 ┃  ENG-44 Sensor pairing hangs on the second device        ● Done        ▮▮▯ Medium  1 Cycle 5 ┃│                                                              │
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛└──────────────────────────────────────────────────────────────┘
  Move │ j/k move                                                                                                                                                
- Do   │ Enter pick │ Tab toggle │ Esc close
+ Do   │ Enter pick │ Tab toggle │ Esc close │ C-y copy

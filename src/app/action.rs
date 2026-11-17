@@ -38,6 +38,8 @@ pub enum Action {
     /// Open the picker of these links of the focused issue, to open one in
     /// the browser.
     OpenLinks(LinkSet),
+    /// Copy the URL of the link highlighted in a links picker and close it.
+    CopyLink,
     /// Poll Linear for changes now.
     Refresh,
     /// Open the picker that changes a field of the focused issue.

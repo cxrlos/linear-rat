@@ -24,5 +24,5 @@ expression: app.backend()
 "│  ENG-51 Add a dry-run mode to the import ◐ In Progress ▮▮▯ Medium  2 Cycle 7 │"
 "└──────────────────────────────────────────────────────────────────────────────┘"
 " Move │ Down/Up move                                                            "
-" Do   │ Enter pick   │ Tab toggle │ Esc close                                   "
+" Do   │ Enter pick   │ Tab toggle │ Esc close │ C-y copy                        "
 "                                                                                "

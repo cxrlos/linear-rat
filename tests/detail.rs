@@ -271,6 +271,57 @@ fn comments_and_history_show_once_loaded_on_a_wide_terminal() {
     assert_snapshot!(app.backend());
 }
 
+/// The demo workspace with the issue `identifier` focused and its detail
+/// opened full width, before its detail load is answered.
+fn detail_of(identifier: &str, rows: u16) -> (App<TestBackend>, Vec<Effect>) {
+    let mut state = State::demo();
+    assert!(
+        state
+            .my_issues
+            .focus_id(&format!("issue-{}", identifier.to_lowercase()))
+    );
+    let mut app = App::new(TestBackend::new(80, rows), state).unwrap();
+    let effects = send(&mut app, [enter()]);
+    (app, effects)
+}
+
+#[test]
+fn attachments_list_pull_requests_first_then_the_rest_with_source_and_url() {
+    let (mut app, effects) = detail_of("DES-34", 40);
+    answer(&mut app, effects);
+
+    send(&mut app, [key('G')]);
+
+    let lines = screen(&app).join("\n");
+    assert!(lines.contains("Attachments (5)"), "{lines}");
+    assert_snapshot!(app.backend());
+}
+
+#[test]
+fn attachments_say_they_are_loading_until_the_detail_loads() {
+    let (mut app, _) = detail_of("DES-34", 60);
+
+    send(&mut app, [key('G')]);
+
+    let lines = screen(&app);
+    let heading = lines
+        .iter()
+        .position(|line| line.trim_matches(['│', ' ']) == "Attachments")
+        .unwrap_or_else(|| panic!("no Attachments heading: {lines:#?}"));
+    assert_eq!(lines[heading + 1].trim_matches(['│', ' ']), "Loading…");
+}
+
+#[test]
+fn an_issue_without_attachments_shows_no_attachments_section() {
+    let (mut app, effects) = detail_of("DES-40", 60);
+    answer(&mut app, effects);
+
+    send(&mut app, [key('G')]);
+
+    let lines = screen(&app).join("\n");
+    assert!(!lines.contains("Attachments"), "{lines}");
+}
+
 #[test]
 fn a_failed_load_says_why_in_the_detail() {
     let mut app = app(80, 24, &AssignedIssues::demo());

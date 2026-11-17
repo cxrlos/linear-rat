@@ -681,6 +681,18 @@ pub static ACTIONS: &[ActionSpec] = &[
             state.modals.top().is_some() || in_detail(state) || state.screen == Screen::Results
         },
     },
+    // After `close`, so a narrow bottom bar drops this before Esc.
+    ActionSpec {
+        action: Action::CopyLink,
+        id: "copy-link",
+        description: "Copy the highlighted link's URL",
+        label: "copy the link",
+        group: Group::Screen,
+        hint: does("copy"),
+        contexts: OVERLAY,
+        default_keys: &[&[Key::ctrl('y')]],
+        available: |state| matches!(state.modals.top(), Some(Modal::Links(links)) if links.list.selected().is_some()),
+    },
     ActionSpec {
         action: Action::ShowScreen(Screen::MyIssues),
         id: "show-my-issues",

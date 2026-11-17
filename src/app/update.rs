@@ -412,6 +412,7 @@ pub fn perform(state: &mut State, action: Action) -> Update {
         }
         Action::Copy(copyable) => copy(state, copyable),
         Action::OpenLinks(set) => links::open(state, set),
+        Action::CopyLink => links::copy(state),
         Action::Edit(field) => edit::open(state, field),
         Action::PickNumber(n) => match state.modals.top() {
             Some(Modal::Links(_)) => links::choose(state, Some(usize::from(n))),
