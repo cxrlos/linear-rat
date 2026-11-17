@@ -13,9 +13,9 @@ use futures_util::stream::{self, StreamExt};
 use insta::assert_snapshot;
 use jiff::Timestamp;
 use jiff::tz::{Offset, TimeZone};
-use linear_rat::app::{App, Effect, Event, State};
+use linear_rat::app::{App, Effect, Event, Failure, State};
 use linear_rat::linear::model::Estimation;
-use linear_rat::linear::{AnalyticsIssues, AnalyticsWindow, FakeClient};
+use linear_rat::linear::{AnalyticsIssues, AnalyticsWindow, ErrorKind, FakeClient};
 use linear_rat::runtime;
 use ratatui::backend::TestBackend;
 
@@ -159,7 +159,7 @@ fn a_failed_load_is_shown_and_asked_for_again_next_time() {
 
     app.handle(Event::AnalyticsLoaded {
         window,
-        result: Err("could not reach Linear".to_owned()),
+        result: Err(failed("could not reach Linear")),
     })
     .unwrap();
 
@@ -375,4 +375,9 @@ async fn the_runtime_loads_analytics_through_the_client_when_the_screen_opens() 
         below_tabs(screen(&app)),
         below_tabs(screen(&opened(80, 24)))
     );
+}
+
+/// A failure with `message`, as the runtime sends one.
+fn failed(message: &str) -> Failure {
+    Failure::new(ErrorKind::Other, "test", message)
 }

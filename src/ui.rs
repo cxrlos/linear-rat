@@ -8,6 +8,7 @@ mod error;
 mod hints;
 pub mod icons;
 pub(crate) mod markdown;
+mod messages;
 mod my_issues;
 mod palette;
 mod picker;
@@ -78,6 +79,7 @@ pub fn render(state: &State, frame: &mut Frame) {
             Modal::Create(form) => picker::render_create(state, form, frame, body_area),
             Modal::DueDate(prompt) => picker::render_due_date(state, prompt, frame, body_area),
             Modal::Confirm(confirm) => confirm::render(state, confirm, frame, body_area),
+            Modal::Messages { scroll } => messages::render(state, *scroll, frame, body_area),
         }
     }
 }
@@ -207,6 +209,14 @@ pub fn cheatsheet_max_scroll(state: &State, viewport: Size) -> u16 {
     let area = Rect::from((ratatui::layout::Position::ORIGIN, viewport));
     let [_, body_area, _, _] = areas(area, notice_rows(state, viewport.width).len());
     cheatsheet::max_scroll(state, body_area)
+}
+
+/// How far the error log can scroll in a `viewport`-sized terminal: how
+/// many of its rows do not fit.
+pub fn messages_max_scroll(state: &State, viewport: Size) -> u16 {
+    let area = Rect::from((ratatui::layout::Position::ORIGIN, viewport));
+    let [_, body_area, _, _] = areas(area, notice_rows(state, viewport.width).len());
+    messages::max_scroll(state, body_area)
 }
 
 /// How far the Analytics screen can scroll in a `viewport`-sized terminal:

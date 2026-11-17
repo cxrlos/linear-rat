@@ -12,8 +12,8 @@ expression: text
 ││ Move                                │ App                                 │ │
 ││  j,Down,C-n/k,Up,C-p  down / up     │  1/2/3  screens   r      refresh    │ │
 ││                                     │  ?      keys      :,C-k  palette    │ │
-││ Analytics                           │  /      search    q      quit       │ │
-││  [/]  shorter / longer range        │  C-z    suspend                     │ │
+││ Analytics                           │  /      search    !      messages   │ │
+││  [/]  shorter / longer range        │  q      quit      C-z    suspend    │ │
 ││  v    Personal or Team              │                                     │ │
 ││  t    team                          │                                     │ │
 │└ Esc close ────────────────────────────────────────────────────────────────┘ │

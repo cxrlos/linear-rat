@@ -6,7 +6,8 @@
 
 use std::collections::BTreeMap;
 
-use super::{Effect, State, TextOpened, Update, edit_text};
+use super::{Effect, Failure, State, TextOpened, Update, WriteClass, edit_text};
+use crate::linear::ErrorKind;
 use crate::linear::model::{Issue, Priority, WorkflowState};
 use crate::linear::{IssueCreate, PostedComment};
 use crate::ui;
@@ -119,6 +120,7 @@ pub(super) fn closed(
         Ok(saved) => saved,
         Err(error) => {
             state.notice = Some(format!("Could not run the editor: {error}"));
+            state.record(Failure::new(ErrorKind::Other, "run the editor", error));
             return Update::redraw();
         }
     };
@@ -213,24 +215,33 @@ fn show_stand_in(state: &mut State, draft: IssueDraft, description: &str) -> New
 pub(super) fn commented(
     state: &mut State,
     comment: &NewComment,
-    result: Result<PostedComment, String>,
+    result: Result<PostedComment, Failure>,
 ) -> Update {
+    if let Some(team_id) = state
+        .store
+        .issue(&comment.issue_id)
+        .map(|issue| issue.team_id.clone())
+    {
+        let outcome = result.as_ref().map(|_| ()).map_err(|failure| &failure.kind);
+        state.learn_write(&team_id, WriteClass::CreateComment, outcome);
+    }
     match result {
         Ok(posted) => {
             state.drafts.comments.remove(&comment.issue_id);
             state.store.add_comment(posted);
             state.notice = Some(format!("Commented on {}", comment.identifier));
         }
-        Err(error) => {
+        Err(failure) => {
             state
                 .drafts
                 .comments
                 .insert(comment.issue_id.clone(), comment.body.clone());
             state.notice = Some(format!(
-                "Could not comment on {}: {error}. The next comment on it starts from \
+                "Could not comment on {}: {failure}. The next comment on it starts from \
                  what you wrote",
                 comment.identifier
             ));
+            state.record(failure);
         }
     }
     Update::redraw()
@@ -242,13 +253,15 @@ pub(super) fn commented(
 pub(super) fn created(
     state: &mut State,
     issue: &NewIssue,
-    result: Result<Box<Issue>, String>,
+    result: Result<Box<Issue>, Failure>,
 ) -> Update {
     let focused = state
         .my_issues
         .focused_issue()
         .is_some_and(|focused| focused.id == issue.local_id);
     state.store.remove_issue(&issue.local_id);
+    let outcome = result.as_ref().map(|_| ()).map_err(|failure| &failure.kind);
+    state.learn_write(&issue.input.team_id, WriteClass::CreateIssue, outcome);
     match result {
         Ok(created) => {
             let id = created.id.clone();
@@ -263,13 +276,14 @@ pub(super) fn created(
                 focus_in_my_issues(state, &id);
             }
         }
-        Err(error) => {
+        Err(failure) => {
             state.drafts.description = Some(issue.input.description.clone());
             state.notice = Some(format!(
-                "Could not create {}: {error}. The next new issue's description starts \
+                "Could not create {}: {failure}. The next new issue's description starts \
                  from what you wrote",
                 issue.input.title
             ));
+            state.record(failure);
             state.team_issues.forget(&issue.local_id);
             state.rebuild_my_issues();
         }

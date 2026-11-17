@@ -3,8 +3,11 @@
 //! shows. The results open in the results view.
 
 use super::update::Update;
-use super::{Effect, FilterField, Modal, Screen, State, filter_label, results};
+use super::{Effect, Failure, FilterField, Modal, Screen, State, filter_label, results};
 use crate::linear::{SearchQuery, SearchResults, TeamQuery};
+
+/// What a search is called in the error log.
+const SEARCH: &str = "search";
 
 /// The query, its options and how far its search is.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -172,14 +175,18 @@ pub(super) fn toggle_scope(state: &mut State) -> Update {
 pub(super) fn finish(
     state: &mut State,
     query: &SearchQuery,
-    result: Result<SearchResults, String>,
+    result: Result<SearchResults, Failure>,
 ) {
-    if let Ok(found) = &result {
-        if state.notice.is_none() {
-            state.notice = super::state::summary(&found.problems);
+    match &result {
+        Ok(found) => {
+            if state.notice.is_none() {
+                state.notice = super::state::summary(&found.problems);
+            }
+            state.record_problems(SEARCH, &found.problems);
+            state.store.merge_search(found);
+            state.rebuild_my_issues();
         }
-        state.store.merge_search(found);
-        state.rebuild_my_issues();
+        Err(failure) => state.record(failure.clone()),
     }
     let waiting = state.modals.iter_mut().rev().find_map(|modal| match modal {
         Modal::Search(search) if matches!(&search.phase, Phase::Searching { query: waiting } if waiting == query) => {
@@ -198,9 +205,9 @@ pub(super) fn finish(
             return;
         }
         Ok(found) => found.issues.into_iter().map(|issue| issue.id).collect(),
-        Err(problem) => {
+        Err(failure) => {
             search.phase = Phase::Typing {
-                problem: Some(problem),
+                problem: Some(failure.message),
             };
             return;
         }

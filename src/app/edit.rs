@@ -9,7 +9,7 @@ use jiff::Timestamp;
 use jiff::civil::Date;
 
 use super::picker::{Entry, Note, Picker};
-use super::{Effect, Modal, State, Store, Update};
+use super::{Effect, Failure, Modal, State, Store, Update, WriteClass};
 use crate::linear::model::{Estimation, Issue, Priority, WorkflowState};
 use crate::linear::{IssueUpdate, Patch};
 use crate::ui::icons;
@@ -800,7 +800,7 @@ pub(super) fn sent(state: &mut State, issue_id: &str) {
 pub(super) fn finished(
     state: &mut State,
     write: &Write,
-    result: Result<Box<Issue>, String>,
+    result: Result<Box<Issue>, Failure>,
 ) -> Update {
     if let Some(count) = state.writes_in_flight.get_mut(&write.issue_id) {
         *count = count.saturating_sub(1);
@@ -808,18 +808,29 @@ pub(super) fn finished(
             state.writes_in_flight.remove(&write.issue_id);
         }
     }
+    let team_id = state
+        .store
+        .issue(&write.issue_id)
+        .map(|issue| issue.team_id.clone());
+    if let Some(team_id) = &team_id {
+        let outcome = result.as_ref().map(|_| ()).map_err(|failure| &failure.kind);
+        state.learn_write(team_id, WriteClass::UpdateIssue, outcome);
+    }
     match result {
         Ok(issue) => {
             state.store.upsert_issue(*issue);
         }
-        Err(error) => {
+        Err(failure) => {
             state.store.roll_back(write);
             state.notice = Some(format!(
-                "Could not change the {} of {}: {error}",
+                "Could not change the {} of {}: {failure}",
                 write.edit.field().name(),
                 write.identifier
             ));
-            state.row_errors.insert(write.issue_id.clone(), error);
+            state
+                .row_errors
+                .insert(write.issue_id.clone(), failure.message.clone());
+            state.record(failure);
         }
     }
     state.rebuild_my_issues();
@@ -832,7 +843,7 @@ pub(super) fn loaded(
     state: &mut State,
     field: Editable,
     team_id: &str,
-    failure: Option<String>,
+    failure: Option<Failure>,
 ) -> Update {
     let what = match field {
         Editable::State => "workflow states",
@@ -845,11 +856,14 @@ pub(super) fn loaded(
         .find(|team| team.id == team_id)
         .map_or(team_id, |team| team.key.as_str())
         .to_owned();
-    refill(state, failure.as_deref(), |picker, _| {
-        picker.field == field && picker.team_id == team_id
-    });
-    if let Some(error) = failure {
-        state.notice = Some(format!("Could not load the {what} of {team}: {error}"));
+    refill(
+        state,
+        failure.as_ref().map(|failure| failure.message.as_str()),
+        |picker, _| picker.field == field && picker.team_id == team_id,
+    );
+    if let Some(failure) = failure {
+        state.notice = Some(format!("Could not load the {what} of {team}: {failure}"));
+        state.record(failure);
     }
     Update::redraw()
 }

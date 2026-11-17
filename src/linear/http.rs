@@ -157,8 +157,8 @@ impl HttpClient {
             }
             match self.post(document, variables).await? {
                 Attempt::Answered(response) => return Ok(response),
-                Attempt::RateLimited { .. } if retries == RATE_LIMIT_RETRIES => {
-                    return Err(ClientError::RateLimited);
+                Attempt::RateLimited { retry_after } if retries == RATE_LIMIT_RETRIES => {
+                    return Err(ClientError::RateLimited { retry_after });
                 }
                 Attempt::RateLimited { retry_after } => {
                     retries += 1;

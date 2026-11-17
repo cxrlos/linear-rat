@@ -86,7 +86,11 @@ fn apply(state: &mut State, event: Event) -> Update {
             let team_id = result.as_ref().ok().map(|options| options.team_id.clone());
             let failure = result.as_ref().err().cloned();
             team_issues::options_loaded(state, result);
-            edit::options_loaded(state, team_id.as_deref(), failure.as_deref());
+            edit::options_loaded(
+                state,
+                team_id.as_deref(),
+                failure.as_ref().map(|failure| failure.message.as_str()),
+            );
             Update::redraw()
         }
         Event::TeamIssuesLoaded {
@@ -137,8 +141,8 @@ fn apply(state: &mut State, event: Event) -> Update {
             clamp_analytics_scroll(state);
             Update::redraw()
         }
-        Event::EffectFailed(error) => {
-            state.notice = Some(error);
+        Event::EffectFailed(failure) => {
+            state.fail(failure);
             Update::redraw()
         }
         Event::WorkflowStatesLoaded { team_id, result } => {
@@ -149,7 +153,12 @@ fn apply(state: &mut State, event: Event) -> Update {
                 }
                 Err(error) => Some(error),
             };
-            create::loaded(state, Editable::State, &team_id, failure.as_deref());
+            create::loaded(
+                state,
+                Editable::State,
+                &team_id,
+                failure.as_ref().map(|f| f.message.as_str()),
+            );
             edit::loaded(state, Editable::State, &team_id, failure)
         }
         Event::TeamMembersLoaded { team_id, result } => {
@@ -160,7 +169,12 @@ fn apply(state: &mut State, event: Event) -> Update {
                 }
                 Err(error) => Some(error),
             };
-            create::loaded(state, Editable::Assignee, &team_id, failure.as_deref());
+            create::loaded(
+                state,
+                Editable::Assignee,
+                &team_id,
+                failure.as_ref().map(|f| f.message.as_str()),
+            );
             edit::loaded(state, Editable::Assignee, &team_id, failure)
         }
         Event::TeamLabelsLoaded { team_id, result } => {
@@ -219,7 +233,7 @@ fn picks_by_number(state: &State, key: Key) -> bool {
     let contexts = keys::active_contexts(state);
     match state.keymap.resolve(&contexts, &[key]) {
         Resolution::Action(action @ Action::PickNumber(_)) => {
-            keys::spec(action).is_some_and(|spec| (spec.available)(state))
+            keys::spec(action).is_some_and(|spec| spec.availability(state).can_run())
         }
         _ => false,
     }
@@ -239,7 +253,13 @@ fn press(state: &mut State, key: Key) -> Update {
 
     let contexts = keys::active_contexts(state);
     let mut update = match state.keymap.resolve(&contexts, &keys) {
-        Resolution::Action(action) => perform(state, action),
+        Resolution::Action(action) => match denied(state, action) {
+            Some(reason) => {
+                state.notice = Some(reason);
+                Update::redraw()
+            }
+            None => perform(state, action),
+        },
         Resolution::Prefix => {
             state.modals.push(Modal::WhichKey { prefix: keys });
             Update::redraw()
@@ -248,6 +268,14 @@ fn press(state: &mut State, key: Key) -> Update {
     };
     update.redraw |= chord_ended;
     update
+}
+
+/// Why the API key is known not to be allowed `action` here, if it is not.
+fn denied(state: &State, action: Action) -> Option<String> {
+    keys::spec(action)?
+        .availability(state)
+        .reason()
+        .map(str::to_owned)
 }
 
 /// Carries out `action` against `state`.
@@ -283,6 +311,10 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             Update::redraw()
         }
         Action::ShowSearch => search::open(state),
+        Action::ShowMessages => {
+            state.modals.push(Modal::Messages { scroll: 0 });
+            Update::redraw()
+        }
         Action::Accept => match state.modals.top() {
             Some(Modal::Picker(_)) => edit::choose(state, None),
             Some(Modal::Links(_)) => links::choose(state, None),
@@ -395,6 +427,7 @@ pub fn perform(state: &mut State, action: Action) -> Update {
                 let max = ui::analytics_max_scroll(state, state.viewport);
                 analytics_screen::scroll(state, action == Action::ScrollDown, max)
             }
+            Some(Modal::Messages { .. }) => scroll_messages(state, action),
             _ => scroll_cheatsheet(state, action),
         },
         Action::ToggleAnalyticsView if state.screen == Screen::Analytics => {
@@ -519,6 +552,23 @@ fn clamp_analytics_scroll(state: &mut State) {
 fn scroll_cheatsheet(state: &mut State, action: Action) -> Update {
     let max = ui::cheatsheet_max_scroll(state, state.viewport);
     let Some(Modal::Cheatsheet { scroll }) = state.modals.top_mut() else {
+        return Update::default();
+    };
+    let before = *scroll;
+    *scroll = match action {
+        Action::ScrollDown => scroll.saturating_add(1).min(max),
+        _ => scroll.saturating_sub(1),
+    };
+    Update {
+        redraw: *scroll != before,
+        effects: Vec::new(),
+    }
+}
+
+/// Moves the open error log one row, no further than its last row.
+fn scroll_messages(state: &mut State, action: Action) -> Update {
+    let max = ui::messages_max_scroll(state, state.viewport);
+    let Some(Modal::Messages { scroll }) = state.modals.top_mut() else {
         return Update::default();
     };
     let before = *scroll;

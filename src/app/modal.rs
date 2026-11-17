@@ -35,6 +35,8 @@ pub enum Modal {
     DueDate(DuePrompt),
     /// A question to answer before something hard to undo runs.
     Confirm(Confirm),
+    /// The error log, newest first, scrolled down by `scroll` rows.
+    Messages { scroll: u16 },
 }
 
 impl Modal {
@@ -48,7 +50,10 @@ impl Modal {
             | Modal::Choice(_)
             | Modal::DueDate(_) => true,
             Modal::Search(search) => !matches!(search.phase, Phase::Searching { .. }),
-            Modal::Cheatsheet { .. } | Modal::WhichKey { .. } | Modal::Confirm(_) => false,
+            Modal::Cheatsheet { .. }
+            | Modal::WhichKey { .. }
+            | Modal::Confirm(_)
+            | Modal::Messages { .. } => false,
         }
     }
 
@@ -70,7 +75,10 @@ impl Modal {
                 prompt.error = None;
                 Some(&mut prompt.text)
             }
-            Modal::Cheatsheet { .. } | Modal::WhichKey { .. } | Modal::Confirm(_) => None,
+            Modal::Cheatsheet { .. }
+            | Modal::WhichKey { .. }
+            | Modal::Confirm(_)
+            | Modal::Messages { .. } => None,
         }
     }
 }

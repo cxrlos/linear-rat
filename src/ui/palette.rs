@@ -34,16 +34,17 @@ pub fn render(state: &State, palette: &Palette, frame: &mut Frame, area: Rect) {
                 .iter()
                 .map(ToString::to_string)
                 .collect();
-            let (key_style, text_style) = if (spec.available)(state) {
+            let availability = spec.availability(state);
+            let (key_style, text_style) = if availability.can_run() {
                 (style::accent(theme), Style::new())
             } else {
                 (style::muted(theme), style::muted(theme))
             };
-            spread(
-                vec![Span::styled(spec.description, text_style)],
-                vec![Span::styled(keys.join(", "), key_style)],
-                width,
-            )
+            let mut text = vec![Span::styled(spec.description, text_style)];
+            if let Some(reason) = availability.reason() {
+                text.push(Span::styled(format!(" · {reason}"), text_style));
+            }
+            spread(text, vec![Span::styled(keys.join(", "), key_style)], width)
         }
         PaletteEntry::Issue(issue) => issue_line(state, issue, id_width, width),
     });

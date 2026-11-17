@@ -1,7 +1,9 @@
 use crossterm::event::KeyEvent;
 use jiff::Timestamp;
 
-use super::{LifecycleWrite, LoadError, NewComment, NewIssue, SyncFailure, Write, Writing};
+use super::{
+    Failure, LifecycleWrite, LoadError, NewComment, NewIssue, SyncFailure, Write, Writing,
+};
 use crate::linear::model::{Issue, Label, Member, ProjectMilestone, Team, WorkflowState};
 use crate::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, LiveEvent, PostedComment,
@@ -26,45 +28,45 @@ pub enum Event {
     /// detail, or why it did not load, with its context.
     IssueDetailLoaded {
         issue_id: String,
-        result: Result<IssueDetail, String>,
+        result: Result<IssueDetail, Failure>,
     },
     /// The result of [`Effect::Search`](super::Effect::Search) for `query`,
     /// or why it failed.
     SearchDone {
         query: SearchQuery,
-        result: Result<SearchResults, String>,
+        result: Result<SearchResults, Failure>,
     },
     /// The result of [`Effect::LoadTeams`](super::Effect::LoadTeams). An
     /// error is a message with its context.
-    TeamsLoaded(Result<Vec<Team>, String>),
+    TeamsLoaded(Result<Vec<Team>, Failure>),
     /// The result of
     /// [`Effect::LoadTeamOptions`](super::Effect::LoadTeamOptions).
-    TeamOptionsLoaded(Result<TeamOptions, String>),
+    TeamOptionsLoaded(Result<TeamOptions, Failure>),
     /// The result of
     /// [`Effect::LoadTeamIssues`](super::Effect::LoadTeamIssues), with the
     /// request it answers.
     TeamIssuesLoaded {
         query: TeamQuery,
         after: Option<String>,
-        result: Result<TeamIssuesPage, String>,
+        result: Result<TeamIssuesPage, Failure>,
     },
     /// The result of
     /// [`Effect::CountTeamIssues`](super::Effect::CountTeamIssues), with the
     /// query it counted.
     TeamIssuesCounted {
         query: TeamQuery,
-        result: Result<usize, String>,
+        result: Result<usize, Failure>,
     },
     /// The result of [`Effect::LoadAnalytics`](super::Effect::LoadAnalytics)
     /// for `window`; the error says why it failed, with its context.
     AnalyticsLoaded {
         window: AnalyticsWindow,
-        result: Result<AnalyticsIssues, String>,
+        result: Result<AnalyticsIssues, Failure>,
     },
     /// The result of
     /// [`Effect::LoadAdministrableTeams`](super::Effect::LoadAdministrableTeams):
     /// team ids, or why they did not load.
-    AdministrableTeamsLoaded(Result<Vec<String>, String>),
+    AdministrableTeamsLoaded(Result<Vec<String>, Failure>),
     /// The result of
     /// [`Effect::LoadTeamAnalytics`](super::Effect::LoadTeamAnalytics) for
     /// `team_id` over `window`; the error says why it failed, with its
@@ -72,11 +74,11 @@ pub enum Event {
     TeamAnalyticsLoaded {
         team_id: String,
         window: AnalyticsWindow,
-        result: Result<TeamAnalyticsIssues, String>,
+        result: Result<TeamAnalyticsIssues, Failure>,
     },
     /// The runtime could not carry out an effect. The message, with its
     /// context, becomes the notice.
-    EffectFailed(String),
+    EffectFailed(Failure),
     /// The time now, about once a second. Polls fall due and the sync
     /// indicator ages on ticks.
     Tick(Timestamp),
@@ -105,19 +107,19 @@ pub enum Event {
     /// why it failed.
     WorkflowStatesLoaded {
         team_id: String,
-        result: Result<Vec<WorkflowState>, String>,
+        result: Result<Vec<WorkflowState>, Failure>,
     },
     /// The result of [`Effect::LoadTeamMembers`](super::Effect::LoadTeamMembers),
     /// or why it failed.
     TeamMembersLoaded {
         team_id: String,
-        result: Result<Vec<Member>, String>,
+        result: Result<Vec<Member>, Failure>,
     },
     /// The result of [`Effect::LoadTeamLabels`](super::Effect::LoadTeamLabels),
     /// or why it failed.
     TeamLabelsLoaded {
         team_id: String,
-        result: Result<Vec<Label>, String>,
+        result: Result<Vec<Label>, Failure>,
     },
     /// The result of
     /// [`Effect::LoadProjectMilestones`](super::Effect::LoadProjectMilestones),
@@ -131,7 +133,7 @@ pub enum Event {
     /// the issue as it stored it, or why it rejected the edit.
     IssueUpdated {
         write: Write,
-        result: Result<Box<Issue>, String>,
+        result: Result<Box<Issue>, Failure>,
     },
     /// Linear's answer to
     /// [`Effect::ChangeLifecycle`](super::Effect::ChangeLifecycle): done, or
@@ -150,12 +152,12 @@ pub enum Event {
     /// [`Effect::CreateComment`](super::Effect::CreateComment).
     CommentCreated {
         comment: NewComment,
-        result: Result<PostedComment, String>,
+        result: Result<PostedComment, Failure>,
     },
     /// Linear's answer to [`Effect::CreateIssue`](super::Effect::CreateIssue):
     /// the issue as it stored it, or why it was not created.
     IssueCreated {
         issue: NewIssue,
-        result: Result<Box<Issue>, String>,
+        result: Result<Box<Issue>, Failure>,
     },
 }

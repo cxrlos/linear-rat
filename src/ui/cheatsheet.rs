@@ -27,7 +27,7 @@ const DIVIDER: &str = " │ ";
 /// Draws inside `area`'s border, scrolled down by `scroll` rows (no further
 /// than its last row).
 pub fn render(state: &State, scroll: u16, frame: &mut Frame, area: Rect) {
-    let lines = lines(state, area, |spec| (spec.available)(state));
+    let lines = lines(state, area, |spec| spec.availability(state).can_run());
     let popup = popup(area, &lines);
     let scroll = scroll.min(hidden_rows(popup, &lines));
     let block = super::popup_block(state)
@@ -178,7 +178,7 @@ fn lines(state: &State, area: Rect, available: impl Fn(&ActionSpec) -> bool) -> 
     }
 
     let height = stacks.iter().map(Vec::len).max().unwrap_or(0);
-    (0..height)
+    let mut lines: Vec<Line<'static>> = (0..height)
         .map(|y| {
             let mut spans = vec![Span::raw(" ")];
             for (index, stack) in stacks.iter().enumerate() {
@@ -193,7 +193,38 @@ fn lines(state: &State, area: Rect, available: impl Fn(&ActionSpec) -> bool) -> 
             spans.push(Span::raw(" "));
             Line::from(spans)
         })
-        .collect()
+        .collect();
+    let reasons = denials(state);
+    if !reasons.is_empty() {
+        lines.push(Line::default());
+    }
+    lines.extend(
+        reasons
+            .into_iter()
+            .map(|reason| Line::styled(format!(" {INDENT}Muted: {reason} "), style::muted(theme))),
+    );
+    lines
+}
+
+/// Why the API key is not allowed the listed actions it is known not to be
+/// allowed, each reason once.
+fn denials(state: &State) -> Vec<String> {
+    let contexts = keys::screen_contexts(state);
+    let mut reasons: Vec<String> = Vec::new();
+    // Only write actions can be denied, and their availability never asks
+    // for the cheatsheet's size, so this cannot recurse into it.
+    let writes = ACTIONS
+        .iter()
+        .filter(|spec| spec.writes.is_some())
+        .filter(|spec| spec.contexts.iter().any(|c| contexts.contains(c)));
+    for spec in writes {
+        if let Some(reason) = spec.availability(state).reason()
+            && !reasons.iter().any(|known| known == reason)
+        {
+            reasons.push(reason.to_owned());
+        }
+    }
+    reasons
 }
 
 /// How wide `pane` is with one entry per line.

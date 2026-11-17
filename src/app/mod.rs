@@ -2,6 +2,7 @@
 
 mod action;
 mod analytics_screen;
+mod capabilities;
 mod compose;
 mod create;
 mod detail;
@@ -10,6 +11,7 @@ mod edit;
 mod edit_text;
 mod effect;
 mod event;
+mod failure;
 mod lifecycle;
 mod links;
 mod load;
@@ -32,6 +34,7 @@ use ratatui::layout::Rect;
 
 pub use action::{Action, Copyable};
 pub use analytics_screen::{AnalyticsScreen, AnalyticsView};
+pub use capabilities::{Capabilities, Capability, WriteClass};
 pub use compose::{Drafts, IssueDraft, NewComment, NewIssue, Writing, is_local};
 pub use create::{CreateForm, Step};
 pub use detail::{Detail, DetailLoad};
@@ -43,6 +46,7 @@ pub use edit::{
 pub use edit_text::TextOpened;
 pub use effect::Effect;
 pub use event::Event;
+pub use failure::{ERROR_LOG_CAP, ErrorLog, Failure, LoggedFailure};
 pub use lifecycle::{Confirm, Lifecycle, LifecycleWrite, OnConfirm, focused_is_archived};
 pub use links::{Link, LinkSet, Links};
 pub use load::{Load, LoadError};

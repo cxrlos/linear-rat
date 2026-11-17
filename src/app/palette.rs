@@ -8,7 +8,7 @@ use nucleo_matcher::{Config, Matcher, Utf32Str};
 
 use super::update::{Update, perform};
 use super::{Action, Modal, Screen, State, results};
-use crate::keys::{ACTIONS, ActionSpec, Context};
+use crate::keys::{ACTIONS, ActionSpec, Availability, Context};
 use crate::linear::model::Issue;
 use crate::ui;
 
@@ -103,11 +103,16 @@ pub(super) fn accept(state: &mut State) -> Update {
         jump_to(state, id);
         return Update::redraw();
     }
-    match spec {
-        Some(spec) if (spec.available)(state) => {
+    let availability = spec.map(|spec| (spec, spec.availability(state)));
+    match availability {
+        Some((spec, Availability::Available)) => {
             let mut update = perform(state, spec.action);
             update.redraw = true;
             update
+        }
+        Some((_, Availability::Denied(reason))) => {
+            state.notice = Some(reason);
+            Update::redraw()
         }
         _ => {
             state.modals.push(palette);

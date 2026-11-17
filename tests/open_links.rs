@@ -8,8 +8,8 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
-use linear_rat::app::{App, Effect, Event, Modal, State};
-use linear_rat::linear::{FakeClient, IssueDetail, LinearClient, Urgency};
+use linear_rat::app::{App, Effect, Event, Failure, Modal, State};
+use linear_rat::linear::{ErrorKind, FakeClient, IssueDetail, LinearClient, Urgency};
 use ratatui::backend::TestBackend;
 
 const DES_34: &str = "https://linear.app/squeakworks/issue/DES-34";
@@ -153,7 +153,7 @@ fn a_failed_load_says_why_in_the_picker_and_the_next_o_tries_again() {
 
     app.handle(Event::IssueDetailLoaded {
         issue_id: "issue-des-34".to_owned(),
-        result: Err("Linear could not be reached".to_owned()),
+        result: Err(failed("Linear could not be reached")),
     })
     .unwrap();
 
@@ -420,4 +420,9 @@ fn the_links_picker_footer_names_the_copy_key() {
 
     let shown = format!("{:?}", app.backend());
     assert!(shown.contains("C-y copy"), "{shown}");
+}
+
+/// A failure with `message`, as the runtime sends one.
+fn failed(message: &str) -> Failure {
+    Failure::new(ErrorKind::Other, "test", message)
 }

@@ -3,7 +3,7 @@
 
 use super::modal::{Choice, Purpose};
 use super::picker::{Entry, Picker};
-use super::{Action, Effect, Modal, Names, Pane, State};
+use super::{Action, Effect, Failure, Modal, Names, Pane, State};
 use crate::linear::model::{Issue, Team};
 use crate::linear::{TeamFilter, TeamIssuesPage, TeamOptions, TeamQuery};
 
@@ -284,18 +284,22 @@ pub(super) fn open(state: &mut State) -> Vec<Effect> {
 }
 
 /// Takes in the viewer's teams and shows the first one.
-pub(super) fn teams_loaded(state: &mut State, result: Result<Vec<Team>, String>) -> Vec<Effect> {
+pub(super) fn teams_loaded(state: &mut State, result: Result<Vec<Team>, Failure>) -> Vec<Effect> {
     match result {
         Ok(teams) => {
             state.store.set_viewer_teams(&teams);
+            for team in &teams {
+                state.learn_reach(&team.id, Ok(()));
+            }
             state.team_issues.teams = Progress::Done;
             match teams.first() {
                 Some(team) => switch(state, team.id.clone()),
                 None => Vec::new(),
             }
         }
-        Err(error) => {
-            state.team_issues.teams = Progress::Failed(error);
+        Err(failure) => {
+            state.team_issues.teams = Progress::Failed(failure.message.clone());
+            state.record(failure);
             Vec::new()
         }
     }
@@ -329,12 +333,13 @@ fn ask_for_options(state: &mut State, team_id: String) -> Option<Effect> {
 
 /// Takes in a team's filter options, and fills in the filter popup if one
 /// is open.
-pub(super) fn options_loaded(state: &mut State, result: Result<TeamOptions, String>) {
+pub(super) fn options_loaded(state: &mut State, result: Result<TeamOptions, Failure>) {
     match result {
         Ok(options) => {
             if state.notice.is_none() {
                 state.notice = options.problems.first().cloned();
             }
+            state.record_problems("load the team's filters", &options.problems);
             state.store.merge_team_options(&options);
             refresh_names(state);
             let shown = state.team_issues.query.as_ref().map(|query| &query.team_id);
@@ -352,11 +357,11 @@ pub(super) fn options_loaded(state: &mut State, result: Result<TeamOptions, Stri
             }
         }
         // The error names no team; a popup opened later asks again.
-        Err(error) => {
+        Err(failure) => {
             if state.team_issues.options == Progress::Loading {
-                state.team_issues.options = Progress::Failed(error.clone());
+                state.team_issues.options = Progress::Failed(failure.message.clone());
             }
-            state.notice = Some(error);
+            state.fail(failure);
         }
     }
 }
@@ -382,7 +387,7 @@ pub(super) fn page_loaded(
     state: &mut State,
     query: &TeamQuery,
     after: Option<String>,
-    result: Result<TeamIssuesPage, String>,
+    result: Result<TeamIssuesPage, Failure>,
 ) -> bool {
     let team_issues = &state.team_issues;
     if team_issues.query.as_ref() != Some(query)
@@ -391,11 +396,14 @@ pub(super) fn page_loaded(
     {
         return false;
     }
+    let outcome = result.as_ref().map(|_| ()).map_err(|failure| &failure.kind);
+    state.learn_reach(&query.team_id, outcome);
     match result {
         Ok(page) => {
             if state.notice.is_none() {
                 state.notice = page.problems.first().cloned();
             }
+            state.record_problems("load the team's issues", &page.problems);
             state.store.merge_team_page(&page);
             let team_issues = &mut state.team_issues;
             team_issues
@@ -406,14 +414,15 @@ pub(super) fn page_loaded(
             team_issues.loading_after = None;
             refresh_names(state);
         }
-        Err(error) => {
+        Err(failure) => {
             let team_issues = &mut state.team_issues;
             team_issues.loading_after = None;
             if team_issues.ids.is_empty() {
-                team_issues.page = Progress::Failed(error);
+                team_issues.page = Progress::Failed(failure.message.clone());
+                state.record(failure);
             } else {
                 team_issues.page = Progress::Done;
-                state.notice = Some(error);
+                state.fail(failure);
             }
         }
     }
@@ -422,15 +431,19 @@ pub(super) fn page_loaded(
 
 /// Takes in the count if it is for the query shown. Returns whether the
 /// screen changed.
-pub(super) fn counted(state: &mut State, query: &TeamQuery, result: Result<usize, String>) -> bool {
+pub(super) fn counted(
+    state: &mut State,
+    query: &TeamQuery,
+    result: Result<usize, Failure>,
+) -> bool {
     if state.team_issues.query.as_ref() != Some(query) {
         return false;
     }
     match result {
         Ok(count) => state.team_issues.count = Some(count),
-        Err(error) => {
+        Err(failure) => {
             state.team_issues.count_failed = true;
-            state.notice = Some(error);
+            state.fail(failure);
         }
     }
     true

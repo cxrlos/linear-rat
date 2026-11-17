@@ -466,7 +466,10 @@ async fn a_rate_limit_that_never_lifts_is_an_error_after_a_few_tries() {
         .await
         .unwrap_err();
 
-    assert!(matches!(error, ClientError::RateLimited), "{error:?}");
+    assert!(
+        matches!(error, ClientError::RateLimited { .. }),
+        "{error:?}"
+    );
     assert_eq!(timer.slept(), [Duration::from_secs(2); 3]);
     assert_eq!(server.received_requests().await.unwrap().len(), 4);
 }

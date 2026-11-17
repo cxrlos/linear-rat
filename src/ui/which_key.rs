@@ -20,7 +20,7 @@ pub fn render(state: &State, prefix: &[Key], frame: &mut Frame, area: Rect) {
         .into_iter()
         .filter_map(|(rest, action)| {
             let spec = keys::spec(action)?;
-            let (key_style, text_style) = if (spec.available)(state) {
+            let (key_style, text_style) = if spec.availability(state).can_run() {
                 (style::accent(&state.theme), Style::new())
             } else {
                 (style::muted(&state.theme), style::muted(&state.theme))

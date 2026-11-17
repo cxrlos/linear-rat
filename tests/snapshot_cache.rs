@@ -9,8 +9,8 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use jiff::Timestamp;
-use linear_rat::app::Store;
-use linear_rat::linear::{AssignedIssues, demo};
+use linear_rat::app::{Capabilities, Capability, Store, WriteClass};
+use linear_rat::linear::{AssignedIssues, ErrorKind, demo};
 use linear_rat::snapshot::SnapshotCache;
 use serde_json::Value;
 
@@ -57,6 +57,53 @@ fn a_saved_store_loads_back_as_the_last_session() {
 
     assert_eq!(saved.store, store);
     assert_eq!(saved.synced_at, Some(demo::NOW));
+}
+
+#[test]
+fn what_the_api_key_may_do_survives_a_round_trip() {
+    let cache = SnapshotCache::new(cache_dir());
+    let mut store = demo_store();
+    let capabilities = store.capabilities_mut();
+    capabilities.learn_write(
+        "team-des",
+        WriteClass::UpdateIssue,
+        Err(&ErrorKind::Forbidden),
+        Some(demo::NOW),
+    );
+    capabilities.learn_write("team-eng", WriteClass::CreateComment, Ok(()), None);
+    capabilities.learn_reach("team-ops", Err(&ErrorKind::Forbidden), None);
+
+    cache.save(&store, Some(demo::NOW)).unwrap();
+    let saved = cache.load().unwrap().store;
+
+    assert_eq!(saved, store);
+    let loaded = saved.capabilities();
+    assert_eq!(
+        loaded.write("team-des", WriteClass::UpdateIssue),
+        Capability::Denied {
+            since: Some(demo::NOW)
+        }
+    );
+    assert_eq!(
+        loaded.write("team-eng", WriteClass::CreateComment),
+        Capability::Allowed
+    );
+    assert!(loaded.reach("team-ops").is_denied());
+}
+
+#[test]
+fn a_snapshot_saved_before_capabilities_still_loads() {
+    let dir = cache_dir();
+    let cache = SnapshotCache::new(dir.clone());
+    cache.save(&demo_store(), None).unwrap();
+    rewrite(&snapshot_file(&dir), |json| {
+        let store = json["store"].as_object_mut().unwrap();
+        assert!(store.remove("capabilities").is_some(), "{store:?}");
+    });
+
+    let saved = cache.load().unwrap();
+
+    assert_eq!(saved.store.capabilities(), &Capabilities::default());
 }
 
 #[test]

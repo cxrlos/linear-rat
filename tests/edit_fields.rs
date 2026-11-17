@@ -8,10 +8,12 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
 use jiff::civil::date;
-use linear_rat::app::{Action, App, Edit, Effect, Event, Modal, State, Write};
+use linear_rat::app::{Action, App, Edit, Effect, Event, Failure, Modal, State, Write};
 use linear_rat::keys;
 use linear_rat::linear::model::{Cycle, Issue};
-use linear_rat::linear::{FakeClient, IssueDetail, IssueUpdate, LinearClient, Patch, demo};
+use linear_rat::linear::{
+    ErrorKind, FakeClient, IssueDetail, IssueUpdate, LinearClient, Patch, demo,
+};
 use ratatui::backend::TestBackend;
 
 /// The issue My Issues focuses first in the demo, in team DES: in the
@@ -127,7 +129,9 @@ fn accepted(write: &Write) -> Event {
 fn rejected(write: &Write) -> Event {
     Event::IssueUpdated {
         write: write.clone(),
-        result: Err("Linear returned errors: Entity not found (INVALID_INPUT)".to_owned()),
+        result: Err(failed(
+            "Linear returned errors: Entity not found (INVALID_INPUT)",
+        )),
     }
 }
 
@@ -278,7 +282,7 @@ fn the_cycle_picker_says_when_the_options_could_not_load() {
     let mut app = app();
     press(&mut app, "C");
 
-    app.handle(Event::TeamOptionsLoaded(Err("timed out".to_owned())))
+    app.handle(Event::TeamOptionsLoaded(Err(failed("timed out"))))
         .unwrap();
 
     assert!(shows(&app, "Could not load: timed out"));
@@ -609,4 +613,9 @@ fn on_a_narrow_list_the_title_keeps_its_room_and_the_due_date_gives_way() {
     );
     assert!(!shows(&app, "due "), "{:#?}", screen(&app));
     assert_snapshot!(app.backend());
+}
+
+/// A failure with `message`, as the runtime sends one.
+fn failed(message: &str) -> Failure {
+    Failure::new(ErrorKind::Other, "test", message)
 }

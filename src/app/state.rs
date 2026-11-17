@@ -7,13 +7,14 @@ use jiff::Timestamp;
 use jiff::civil::Date;
 
 use super::{
-    AnalyticsScreen, Detail, Drafts, Load, LoadError, ModalStack, MyIssues, Results, Store,
-    SyncStatus, TeamIssues,
+    AnalyticsScreen, Detail, Drafts, ErrorLog, Failure, Load, LoadError, ModalStack, MyIssues,
+    Results, Store, SyncStatus, TeamIssues, WriteClass,
 };
 use crate::auth::KeySource;
 use crate::config::{AnalyticsSettings, Loaded, SyncSettings, UiSettings};
 use crate::keys::Keymap;
 use crate::linear::AssignedIssues;
+use crate::linear::ErrorKind;
 use crate::linear::model::Issue;
 use crate::ui;
 use crate::ui::theme::Theme;
@@ -60,6 +61,8 @@ pub struct State {
     pub analytics_screen: AnalyticsScreen,
     /// Comments and descriptions Linear did not take, to write again.
     pub drafts: Drafts,
+    /// The most recent failures, for the messages overlay.
+    pub errors: ErrorLog,
 }
 
 impl State {
@@ -88,6 +91,70 @@ impl State {
         }
     }
 
+    /// Adds `failure` to the error log, stamped with the latest tick.
+    pub fn record(&mut self, failure: Failure) {
+        self.errors.record(self.sync_status.now(), failure);
+    }
+
+    /// Shows `failure` as the notice and adds it to the error log.
+    pub fn fail(&mut self, failure: Failure) {
+        self.notice = Some(failure.to_string());
+        self.record(failure);
+    }
+
+    /// Learns what the API key may do from a write of `class` in team
+    /// `team_id` that ended `outcome`.
+    pub fn learn_write(
+        &mut self,
+        team_id: &str,
+        class: WriteClass,
+        outcome: Result<(), &ErrorKind>,
+    ) {
+        let now = self.sync_status.now();
+        self.store
+            .capabilities_mut()
+            .learn_write(team_id, class, outcome, now);
+    }
+
+    /// Learns whether the API key can reach team `team_id` from a read
+    /// there that ended `outcome`. Being a member of the team counts as a
+    /// read that worked.
+    pub fn learn_reach(&mut self, team_id: &str, outcome: Result<(), &ErrorKind>) {
+        let now = self.sync_status.now();
+        self.store
+            .capabilities_mut()
+            .learn_reach(team_id, outcome, now);
+    }
+
+    /// Why the API key cannot do `class` to the focused issue, as `this API
+    /// key cannot edit issues in ENG`, or `None` when it is not known to be
+    /// denied or the denial no longer holds.
+    pub fn write_denied(&self, class: WriteClass) -> Option<String> {
+        let team_id = &self.focused_issue()?.team_id;
+        let capabilities = self.store.capabilities();
+        let now = self.sync_status.now();
+        let team = self
+            .store
+            .teams()
+            .find(|team| &team.id == team_id)
+            .map_or(team_id.as_str(), |team| team.key.as_str());
+        if capabilities.reach(team_id).holds_at(now) {
+            return Some(format!("this API key cannot reach {team}"));
+        }
+        capabilities
+            .write(team_id, class)
+            .holds_at(now)
+            .then(|| format!("this API key cannot {} in {team}", class.verb()))
+    }
+
+    /// Adds each of `problems`, what Linear could not give while `action`
+    /// otherwise worked, to the error log.
+    pub fn record_problems(&mut self, action: &str, problems: &[String]) {
+        for problem in problems {
+            self.record(Failure::new(ErrorKind::Other, action, problem.clone()));
+        }
+    }
+
     /// Fills My Issues with `loaded`, grouped as of when it was loaded. What
     /// Linear could not give becomes the notice, unless one is already
     /// showing.
@@ -95,6 +162,7 @@ impl State {
         if self.notice.is_none() {
             self.notice = summary(&loaded.problems);
         }
+        self.record_problems("load My Issues", &loaded.problems);
         // A store from another workspace or viewer, as a snapshot of the
         // last session can be, is thrown away rather than mixed in.
         let other_viewer = self

@@ -24,6 +24,8 @@ pub enum Action {
     ShowPalette,
     /// Open the search across the workspace.
     ShowSearch,
+    /// Open the log of recent errors.
+    ShowMessages,
     /// Run or open what an overlay has highlighted, or send its query.
     Accept,
     /// Show the next shorter or longer analytics range.
