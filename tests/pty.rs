@@ -375,15 +375,15 @@ fn an_editor_that_suspends_its_group_stops_lrat_with_it() {
     fs::set_permissions(&editor, fs::Permissions::from_mode(0o755)).unwrap();
     // A shell with job control, as at a prompt: it gives lrat a process
     // group of its own and takes the terminal back when that group stops.
-    // `set -m` rather than `sh -m`: macOS's /bin/sh (bash 3.2) ignores the
-    // flag with -c, which leaves lrat in the session leader's orphaned group,
-    // where the kernel discards SIGTSTP.
-    let script =
-        "set -m; \"$LRAT\" --demo; echo shell-has-the-terminal; read _; fg; echo shell-done";
+    // An interactive bash, as at a real prompt: a non-interactive shell on
+    // macOS (bash 3.2 as /bin/sh) either leaves lrat in the session
+    // leader's orphaned group, where the kernel discards SIGTSTP, or never
+    // notices that its job stopped.
+    let script = "\"$LRAT\" --demo; echo shell-has-the-terminal; read _; fg; echo shell-done";
     let editor = editor.to_string_lossy();
     let mut pty = Pty::spawn_with(
-        Path::new("/bin/sh"),
-        &["-c", script],
+        Path::new("/bin/bash"),
+        &["--norc", "--noprofile", "-i", "-c", script],
         &[("LRAT", env!("CARGO_BIN_EXE_lrat")), ("EDITOR", &editor)],
     );
     pty.wait_for_first_frame();
