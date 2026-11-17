@@ -4,7 +4,7 @@ use super::{Context, Key};
 use crate::analytics::WeekRange;
 use crate::app::{
     self, Action, AnalyticsView, Copyable, EditPicker, Editable, FilterField, LinkSet, Modal, Pane,
-    Phase, Screen, State, can_load_more,
+    Phase, Screen, State, WriteClass, can_load_more,
 };
 use crate::ui;
 
@@ -22,12 +22,55 @@ pub struct ActionSpec {
     pub label: &'static str,
     /// The cheatsheet pane it is listed in.
     pub group: Group,
+    /// The kind of write it sends to the focused issue's team, so it is
+    /// denied where the API key is known not to be allowed that.
+    pub writes: Option<WriteClass>,
     /// Where the action shows in the bottom bar, if it does.
     pub hint: Option<Hint>,
     pub contexts: &'static [Context],
     pub default_keys: &'static [&'static [Key]],
-    /// Whether it can run now. Unavailable actions are still listed, muted.
+    /// Whether it can run now, the API key aside. Unavailable actions are
+    /// still listed, muted.
     pub available: fn(&State) -> bool,
+}
+
+impl ActionSpec {
+    /// Whether it can run now: [`ActionSpec::available`], and then whether
+    /// the API key may send what it [`writes`](ActionSpec::writes).
+    pub fn availability(&self, state: &State) -> Availability {
+        if !(self.available)(state) {
+            return Availability::Unavailable;
+        }
+        match self.writes.and_then(|class| state.write_denied(class)) {
+            Some(reason) => Availability::Denied(reason),
+            None => Availability::Available,
+        }
+    }
+}
+
+/// Whether an action can run now, and why not when the API key is the
+/// reason.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Availability {
+    Available,
+    /// It does not apply to what is on screen now.
+    Unavailable,
+    /// The API key is not allowed to do it; the reason says so, as `this
+    /// API key cannot edit issues in ENG`.
+    Denied(String),
+}
+
+impl Availability {
+    pub fn can_run(&self) -> bool {
+        *self == Availability::Available
+    }
+
+    pub fn reason(&self) -> Option<&str> {
+        match self {
+            Availability::Denied(reason) => Some(reason),
+            Availability::Available | Availability::Unavailable => None,
+        }
+    }
 }
 
 /// The cheatsheet's panes by purpose, in the order they are laid out.
@@ -135,6 +178,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Move down",
         label: "down / up",
         group: Group::Move,
+        writes: None,
         hint: moves("down"),
         contexts: PANES,
         default_keys: &[&[Key::char('j')]],
@@ -146,6 +190,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Move up",
         label: "down / up",
         group: Group::Move,
+        writes: None,
         hint: moves("up"),
         contexts: PANES,
         default_keys: &[&[Key::char('k')]],
@@ -157,6 +202,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Move to the top",
         label: "top / bottom",
         group: Group::Move,
+        writes: None,
         hint: moves("top"),
         contexts: PANES,
         default_keys: &[&[Key::char('g'), Key::char('g')]],
@@ -168,6 +214,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Move to the bottom",
         label: "top / bottom",
         group: Group::Move,
+        writes: None,
         hint: moves("bottom"),
         contexts: PANES,
         default_keys: &[&[Key::char('G')]],
@@ -179,6 +226,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Move down half a page",
         label: "half page",
         group: Group::Move,
+        writes: None,
         hint: moves("page"),
         contexts: PANES,
         default_keys: &[&[Key::ctrl('d')]],
@@ -190,6 +238,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Move up half a page",
         label: "half page",
         group: Group::Move,
+        writes: None,
         hint: moves("page"),
         contexts: PANES,
         default_keys: &[&[Key::ctrl('u')]],
@@ -201,6 +250,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Focus the pane on the left",
         label: "pane left / right",
         group: Group::Move,
+        writes: None,
         hint: moves("pane"),
         contexts: PANES,
         default_keys: &[&[Key::char('h')]],
@@ -212,6 +262,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Focus the pane on the right",
         label: "pane left / right",
         group: Group::Move,
+        writes: None,
         hint: moves("pane"),
         contexts: PANES,
         default_keys: &[&[Key::char('l')]],
@@ -223,6 +274,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Open the focused issue",
         label: "open the issue",
         group: Group::Open,
+        writes: None,
         hint: does("open"),
         contexts: LIST,
         default_keys: &[&[Key::named(KeyCode::Enter)]],
@@ -234,6 +286,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Copy the identifier",
         label: "copy key / URL",
         group: Group::Open,
+        writes: None,
         hint: does("yank"),
         contexts: PANES,
         default_keys: &[&[Key::char('y'), Key::char('i')]],
@@ -245,6 +298,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Copy the URL",
         label: "copy key / URL",
         group: Group::Open,
+        writes: None,
         hint: does("yank"),
         contexts: PANES,
         default_keys: &[&[Key::char('y'), Key::char('u')]],
@@ -256,6 +310,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Copy the branch name",
         label: "copy branch / link",
         group: Group::Open,
+        writes: None,
         hint: does("yank"),
         contexts: PANES,
         default_keys: &[&[Key::char('y'), Key::char('b')]],
@@ -267,6 +322,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Copy a Markdown link",
         label: "copy branch / link",
         group: Group::Open,
+        writes: None,
         hint: does("yank"),
         contexts: PANES,
         default_keys: &[&[Key::char('y'), Key::char('m')]],
@@ -278,6 +334,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Open the issue or a pull request",
         label: "Linear page or PR",
         group: Group::Open,
+        writes: None,
         hint: does("links"),
         contexts: PANES,
         default_keys: &[&[Key::char('o')]],
@@ -289,6 +346,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Open another link of the issue",
         label: "other links",
         group: Group::Open,
+        writes: None,
         hint: None,
         contexts: PANES,
         default_keys: &[&[Key::char('O')]],
@@ -300,6 +358,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Change the workflow state",
         label: "workflow state",
         group: Group::Edit,
+        writes: Some(WriteClass::UpdateIssue),
         hint: edits("state"),
         contexts: PANES,
         default_keys: &[&[Key::char('s')]],
@@ -311,6 +370,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Change the assignee",
         label: "assignee",
         group: Group::Edit,
+        writes: Some(WriteClass::UpdateIssue),
         hint: edits("assignee"),
         contexts: PANES,
         default_keys: &[&[Key::char('a')]],
@@ -322,6 +382,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Change the priority",
         label: "priority",
         group: Group::Edit,
+        writes: Some(WriteClass::UpdateIssue),
         hint: edits("priority"),
         contexts: PANES,
         default_keys: &[&[Key::char('p')]],
@@ -333,6 +394,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Add or remove labels",
         label: "labels",
         group: Group::Edit,
+        writes: Some(WriteClass::UpdateIssue),
         hint: edits("labels"),
         contexts: PANES,
         default_keys: &[&[Key::char('L')]],
@@ -344,6 +406,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Change the estimate",
         label: "estimate",
         group: Group::Edit,
+        writes: Some(WriteClass::UpdateIssue),
         hint: edits("estimate"),
         contexts: PANES,
         default_keys: &[&[Key::char('e')]],
@@ -355,6 +418,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Edit the title and description",
         label: "title and description",
         group: Group::Edit,
+        writes: Some(WriteClass::UpdateIssue),
         hint: edits("text"),
         contexts: PANES,
         default_keys: &[&[Key::char('E')]],
@@ -370,6 +434,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Comment in $EDITOR",
         label: "comment",
         group: Group::Edit,
+        writes: Some(WriteClass::CreateComment),
         hint: edits("comment"),
         contexts: PANES,
         default_keys: &[&[Key::char('c')]],
@@ -385,6 +450,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Create an issue",
         label: "new issue",
         group: Group::Edit,
+        writes: None,
         hint: None,
         contexts: PANES,
         default_keys: &[&[Key::char('n')]],
@@ -396,6 +462,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Pick entry 1 of the list",
         label: "pick by number",
         group: Group::Screen,
+        writes: None,
         hint: None,
         contexts: OVERLAY,
         default_keys: &[&[Key::char('1')]],
@@ -407,6 +474,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Pick entry 2 of the list",
         label: "pick by number",
         group: Group::Screen,
+        writes: None,
         hint: None,
         contexts: OVERLAY,
         default_keys: &[&[Key::char('2')]],
@@ -418,6 +486,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Pick entry 3 of the list",
         label: "pick by number",
         group: Group::Screen,
+        writes: None,
         hint: None,
         contexts: OVERLAY,
         default_keys: &[&[Key::char('3')]],
@@ -429,6 +498,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Pick entry 4 of the list",
         label: "pick by number",
         group: Group::Screen,
+        writes: None,
         hint: None,
         contexts: OVERLAY,
         default_keys: &[&[Key::char('4')]],
@@ -440,6 +510,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Pick entry 5 of the list",
         label: "pick by number",
         group: Group::Screen,
+        writes: None,
         hint: None,
         contexts: OVERLAY,
         default_keys: &[&[Key::char('5')]],
@@ -451,6 +522,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Pick entry 6 of the list",
         label: "pick by number",
         group: Group::Screen,
+        writes: None,
         hint: None,
         contexts: OVERLAY,
         default_keys: &[&[Key::char('6')]],
@@ -462,6 +534,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Pick entry 7 of the list",
         label: "pick by number",
         group: Group::Screen,
+        writes: None,
         hint: None,
         contexts: OVERLAY,
         default_keys: &[&[Key::char('7')]],
@@ -473,6 +546,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Pick entry 8 of the list",
         label: "pick by number",
         group: Group::Screen,
+        writes: None,
         hint: None,
         contexts: OVERLAY,
         default_keys: &[&[Key::char('8')]],
@@ -484,6 +558,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Pick entry 9 of the list",
         label: "pick by number",
         group: Group::Screen,
+        writes: None,
         hint: None,
         contexts: OVERLAY,
         default_keys: &[&[Key::char('9')]],
@@ -495,6 +570,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Switch the team of Team Issues",
         label: "switch team",
         group: Group::Screen,
+        writes: None,
         hint: views("team"),
         contexts: TEAM_ISSUES,
         default_keys: &[&[Key::char('t')]],
@@ -506,6 +582,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Filter by workflow state",
         label: "filter by state",
         group: Group::Screen,
+        writes: None,
         hint: views("filter"),
         contexts: TEAM_ISSUES,
         default_keys: &[&[Key::char('f'), Key::char('s')]],
@@ -517,6 +594,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Filter by assignee",
         label: "filter by assignee",
         group: Group::Screen,
+        writes: None,
         hint: views("filter"),
         contexts: TEAM_ISSUES,
         default_keys: &[&[Key::char('f'), Key::char('a')]],
@@ -528,6 +606,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Filter by label",
         label: "filter by label",
         group: Group::Screen,
+        writes: None,
         hint: views("filter"),
         contexts: TEAM_ISSUES,
         default_keys: &[&[Key::char('f'), Key::char('l')]],
@@ -539,6 +618,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Filter by cycle",
         label: "filter by cycle",
         group: Group::Screen,
+        writes: None,
         hint: views("filter"),
         contexts: TEAM_ISSUES,
         default_keys: &[&[Key::char('f'), Key::char('c')]],
@@ -550,6 +630,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Filter by project",
         label: "filter by project",
         group: Group::Screen,
+        writes: None,
         hint: views("filter"),
         contexts: TEAM_ISSUES,
         default_keys: &[&[Key::char('f'), Key::char('p')]],
@@ -561,6 +642,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Load the next page of Team Issues",
         label: "load more",
         group: Group::Screen,
+        writes: None,
         hint: views("more"),
         contexts: TEAM_ISSUES,
         default_keys: &[&[Key::char('m')]],
@@ -572,6 +654,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Scroll down",
         label: "down / up",
         group: Group::Move,
+        writes: None,
         hint: moves("move"),
         contexts: SCROLLS,
         default_keys: &[
@@ -587,6 +670,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Scroll up",
         label: "down / up",
         group: Group::Move,
+        writes: None,
         hint: moves("move"),
         contexts: SCROLLS,
         default_keys: &[
@@ -602,6 +686,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Choose the highlighted entry",
         label: "choose",
         group: Group::Screen,
+        writes: None,
         hint: does("pick"),
         contexts: OVERLAY,
         default_keys: &[&[Key::named(KeyCode::Enter)]],
@@ -613,6 +698,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Mark or unmark the highlighted entry",
         label: "mark or unmark",
         group: Group::Screen,
+        writes: None,
         hint: does("toggle"),
         contexts: OVERLAY,
         default_keys: &[&[Key::named(KeyCode::Tab)]],
@@ -627,6 +713,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Show a shorter range",
         label: "shorter / longer range",
         group: Group::Screen,
+        writes: None,
         hint: views("range"),
         contexts: ANALYTICS,
         default_keys: &[&[Key::char('[')]],
@@ -638,6 +725,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Show a longer range",
         label: "shorter / longer range",
         group: Group::Screen,
+        writes: None,
         hint: views("range"),
         contexts: ANALYTICS,
         default_keys: &[&[Key::char(']')]],
@@ -649,6 +737,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Show Personal or Team analytics",
         label: "Personal or Team",
         group: Group::Screen,
+        writes: None,
         hint: views("view"),
         contexts: ANALYTICS,
         default_keys: &[&[Key::char('v')]],
@@ -660,6 +749,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Pick the team for Team analytics",
         label: "team",
         group: Group::Screen,
+        writes: None,
         hint: views("team"),
         contexts: ANALYTICS,
         default_keys: &[&[Key::char('t')]],
@@ -674,6 +764,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Close the top overlay or step back",
         label: "close or step back",
         group: Group::Move,
+        writes: None,
         hint: does("close"),
         contexts: &[Context::List, Context::Detail, Context::Overlay],
         default_keys: &[&[Key::named(KeyCode::Esc)]],
@@ -687,6 +778,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Show My Issues",
         label: "screens",
         group: Group::App,
+        writes: None,
         hint: None,
         contexts: GLOBAL,
         default_keys: &[&[Key::char('1')]],
@@ -698,6 +790,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Show Team Issues",
         label: "screens",
         group: Group::App,
+        writes: None,
         hint: None,
         contexts: GLOBAL,
         default_keys: &[&[Key::char('2')]],
@@ -709,6 +802,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Show Analytics",
         label: "screens",
         group: Group::App,
+        writes: None,
         hint: None,
         contexts: GLOBAL,
         default_keys: &[&[Key::char('3')]],
@@ -720,6 +814,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Refresh now",
         label: "refresh",
         group: Group::App,
+        writes: None,
         hint: None,
         contexts: GLOBAL,
         default_keys: &[&[Key::char('r')]],
@@ -731,6 +826,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Show every key for this context",
         label: "keys",
         group: Group::App,
+        writes: None,
         hint: does("keys"),
         contexts: GLOBAL,
         default_keys: &[&[Key::char('?')]],
@@ -742,6 +838,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Find an action or loaded issue",
         label: "palette",
         group: Group::App,
+        writes: None,
         hint: does("palette"),
         contexts: GLOBAL,
         default_keys: &[&[Key::char(':')], &[Key::ctrl('k')]],
@@ -753,6 +850,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Search all issues in Linear",
         label: "search",
         group: Group::App,
+        writes: None,
         hint: moves("search"),
         contexts: GLOBAL,
         default_keys: &[&[Key::char('/')]],
@@ -764,6 +862,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Show recent errors",
         label: "messages",
         group: Group::App,
+        writes: None,
         hint: None,
         contexts: GLOBAL,
         default_keys: &[&[Key::char('M')]],
@@ -775,6 +874,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Quit lrat",
         label: "quit",
         group: Group::App,
+        writes: None,
         hint: does("quit"),
         contexts: GLOBAL,
         default_keys: &[&[Key::char('q')]],
@@ -786,6 +886,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Suspend lrat to the shell",
         label: "suspend",
         group: Group::App,
+        writes: None,
         hint: None,
         contexts: GLOBAL,
         default_keys: &[&[Key::ctrl('z')]],

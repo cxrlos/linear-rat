@@ -5,7 +5,7 @@
 //! one `issueUpdate`, and is rolled back if Linear rejects it.
 
 use super::picker::{Entry, Note, Picker};
-use super::{Effect, Failure, Modal, State, Store, Update};
+use super::{Effect, Failure, Modal, State, Store, Update, WriteClass};
 use crate::linear::model::{Estimation, Issue, Priority, WorkflowState};
 use crate::linear::{IssueUpdate, Patch};
 use crate::ui::icons;
@@ -609,6 +609,14 @@ pub(super) fn finished(
         if *count == 0 {
             state.writes_in_flight.remove(&write.issue_id);
         }
+    }
+    let team_id = state
+        .store
+        .issue(&write.issue_id)
+        .map(|issue| issue.team_id.clone());
+    if let Some(team_id) = &team_id {
+        let outcome = result.as_ref().map(|_| ()).map_err(|failure| &failure.kind);
+        state.learn_write(team_id, WriteClass::UpdateIssue, outcome);
     }
     match result {
         Ok(issue) => {

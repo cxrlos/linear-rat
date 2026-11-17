@@ -2,6 +2,7 @@
 
 mod action;
 mod analytics_screen;
+mod capabilities;
 mod compose;
 mod create;
 mod detail;
@@ -31,6 +32,7 @@ use ratatui::layout::Rect;
 
 pub use action::{Action, Copyable};
 pub use analytics_screen::{AnalyticsScreen, AnalyticsView};
+pub use capabilities::{Capabilities, Capability, WriteClass};
 pub use compose::{Drafts, IssueDraft, NewComment, NewIssue, Writing, is_local};
 pub use create::{CreateForm, Step};
 pub use detail::{Detail, DetailLoad};

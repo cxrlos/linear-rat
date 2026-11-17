@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, HashSet};
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
+use super::capabilities::Capabilities;
 use super::edit::{Edit, Write};
 use crate::analytics::AdministrableTeams;
 use crate::linear::model::{
@@ -74,9 +75,22 @@ pub struct Store {
     /// next launch.
     #[serde(skip)]
     administrable_teams: Option<Vec<String>>,
+    /// What the API key may do in each team, as learned from Linear's
+    /// answers. Defaults when missing, so an older snapshot still loads.
+    #[serde(default)]
+    capabilities: Capabilities,
 }
 
 impl Store {
+    /// What the API key may do in each team.
+    pub fn capabilities(&self) -> &Capabilities {
+        &self.capabilities
+    }
+
+    pub fn capabilities_mut(&mut self) -> &mut Capabilities {
+        &mut self.capabilities
+    }
+
     /// Stores `issue` unless the stored copy is newer, so updates can arrive
     /// in any order. Returns whether it replaced or added anything.
     pub fn upsert_issue(&mut self, issue: Issue) -> bool {

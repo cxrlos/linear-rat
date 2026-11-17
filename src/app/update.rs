@@ -214,7 +214,7 @@ fn picks_by_number(state: &State, key: Key) -> bool {
     let contexts = keys::active_contexts(state);
     match state.keymap.resolve(&contexts, &[key]) {
         Resolution::Action(action @ Action::PickNumber(_)) => {
-            keys::spec(action).is_some_and(|spec| (spec.available)(state))
+            keys::spec(action).is_some_and(|spec| spec.availability(state).can_run())
         }
         _ => false,
     }
@@ -234,7 +234,13 @@ fn press(state: &mut State, key: Key) -> Update {
 
     let contexts = keys::active_contexts(state);
     let mut update = match state.keymap.resolve(&contexts, &keys) {
-        Resolution::Action(action) => perform(state, action),
+        Resolution::Action(action) => match denied(state, action) {
+            Some(reason) => {
+                state.notice = Some(reason);
+                Update::redraw()
+            }
+            None => perform(state, action),
+        },
         Resolution::Prefix => {
             state.modals.push(Modal::WhichKey { prefix: keys });
             Update::redraw()
@@ -243,6 +249,14 @@ fn press(state: &mut State, key: Key) -> Update {
     };
     update.redraw |= chord_ended;
     update
+}
+
+/// Why the API key is known not to be allowed `action` here, if it is not.
+fn denied(state: &State, action: Action) -> Option<String> {
+    keys::spec(action)?
+        .availability(state)
+        .reason()
+        .map(str::to_owned)
 }
 
 /// Carries out `action` against `state`.

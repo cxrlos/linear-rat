@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use super::{Effect, Failure, State, TextOpened, Update, edit_text};
+use super::{Effect, Failure, State, TextOpened, Update, WriteClass, edit_text};
 use crate::linear::ErrorKind;
 use crate::linear::model::{Issue, Priority, WorkflowState};
 use crate::linear::{IssueCreate, PostedComment};
@@ -215,6 +215,14 @@ pub(super) fn commented(
     comment: &NewComment,
     result: Result<PostedComment, Failure>,
 ) -> Update {
+    if let Some(team_id) = state
+        .store
+        .issue(&comment.issue_id)
+        .map(|issue| issue.team_id.clone())
+    {
+        let outcome = result.as_ref().map(|_| ()).map_err(|failure| &failure.kind);
+        state.learn_write(&team_id, WriteClass::CreateComment, outcome);
+    }
     match result {
         Ok(posted) => {
             state.drafts.comments.remove(&comment.issue_id);
@@ -250,6 +258,8 @@ pub(super) fn created(
         .focused_issue()
         .is_some_and(|focused| focused.id == issue.local_id);
     state.store.remove_issue(&issue.local_id);
+    let outcome = result.as_ref().map(|_| ()).map_err(|failure| &failure.kind);
+    state.learn_write(&issue.input.team_id, WriteClass::CreateIssue, outcome);
     match result {
         Ok(created) => {
             let id = created.id.clone();

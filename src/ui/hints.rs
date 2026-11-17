@@ -102,7 +102,7 @@ fn items(state: &State, row: HintRow) -> Vec<Item> {
                 continue;
             };
             shown.push(spec.action);
-            let available = (spec.available)(state);
+            let available = spec.availability(state).can_run();
             match groups.iter_mut().find(|(word, ..)| *word == hint.word) {
                 Some((_, keys, any_available)) => {
                     keys.push((key, available));

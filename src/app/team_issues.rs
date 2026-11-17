@@ -272,6 +272,9 @@ pub(super) fn teams_loaded(state: &mut State, result: Result<Vec<Team>, Failure>
     match result {
         Ok(teams) => {
             state.store.set_viewer_teams(&teams);
+            for team in &teams {
+                state.learn_reach(&team.id, Ok(()));
+            }
             state.team_issues.teams = Progress::Done;
             match teams.first() {
                 Some(team) => switch(state, team.id.clone()),
@@ -377,6 +380,8 @@ pub(super) fn page_loaded(
     {
         return false;
     }
+    let outcome = result.as_ref().map(|_| ()).map_err(|failure| &failure.kind);
+    state.learn_reach(&query.team_id, outcome);
     match result {
         Ok(page) => {
             if state.notice.is_none() {

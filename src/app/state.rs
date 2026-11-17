@@ -7,7 +7,7 @@ use jiff::Timestamp;
 
 use super::{
     AnalyticsScreen, Detail, Drafts, ErrorLog, Failure, Load, LoadError, ModalStack, MyIssues,
-    Results, Store, SyncStatus, TeamIssues,
+    Results, Store, SyncStatus, TeamIssues, WriteClass,
 };
 use crate::auth::KeySource;
 use crate::config::{AnalyticsSettings, Loaded, SyncSettings, UiSettings};
@@ -99,6 +99,50 @@ impl State {
     pub fn fail(&mut self, failure: Failure) {
         self.notice = Some(failure.to_string());
         self.record(failure);
+    }
+
+    /// Learns what the API key may do from a write of `class` in team
+    /// `team_id` that ended `outcome`.
+    pub fn learn_write(
+        &mut self,
+        team_id: &str,
+        class: WriteClass,
+        outcome: Result<(), &ErrorKind>,
+    ) {
+        let now = self.sync_status.now();
+        self.store
+            .capabilities_mut()
+            .learn_write(team_id, class, outcome, now);
+    }
+
+    /// Learns whether the API key can reach team `team_id` from a read
+    /// there that ended `outcome`. Being a member of the team counts as a
+    /// read that worked.
+    pub fn learn_reach(&mut self, team_id: &str, outcome: Result<(), &ErrorKind>) {
+        let now = self.sync_status.now();
+        self.store
+            .capabilities_mut()
+            .learn_reach(team_id, outcome, now);
+    }
+
+    /// Why the API key cannot do `class` to the focused issue, as `this API
+    /// key cannot edit issues in ENG`, or `None` when it is not known to be
+    /// denied.
+    pub fn write_denied(&self, class: WriteClass) -> Option<String> {
+        let team_id = &self.focused_issue()?.team_id;
+        let capabilities = self.store.capabilities();
+        let team = self
+            .store
+            .teams()
+            .find(|team| &team.id == team_id)
+            .map_or(team_id.as_str(), |team| team.key.as_str());
+        if capabilities.reach(team_id).is_denied() {
+            return Some(format!("this API key cannot reach {team}"));
+        }
+        capabilities
+            .write(team_id, class)
+            .is_denied()
+            .then(|| format!("this API key cannot {} in {team}", class.verb()))
     }
 
     /// Adds each of `problems`, what Linear could not give while `action`

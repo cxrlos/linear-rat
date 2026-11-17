@@ -163,6 +163,14 @@ fn render_list(view: &View, state: &State, frame: &mut Frame, area: Rect, focus:
         _ if team_issues.query().is_none() => {
             Some(message("You are not a member of any team.".to_owned()).fg(theme.muted))
         }
+        (_, Progress::Failed(_))
+            if team_issues.ids().is_empty()
+                && team_issues.query().is_some_and(|query| {
+                    state.store.capabilities().reach(&query.team_id).is_denied()
+                }) =>
+        {
+            Some(message("Not accessible with this key".to_owned()).fg(theme.muted))
+        }
         (_, Progress::Failed(error)) if team_issues.ids().is_empty() => {
             Some(message(error.clone()).style(style::error(theme)))
         }
