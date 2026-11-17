@@ -82,13 +82,15 @@ pub(super) async fn create(
         )
         .await?;
     let payload = response.data.issue_relation_create;
-    let kind = relation_type(&payload.issue_relation.kind);
-    match kind {
-        Some(kind) if payload.success => Ok(IssueRelation {
-            id: payload.issue_relation.id,
+    let stored = payload
+        .issue_relation
+        .and_then(|node| Some((relation_type(&node.kind)?, node)));
+    match stored {
+        Some((kind, node)) if payload.success => Ok(IssueRelation {
+            id: node.id,
             kind,
-            issue_id: payload.issue_relation.issue.id,
-            related_issue_id: payload.issue_relation.related_issue.id,
+            issue_id: node.issue.id,
+            related_issue_id: node.related_issue.id,
         }),
         _ if !response.errors.is_empty() => Err(ClientError::GraphQl(response.errors)),
         _ => Err(ClientError::Decode(
@@ -183,7 +185,7 @@ struct CreateData {
 #[serde(rename_all = "camelCase")]
 struct CreatePayload {
     success: bool,
-    issue_relation: RelationNode,
+    issue_relation: Option<RelationNode>,
 }
 
 #[derive(Deserialize)]

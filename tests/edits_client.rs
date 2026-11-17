@@ -538,6 +538,32 @@ async fn creating_a_relation_sends_its_type_and_returns_it_as_stored() {
 }
 
 #[tokio::test]
+async fn a_relation_linear_does_not_confirm_says_so() {
+    let server = server_answering(json!({ "data": { "issueRelationCreate": {
+        "success": false,
+        "issueRelation": null
+    } } }))
+    .await;
+    let input = RelationCreate {
+        issue_id: "issue-1".to_owned(),
+        related_issue_id: "issue-2".to_owned(),
+        kind: RelationType::Related,
+    };
+
+    let error = client_for(&server)
+        .create_relation(&input)
+        .await
+        .unwrap_err();
+
+    assert!(
+        error
+            .to_string()
+            .contains("Linear did not confirm the relation"),
+        "{error:?}"
+    );
+}
+
+#[tokio::test]
 async fn deleting_a_relation_sends_its_id() {
     let server =
         server_answering(json!({ "data": { "issueRelationDelete": { "success": true } } })).await;
