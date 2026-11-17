@@ -117,11 +117,19 @@ pub struct Scope {
     /// When set, only these are offered, in this order, and Linear's search
     /// is not asked, since nothing else could be chosen.
     pub only: Option<Vec<String>>,
+    /// When set, the sub-issues of this issue at any depth are never
+    /// offered. Checked against the store's parents each time the list is
+    /// ranked, so it also holds for issues Linear's search brings later.
+    pub not_under: Option<String>,
 }
 
 impl Scope {
-    fn allows(&self, id: &str) -> bool {
+    fn allows(&self, store: &Store, id: &str) -> bool {
         !self.excluded.iter().any(|excluded| excluded == id)
+            && self
+                .not_under
+                .as_ref()
+                .is_none_or(|ancestor| !store.is_under(id, ancestor))
             && self
                 .only
                 .as_ref()
@@ -240,7 +248,7 @@ impl IssuePicker {
 /// typed, the most recently updated first, or `scope.only`'s order. What
 /// Linear's search `found` and the store has follows, in its order.
 fn rank(state: &State, scope: &Scope, query: &str, found: &[String]) -> Vec<String> {
-    let allowed = |issue: &&Issue| scope.allows(&issue.id);
+    let allowed = |issue: &&Issue| scope.allows(&state.store, &issue.id);
     let mut issues: Vec<&Issue> = match &scope.only {
         Some(only) => only
             .iter()
@@ -277,7 +285,7 @@ fn rank(state: &State, scope: &Scope, query: &str, found: &[String]) -> Vec<Stri
     }
     let mut ids: Vec<String> = issues.into_iter().map(|issue| issue.id.clone()).collect();
     for id in found {
-        if scope.allows(id) && state.store.issue(id).is_some() && !ids.contains(id) {
+        if scope.allows(&state.store, id) && state.store.issue(id).is_some() && !ids.contains(id) {
             ids.push(id.clone());
         }
     }

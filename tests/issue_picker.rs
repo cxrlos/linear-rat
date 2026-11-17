@@ -236,7 +236,7 @@ fn excluded_issues_are_never_offered() {
         Mode::One,
         Scope {
             excluded: vec![excluded],
-            only: None,
+            ..Scope::default()
         },
     );
     press(&mut app, "cave");
@@ -257,8 +257,8 @@ fn a_picker_limited_to_some_issues_never_searches() {
     let mut app = picker_app(
         Mode::One,
         Scope {
-            excluded: Vec::new(),
             only: Some(only),
+            ..Scope::default()
         },
     );
 

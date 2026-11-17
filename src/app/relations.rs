@@ -59,21 +59,29 @@ fn family_loaded(state: &mut State, issue: &Issue) -> (bool, Vec<Effect>) {
 }
 
 /// Opens the issue picker for the focused issue's parent, leaving out the
-/// issue itself and its sub-issues at any depth.
+/// issue itself and its sub-issues at any depth. It waits for the detail,
+/// which brings the sub-issues, so the store knows the parents that the
+/// issues Linear's search finds hang from.
 pub(super) fn open_parent(state: &mut State) -> Update {
     let Some(issue) = focused(state) else {
         return Update::redraw();
     };
-    let mut excluded = state.store.descendants(&issue.id);
-    excluded.push(issue.id.clone());
+    let (loaded, effects) = family_loaded(state, &issue);
+    if !loaded {
+        return Update {
+            redraw: true,
+            effects,
+        };
+    }
     let picker = IssuePicker::new(
         IssuePurpose::SetParent {
             issue_id: issue.id.clone(),
         },
         Mode::One,
         Scope {
-            excluded,
+            excluded: vec![issue.id.clone()],
             only: None,
+            not_under: Some(issue.id.clone()),
         },
         issue.parent_id.clone(),
     );
@@ -155,6 +163,7 @@ pub(super) fn kind_chosen(state: &mut State, nth: Option<usize>) -> Update {
         Scope {
             excluded,
             only: None,
+            not_under: None,
         },
         None,
     );
@@ -190,6 +199,7 @@ pub(super) fn open_remove(state: &mut State) -> Update {
         Scope {
             excluded: Vec::new(),
             only: Some(others),
+            not_under: None,
         },
         None,
     );
@@ -235,6 +245,7 @@ pub(super) fn open_related(state: &mut State) -> Update {
         Scope {
             excluded: Vec::new(),
             only: Some(family),
+            not_under: None,
         },
         None,
     );

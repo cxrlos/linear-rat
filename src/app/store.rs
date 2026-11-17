@@ -481,20 +481,25 @@ impl Store {
         children
     }
 
-    /// The ids of the stored sub-issues of the issue with id `issue_id`,
-    /// their sub-issues and so on.
-    pub fn descendants(&self, issue_id: &str) -> Vec<String> {
-        let mut found: Vec<String> = Vec::new();
-        let mut next = vec![issue_id.to_owned()];
-        while let Some(parent) = next.pop() {
-            for child in self.children(&parent) {
-                if !found.contains(&child.id) && child.id != issue_id {
-                    found.push(child.id.clone());
-                    next.push(child.id.clone());
-                }
+    /// Whether the issue with id `id` is a sub-issue of the issue with id
+    /// `ancestor` at any depth, following the parents the store holds. A
+    /// chain that reaches an issue the store lacks, or loops, ends there.
+    pub fn is_under(&self, id: &str, ancestor: &str) -> bool {
+        let mut seen: Vec<&str> = Vec::new();
+        let mut next = self.issue(id).and_then(|issue| issue.parent_id.as_deref());
+        while let Some(parent) = next {
+            if parent == ancestor {
+                return true;
             }
+            if seen.contains(&parent) {
+                return false;
+            }
+            seen.push(parent);
+            next = self
+                .issue(parent)
+                .and_then(|issue| issue.parent_id.as_deref());
         }
-        found
+        false
     }
 
     pub fn viewer(&self) -> Option<&Viewer> {

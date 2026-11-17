@@ -10,9 +10,9 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
 use linear_rat::app::{App, Edit, Effect, Event, Modal, RelationWrite, State, Write};
-use linear_rat::linear::model::{IssueRelation, RelationKind, RelationType};
+use linear_rat::linear::model::{Issue, IssueRelation, RelationKind, RelationType};
 use linear_rat::linear::{
-    FakeClient, IssueDetail, LinearClient, Patch, RelationCreate, TeamFilter,
+    FakeClient, IssueDetail, LinearClient, Patch, RelationCreate, SearchResults, TeamFilter,
 };
 use ratatui::backend::TestBackend;
 
@@ -399,8 +399,7 @@ fn removing_before_the_relations_loaded_asks_for_them_first() {
 
 #[test]
 fn setting_a_parent_shows_at_once_and_rolls_back_when_linear_rejects_it() {
-    let mut app = sized(80, 24);
-    focus(&mut app, "ENG-6");
+    let mut app = focused_with_detail("ENG-6");
 
     let write = only_write(press(&mut app, "PENG-60\n"));
 
@@ -432,8 +431,7 @@ fn setting_a_parent_shows_at_once_and_rolls_back_when_linear_rejects_it() {
 
 #[test]
 fn a_parent_linear_accepts_stays() {
-    let mut app = sized(80, 24);
-    focus(&mut app, "ENG-6");
+    let mut app = focused_with_detail("ENG-6");
     let write = only_write(press(&mut app, "PENG-60\n"));
 
     let issue = on_own_thread(FakeClient.update_issue(&write.issue_id, &write.update())).unwrap();
@@ -448,35 +446,127 @@ fn a_parent_linear_accepts_stays() {
     assert!(app.state().notice.is_none(), "{:?}", app.state().notice);
 }
 
+/// The ids the picker on top offers.
+fn offered(app: &App<TestBackend>) -> Vec<String> {
+    let Some(Modal::IssuePicker(picker)) = app.state().modals.top() else {
+        panic!("{:?}", app.state().modals.top());
+    };
+    picker.list.values().cloned().collect()
+}
+
+/// A copy of the stored issue `like`, as `identifier`, with `parent_id` as
+/// its parent: an issue only Linear's search knows about.
+fn found_issue(app: &App<TestBackend>, like: &str, identifier: &str, parent_id: &str) -> Issue {
+    let mut issue = app.state().store.issue(like).unwrap().clone();
+    issue.id = format!("issue-{}", identifier.to_lowercase());
+    issue.identifier = identifier.to_owned();
+    issue.parent_id = Some(parent_id.to_owned());
+    issue
+}
+
+/// Types `query` into the picker on top, lets typing pause and answers its
+/// search with `issues`.
+fn search_answers(app: &mut App<TestBackend>, query: &str, issues: Vec<Issue>) {
+    press(app, query);
+    let effects = app.handle(Event::TypingPaused(query.to_owned())).unwrap();
+    assert!(
+        effects
+            .iter()
+            .any(|effect| matches!(effect, Effect::Search(term) if term == query)),
+        "{effects:?}"
+    );
+    let result = Ok(SearchResults {
+        issues,
+        cycles: Vec::new(),
+        labels: Vec::new(),
+        members: Vec::new(),
+        teams: Vec::new(),
+        problems: Vec::new(),
+    });
+    app.handle(Event::SearchDone {
+        term: query.to_owned(),
+        result,
+    })
+    .unwrap();
+}
+
 #[test]
 fn the_parent_picker_leaves_out_the_issue_and_its_sub_issues() {
     let mut app = focused_with_detail("ENG-51");
 
     press(&mut app, "P");
 
-    let Some(Modal::IssuePicker(picker)) = app.state().modals.top() else {
-        panic!("{:?}", app.state().modals.top());
-    };
-    let mut excluded = picker.scope().excluded.clone();
-    excluded.sort();
-    assert_eq!(
-        excluded,
-        [
-            "issue-eng-17",
-            "issue-eng-29",
-            "issue-eng-51",
-            "issue-eng-60",
-            "issue-eng-69"
-        ]
+    let offered = offered(&app);
+    for id in [
+        "issue-eng-17",
+        "issue-eng-29",
+        "issue-eng-51",
+        "issue-eng-60",
+        "issue-eng-69",
+    ] {
+        assert!(!offered.contains(&id.to_owned()), "{id} in {offered:?}");
+    }
+    assert!(offered.contains(&"issue-eng-6".to_owned()), "{offered:?}");
+}
+
+#[test]
+fn sub_issues_at_any_depth_found_by_search_are_never_offered_as_parent() {
+    let mut app = focused_with_detail("ENG-51");
+    let child = found_issue(&app, "issue-eng-6", "ENG-91", DRY_RUN);
+    let grandchild = found_issue(&app, "issue-eng-6", "ENG-92", "issue-eng-60");
+    let great_grandchild = found_issue(&app, "issue-eng-6", "ENG-93", "issue-eng-92");
+    let elsewhere = found_issue(&app, "issue-eng-6", "ENG-94", "issue-eng-6");
+
+    press(&mut app, "P");
+    search_answers(
+        &mut app,
+        "ENG-9",
+        vec![child, grandchild, great_grandchild, elsewhere],
     );
-    press(&mut app, "ENG-60");
-    let Some(Modal::IssuePicker(picker)) = app.state().modals.top() else {
-        panic!("{:?}", app.state().modals.top());
-    };
-    let offered: Vec<&String> = picker.list.values().collect();
+
+    let offered = offered(&app);
+    assert!(offered.contains(&"issue-eng-94".to_owned()), "{offered:?}");
+    for id in ["issue-eng-91", "issue-eng-92", "issue-eng-93"] {
+        assert!(!offered.contains(&id.to_owned()), "{id} in {offered:?}");
+    }
+}
+
+#[test]
+fn parents_that_loop_do_not_hang_the_parent_picker() {
+    let mut app = focused_with_detail("ENG-51");
+    let one = found_issue(&app, "issue-eng-6", "ENG-95", "issue-eng-96");
+    let other = found_issue(&app, "issue-eng-6", "ENG-96", "issue-eng-95");
+
+    press(&mut app, "P");
+    search_answers(&mut app, "ENG-9", vec![one, other]);
+
+    let offered = offered(&app);
+    for id in ["issue-eng-95", "issue-eng-96"] {
+        assert!(offered.contains(&id.to_owned()), "{id} not in {offered:?}");
+    }
+}
+
+#[test]
+fn setting_a_parent_before_the_sub_issues_loaded_asks_for_them_first() {
+    let mut app = sized(80, 24);
+    focus(&mut app, "ENG-51");
+
+    let effects = press(&mut app, "P");
+
     assert!(
-        !offered.contains(&&"issue-eng-60".to_owned()),
-        "{offered:?}"
+        effects.iter().any(|effect| matches!(
+            effect,
+            Effect::LoadIssueDetail { issue_id, .. } if issue_id == DRY_RUN
+        )),
+        "{effects:?}"
+    );
+    assert!(app.state().modals.top().is_none());
+    assert!(
+        app.state()
+            .notice
+            .as_deref()
+            .unwrap()
+            .starts_with("Loading the relations of ENG-51")
     );
 }
 
