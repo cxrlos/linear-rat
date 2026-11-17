@@ -505,9 +505,9 @@ fn the_cheatsheet_mutes_the_estimate_action_without_estimates() {
         let rows: Vec<String> = screen(&app);
         let row = rows
             .iter()
-            .position(|line| line.contains("Change the estimate"))
+            .position(|line| line.contains("e  estimate"))
             .unwrap();
-        let column = rows[row].find("Change the estimate").unwrap();
+        let column = rows[row].find("e  estimate").unwrap() + "e  ".len();
         let column = rows[row][..column].chars().count();
         (
             buffer.content()[row * width + column].style(),

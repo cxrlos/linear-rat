@@ -1,0 +1,27 @@
+---
+source: tests/cheatsheet.rs
+expression: "text(&cheatsheet(50, 24))"
+---
+ [1] My Issues │ [2] Team Issues │ [3] Analytics  
+┌My Issues───────────────────────────────────────┐
+│◐ Starte┌ Keys ────────────────────────┐        │
+│▸ DES-34│ Move                         │Cycle 7 │
+│  ENG-51│  j/k      down / up          │Cycle 7 │
+│  OPS-37│  gg/G     top / bottom       │Cycle 7 │
+│  ENG-61│  C-d/C-u  half page          │Cycle 7 │
+│  OPS-36│  h/l      pane left / right  │Cycle 7 │
+│  ENG-60│  Esc      close or step back │Cycle 7 │
+│  ENG-22│                              │        │
+│  OPS-15│ Edit the issue               │        │
+│  DES-12│  s  workflow state           │        │
+│○ Unstar│  a  assignee                 │        │
+│  DES-40│  p  priority                 │Cycle 7 │
+│  ENG-57│  L  labels                   │Cycle 7 │
+│  OPS-38│  e  estimate                 │Cycle 7 │
+│  DES-31│  E  title and description    │Cycle 7 │
+│  ENG-65│  c  comment                  │Cycle 7 │
+│  DES-16│  n  new issue                │        │
+│  ENG-56└ Esc close ───────────────────┘        │
+└────────────────────────────────────────────────┘
+ Move │ j/k move                                  
+ Do   │ Enter pick │ Tab toggle │ Esc close

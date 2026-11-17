@@ -212,10 +212,17 @@ fn the_cheatsheet_shows_overridden_keys() {
     press(&mut app, "?");
     assert_snapshot!(app.backend());
 
-    press(&mut app, &"j".repeat(30));
+    let loaded = config::parse(OVERRIDES, Path::new("config.toml"));
+    let mut narrow = App::new(
+        TestBackend::new(50, 24),
+        State::default().with_config(&loaded),
+    )
+    .unwrap();
+    press(&mut narrow, "?");
+    press(&mut narrow, &"j".repeat(30));
     assert_snapshot!(
         "the_cheatsheet_shows_overridden_keys_scrolled",
-        app.backend()
+        narrow.backend()
     );
 }
 
@@ -224,8 +231,8 @@ fn screen(app: &App<TestBackend>) -> String {
 }
 
 #[test]
-fn the_cheatsheet_fits_inside_the_frame_and_scrolls_to_the_rest() {
-    let mut app = app();
+fn a_narrow_cheatsheet_fits_inside_the_frame_and_scrolls_to_the_rest() {
+    let mut app = sized_app(50);
 
     press(&mut app, "?");
     assert!(
@@ -233,24 +240,21 @@ fn the_cheatsheet_fits_inside_the_frame_and_scrolls_to_the_rest() {
         "{}",
         screen(&app)
     );
-    assert!(!screen(&app).contains("Quit lrat"));
+    assert!(row(&app, 3).contains("Move"), "{}", screen(&app));
+    assert!(!screen(&app).contains("suspend"));
 
     press(&mut app, &"j".repeat(30));
-    assert!(
-        screen(&app).contains("q       Quit lrat"),
-        "{}",
-        screen(&app)
-    );
-    assert!(!screen(&app).contains("Issue list"));
+    assert!(screen(&app).contains("suspend"), "{}", screen(&app));
+    assert!(!screen(&app).contains("down / up"));
     assert!(row(&app, 19).contains("└ Esc close"), "{}", screen(&app));
 
     press(&mut app, &"k".repeat(30));
-    assert!(row(&app, 3).contains("Issue list"), "{}", screen(&app));
+    assert!(row(&app, 3).contains("Move"), "{}", screen(&app));
 }
 
 #[test]
 fn the_bottom_bar_of_the_cheatsheet_accents_only_the_ways_it_can_scroll() {
-    let mut app = app();
+    let mut app = sized_app(50);
 
     press(&mut app, "?");
     assert_eq!(fg_of(&app, 21, "j"), Some(Color::Cyan));

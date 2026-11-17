@@ -221,7 +221,7 @@ fn the_cheatsheet_lists_the_text_edit() {
 
     press(&mut app, "?");
 
-    assert!(shows(&app, "Edit the title and description"));
+    assert!(shows(&app, "title and description"));
 }
 
 #[test]

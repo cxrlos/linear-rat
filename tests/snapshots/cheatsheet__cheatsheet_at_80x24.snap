@@ -1,0 +1,27 @@
+---
+source: tests/cheatsheet.rs
+expression: "text(&cheatsheet(80, 24))"
+---
+ [1] My Issues │ [2] Team Issues │ [3] Analytics                                
+┌My Issues─────────────────────────────────────────────────────────────────────┐
+│┌ Keys ─────────────────────────────────────────────────────────────────────┐ │
+││ Move                                │ Edit the issue                      │ │
+││  j/k      down / up                 │  s  workflow state                  │ │
+││  gg/G     top / bottom              │  a  assignee                        │ │
+││  C-d/C-u  half page                 │  p  priority                        │ │
+││  h/l      pane left / right         │  L  labels                          │ │
+││  Esc      close or step back        │  e  estimate                        │ │
+││                                     │  E  title and description           │ │
+││ Open & copy                         │  c  comment                         │ │
+││  Enter  open the issue              │  n  new issue                       │ │
+││  yi/yu  copy key / URL              │                                     │ │
+││  yb/ym  copy branch / link          │ App                                 │ │
+││  o      Linear page or PR           │  1/2/3  screens   r      refresh    │ │
+││  O      other links                 │  ?      keys      :,C-k  palette    │ │
+││                                     │  /      search    q      quit       │ │
+││                                     │  C-z    suspend                     │ │
+│└ Esc close ────────────────────────────────────────────────────────────────┘ │
+│  ENG-56 Notification settings reset afte ○ Todo        ▮▮▮ High    2         │
+└──────────────────────────────────────────────────────────────────────────────┘
+ Move │ j/k move                                                                
+ Do   │ Enter pick │ Tab toggle │ Esc close

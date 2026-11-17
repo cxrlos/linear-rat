@@ -10,7 +10,7 @@ mod registry;
 pub use key::{Key, KeySequence, ParseKeyError};
 pub use keymap::{Change, Keymap, Override, Resolution, Target};
 pub use reference::keymap_reference;
-pub use registry::{ACTIONS, ActionSpec, Hint, HintRow, by_id, spec};
+pub use registry::{ACTIONS, ActionSpec, Group, Hint, HintRow, by_id, spec};
 
 use crate::app::{Load, Modal, Pane, Screen, State};
 
@@ -58,7 +58,8 @@ impl Context {
         Context::ALL.into_iter().find(|c| c.name() == name)
     }
 
-    /// The heading the cheatsheet shows over its actions.
+    /// The heading of its table in the keymap reference, and of the
+    /// cheatsheet pane of its own keys.
     pub fn title(self) -> &'static str {
         match self {
             Context::Global => "Everywhere",
