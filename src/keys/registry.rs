@@ -25,6 +25,11 @@ pub struct ActionSpec {
     /// Where the action shows in the bottom bar, if it does.
     pub hint: Option<Hint>,
     pub contexts: &'static [Context],
+    /// The kinds of overlay it applies to, when it binds in
+    /// [`Context::Overlay`]. The bottom bar leaves it out over any other
+    /// kind, where it can never run; over these it is muted while it cannot
+    /// run now.
+    pub overlays: &'static [OverlayKind],
     pub default_keys: &'static [&'static [Key]],
     /// Whether it can run now. Unavailable actions are still listed, muted.
     pub available: fn(&State) -> bool,
@@ -126,6 +131,67 @@ const ANALYTICS: &[Context] = &[Context::Analytics];
 /// The overlays and the Analytics screen both scroll by row.
 const SCROLLS: &[Context] = &[Context::Overlay, Context::Analytics];
 
+/// What an overlay is, as far as which keys can ever apply to it goes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OverlayKind {
+    /// The cheatsheet, which scrolls.
+    Cheatsheet,
+    /// A list to choose one entry from: a single-select edit picker, a link
+    /// picker, a team switcher or filter, the create form, an issue picker
+    /// for one issue.
+    List,
+    /// A list to mark entries in: the label picker, an issue picker for
+    /// several issues.
+    MultiList,
+    Palette,
+    Search,
+}
+
+impl OverlayKind {
+    pub const ALL: [OverlayKind; 5] = [
+        OverlayKind::Cheatsheet,
+        OverlayKind::List,
+        OverlayKind::MultiList,
+        OverlayKind::Palette,
+        OverlayKind::Search,
+    ];
+
+    /// The kind of `modal`, or `None` for the which-key popup, which only
+    /// waits for the rest of a chord.
+    pub fn of(modal: &Modal) -> Option<Self> {
+        Some(match modal {
+            Modal::Cheatsheet { .. } => OverlayKind::Cheatsheet,
+            Modal::WhichKey { .. } => return None,
+            Modal::Picker(picker) if picker.list.is_multi() => OverlayKind::MultiList,
+            Modal::IssuePicker(picker) if picker.list.is_multi() => OverlayKind::MultiList,
+            Modal::Picker(_)
+            | Modal::IssuePicker(_)
+            | Modal::Links(_)
+            | Modal::Choice(_)
+            | Modal::Create(_) => OverlayKind::List,
+            Modal::Palette(_) => OverlayKind::Palette,
+            Modal::Search(_) => OverlayKind::Search,
+        })
+    }
+}
+
+/// The lists, which numbers pick from.
+const LISTS: &[OverlayKind] = &[OverlayKind::List, OverlayKind::MultiList];
+/// The overlays with something to move through.
+const SCROLLING: &[OverlayKind] = &[
+    OverlayKind::Cheatsheet,
+    OverlayKind::List,
+    OverlayKind::MultiList,
+    OverlayKind::Palette,
+];
+/// The overlays Enter chooses or sends in.
+const ACCEPTING: &[OverlayKind] = &[
+    OverlayKind::List,
+    OverlayKind::MultiList,
+    OverlayKind::Palette,
+    OverlayKind::Search,
+];
+
 /// Every action lrat has, in the order hints and the cheatsheet list them.
 /// This is the only place a key binding is written down.
 pub static ACTIONS: &[ActionSpec] = &[
@@ -137,6 +203,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Move,
         hint: moves("down"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('j')]],
         available: can_move_down,
     },
@@ -148,6 +215,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Move,
         hint: moves("up"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('k')]],
         available: can_move_up,
     },
@@ -159,6 +227,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Move,
         hint: moves("top"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('g'), Key::char('g')]],
         available: can_move_up,
     },
@@ -170,6 +239,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Move,
         hint: moves("bottom"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('G')]],
         available: can_move_down,
     },
@@ -181,6 +251,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Move,
         hint: moves("page"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::ctrl('d')]],
         available: can_move_down,
     },
@@ -192,6 +263,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Move,
         hint: moves("page"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::ctrl('u')]],
         available: can_move_up,
     },
@@ -203,6 +275,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Move,
         hint: moves("pane"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('h')]],
         available: always,
     },
@@ -214,6 +287,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Move,
         hint: moves("pane"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('l')]],
         available: always,
     },
@@ -225,6 +299,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Open,
         hint: does("open"),
         contexts: LIST,
+        overlays: &[],
         default_keys: &[&[Key::named(KeyCode::Enter)]],
         available: always,
     },
@@ -236,6 +311,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Open,
         hint: does("yank"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('y'), Key::char('i')]],
         available: has_focused_issue,
     },
@@ -247,6 +323,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Open,
         hint: does("yank"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('y'), Key::char('u')]],
         available: has_focused_issue,
     },
@@ -258,6 +335,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Open,
         hint: does("yank"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('y'), Key::char('b')]],
         available: has_focused_issue,
     },
@@ -269,6 +347,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Open,
         hint: does("yank"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('y'), Key::char('m')]],
         available: has_focused_issue,
     },
@@ -280,6 +359,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Open,
         hint: does("links"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('o')]],
         available: has_focused_issue,
     },
@@ -291,6 +371,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Open,
         hint: None,
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('O')]],
         available: has_focused_issue,
     },
@@ -302,6 +383,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Edit,
         hint: edits("state"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('s')]],
         available: has_focused_issue,
     },
@@ -313,6 +395,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Edit,
         hint: edits("assignee"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('a')]],
         available: has_focused_issue,
     },
@@ -324,6 +407,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Edit,
         hint: edits("priority"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('p')]],
         available: has_focused_issue,
     },
@@ -335,6 +419,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Edit,
         hint: edits("labels"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('L')]],
         available: has_focused_issue,
     },
@@ -346,6 +431,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Edit,
         hint: edits("estimate"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('e')]],
         available: app::focused_team_estimates,
     },
@@ -357,6 +443,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Edit,
         hint: edits("text"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('E')]],
         available: |state| {
             state
@@ -372,6 +459,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Edit,
         hint: edits("comment"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('c')]],
         available: |state| {
             state
@@ -387,6 +475,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Edit,
         hint: None,
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('n')]],
         available: |state| state.store.teams().next().is_some(),
     },
@@ -398,6 +487,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Screen,
         hint: None,
         contexts: OVERLAY,
+        overlays: LISTS,
         default_keys: &[&[Key::char('1')]],
         available: |state| picker_has(1, state),
     },
@@ -409,6 +499,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Screen,
         hint: None,
         contexts: OVERLAY,
+        overlays: LISTS,
         default_keys: &[&[Key::char('2')]],
         available: |state| picker_has(2, state),
     },
@@ -420,6 +511,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Screen,
         hint: None,
         contexts: OVERLAY,
+        overlays: LISTS,
         default_keys: &[&[Key::char('3')]],
         available: |state| picker_has(3, state),
     },
@@ -431,6 +523,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Screen,
         hint: None,
         contexts: OVERLAY,
+        overlays: LISTS,
         default_keys: &[&[Key::char('4')]],
         available: |state| picker_has(4, state),
     },
@@ -442,6 +535,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Screen,
         hint: None,
         contexts: OVERLAY,
+        overlays: LISTS,
         default_keys: &[&[Key::char('5')]],
         available: |state| picker_has(5, state),
     },
@@ -453,6 +547,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Screen,
         hint: None,
         contexts: OVERLAY,
+        overlays: LISTS,
         default_keys: &[&[Key::char('6')]],
         available: |state| picker_has(6, state),
     },
@@ -464,6 +559,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Screen,
         hint: None,
         contexts: OVERLAY,
+        overlays: LISTS,
         default_keys: &[&[Key::char('7')]],
         available: |state| picker_has(7, state),
     },
@@ -475,6 +571,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Screen,
         hint: None,
         contexts: OVERLAY,
+        overlays: LISTS,
         default_keys: &[&[Key::char('8')]],
         available: |state| picker_has(8, state),
     },
@@ -486,6 +583,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Screen,
         hint: None,
         contexts: OVERLAY,
+        overlays: LISTS,
         default_keys: &[&[Key::char('9')]],
         available: |state| picker_has(9, state),
     },
@@ -497,6 +595,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Screen,
         hint: views("team"),
         contexts: TEAM_ISSUES,
+        overlays: &[],
         default_keys: &[&[Key::char('t')]],
         available: |state| state.store.viewer_teams().next().is_some(),
     },
@@ -508,6 +607,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Screen,
         hint: views("filter"),
         contexts: TEAM_ISSUES,
+        overlays: &[],
         default_keys: &[&[Key::char('f'), Key::char('s')]],
         available: has_team,
     },
@@ -519,6 +619,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Screen,
         hint: views("filter"),
         contexts: TEAM_ISSUES,
+        overlays: &[],
         default_keys: &[&[Key::char('f'), Key::char('a')]],
         available: has_team,
     },
@@ -530,6 +631,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Screen,
         hint: views("filter"),
         contexts: TEAM_ISSUES,
+        overlays: &[],
         default_keys: &[&[Key::char('f'), Key::char('l')]],
         available: has_team,
     },
@@ -541,6 +643,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Screen,
         hint: views("filter"),
         contexts: TEAM_ISSUES,
+        overlays: &[],
         default_keys: &[&[Key::char('f'), Key::char('c')]],
         available: has_team,
     },
@@ -552,6 +655,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Screen,
         hint: views("filter"),
         contexts: TEAM_ISSUES,
+        overlays: &[],
         default_keys: &[&[Key::char('f'), Key::char('p')]],
         available: has_team,
     },
@@ -563,6 +667,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Screen,
         hint: views("more"),
         contexts: TEAM_ISSUES,
+        overlays: &[],
         default_keys: &[&[Key::char('m')]],
         available: can_load_more,
     },
@@ -574,6 +679,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Move,
         hint: moves("move"),
         contexts: SCROLLS,
+        overlays: SCROLLING,
         default_keys: &[
             &[Key::char('j')],
             &[Key::named(KeyCode::Down)],
@@ -589,6 +695,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Move,
         hint: moves("move"),
         contexts: SCROLLS,
+        overlays: SCROLLING,
         default_keys: &[
             &[Key::char('k')],
             &[Key::named(KeyCode::Up)],
@@ -602,8 +709,9 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Choose the highlighted entry",
         label: "choose",
         group: Group::Screen,
-        hint: does("pick"),
+        hint: does("choose"),
         contexts: OVERLAY,
+        overlays: ACCEPTING,
         default_keys: &[&[Key::named(KeyCode::Enter)]],
         available: can_accept,
     },
@@ -615,6 +723,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Screen,
         hint: does("toggle"),
         contexts: OVERLAY,
+        overlays: &[OverlayKind::MultiList],
         default_keys: &[&[Key::named(KeyCode::Tab)]],
         available: |state| match state.modals.top() {
             Some(Modal::Picker(picker)) => {
@@ -634,6 +743,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Screen,
         hint: views("range"),
         contexts: ANALYTICS,
+        overlays: &[],
         default_keys: &[&[Key::char('[')]],
         available: |state| state.analytics_range() != WeekRange::Four,
     },
@@ -645,6 +755,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Screen,
         hint: views("range"),
         contexts: ANALYTICS,
+        overlays: &[],
         default_keys: &[&[Key::char(']')]],
         available: |state| state.analytics_range() != WeekRange::TwentySix,
     },
@@ -656,6 +767,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Screen,
         hint: views("view"),
         contexts: ANALYTICS,
+        overlays: &[],
         default_keys: &[&[Key::char('v')]],
         available: always,
     },
@@ -667,6 +779,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Screen,
         hint: views("team"),
         contexts: ANALYTICS,
+        overlays: &[],
         default_keys: &[&[Key::char('t')]],
         available: |state| {
             state.analytics_screen.view() == AnalyticsView::Team
@@ -681,6 +794,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::Move,
         hint: does("close"),
         contexts: &[Context::List, Context::Detail, Context::Overlay],
+        overlays: &OverlayKind::ALL,
         default_keys: &[&[Key::named(KeyCode::Esc)]],
         available: |state| {
             state.modals.top().is_some() || in_detail(state) || state.screen == Screen::Results
@@ -694,6 +808,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::App,
         hint: None,
         contexts: GLOBAL,
+        overlays: &[],
         default_keys: &[&[Key::char('1')]],
         available: |state| state.screen != Screen::MyIssues,
     },
@@ -705,6 +820,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::App,
         hint: None,
         contexts: GLOBAL,
+        overlays: &[],
         default_keys: &[&[Key::char('2')]],
         available: |state| state.screen != Screen::TeamIssues,
     },
@@ -716,6 +832,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::App,
         hint: None,
         contexts: GLOBAL,
+        overlays: &[],
         default_keys: &[&[Key::char('3')]],
         available: |state| state.screen != Screen::Analytics,
     },
@@ -727,6 +844,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::App,
         hint: None,
         contexts: GLOBAL,
+        overlays: &[],
         default_keys: &[&[Key::char('r')]],
         available: |state| state.can_refresh(),
     },
@@ -738,6 +856,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::App,
         hint: does("keys"),
         contexts: GLOBAL,
+        overlays: &[],
         default_keys: &[&[Key::char('?')]],
         available: always,
     },
@@ -749,6 +868,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::App,
         hint: does("palette"),
         contexts: GLOBAL,
+        overlays: &[],
         default_keys: &[&[Key::char(':')], &[Key::ctrl('k')]],
         available: always,
     },
@@ -760,6 +880,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::App,
         hint: moves("search"),
         contexts: GLOBAL,
+        overlays: &[],
         default_keys: &[&[Key::char('/')]],
         available: always,
     },
@@ -771,6 +892,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::App,
         hint: does("quit"),
         contexts: GLOBAL,
+        overlays: &[],
         default_keys: &[&[Key::char('q')]],
         available: always,
     },
@@ -782,6 +904,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         group: Group::App,
         hint: None,
         contexts: GLOBAL,
+        overlays: &[],
         default_keys: &[&[Key::ctrl('z')]],
         available: always,
     },

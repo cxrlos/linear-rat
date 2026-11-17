@@ -24,7 +24,7 @@ expression: "format!(\"{}\\n\\n{}\", quit.join(\"\\n\"), screen(&app).join(\"\\n
 │  ENG-56 Notification settings reset afte ○ Todo        ▮▮▮ High    2         │
 └──────────────────────────────────────────────────────────────────────────────┘
  Move │ Down/Up move                                                            
- Do   │ Enter pick   │ Tab toggle │ Esc close                                   
+ Do   │ Enter choose │ Esc close                                                
                                                                                 
 
  [1] My Issues │ [2] Team Issues │ [3] Analytics                                
@@ -49,4 +49,4 @@ expression: "format!(\"{}\\n\\n{}\", quit.join(\"\\n\"), screen(&app).join(\"\\n
 │  ENG-56 Notification settings reset afte ○ Todo        ▮▮▮ High    2         │
 └──────────────────────────────────────────────────────────────────────────────┘
  Move │ Down/Up move                                                            
- Do   │ Enter pick   │ Tab toggle │ Esc close
+ Do   │ Enter choose │ Esc close

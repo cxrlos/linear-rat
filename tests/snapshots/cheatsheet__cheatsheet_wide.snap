@@ -40,4 +40,4 @@ expression: "text(&cheatsheet(160, 40))"
 ┃  DES-36 Map legend for shelf temperatures                ◇ Triage      ··· None              ┃│                                                              │
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛└──────────────────────────────────────────────────────────────┘
  Move │ j/k move                                                                                                                                                
- Do   │ Enter pick │ Tab toggle │ Esc close
+ Do   │ Esc close

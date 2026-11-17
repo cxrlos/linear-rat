@@ -11,7 +11,7 @@ use super::style;
 use crate::app::{
     Action, Choice, CreateForm, Edit, EditPicker, IssuePicker, Links, Note, Picker, State, Step,
 };
-use crate::keys::Context;
+use crate::keys::{self, Context};
 
 /// The width the list asks for at least, so short entries leave room for
 /// the title and the keys at the bottom.
@@ -259,23 +259,24 @@ fn render<T>(
 /// The keys that select, choose and close, as
 /// ` Down/Up select  Enter choose  Esc close `, with the key that toggles an
 /// entry in a multi-select picker. Keys the filter takes as text are left
-/// out.
+/// out. Choosing, toggling and closing say what the bottom bar says.
 fn bottom_keys(state: &State, multi: bool) -> Line<'static> {
-    let items: &[(&[Action], &str)] = if multi {
-        &[
-            (&[Action::ScrollDown, Action::ScrollUp], "select"),
-            (&[Action::ToggleEntry], "toggle"),
-            (&[Action::Accept], "save"),
-            (&[Action::Close], "close"),
-        ]
+    let select: (&[Action], &str) = (&[Action::ScrollDown, Action::ScrollUp], "select");
+    let toggle: (&[Action], &str) = (&[Action::ToggleEntry], hint_word(Action::ToggleEntry));
+    let choose: (&[Action], &str) = (&[Action::Accept], hint_word(Action::Accept));
+    let close: (&[Action], &str) = (&[Action::Close], hint_word(Action::Close));
+    if multi {
+        keys_line(state, &[select, toggle, choose, close])
     } else {
-        &[
-            (&[Action::ScrollDown, Action::ScrollUp], "select"),
-            (&[Action::Accept], "choose"),
-            (&[Action::Close], "close"),
-        ]
-    };
-    keys_line(state, items)
+        keys_line(state, &[select, choose, close])
+    }
+}
+
+/// The word the bottom bar says after `action`'s key.
+fn hint_word(action: Action) -> &'static str {
+    keys::spec(action)
+        .and_then(|spec| spec.hint)
+        .map_or("", |hint| hint.word)
 }
 
 /// Each group of `items` as its keys and word, leaving out keys the text
