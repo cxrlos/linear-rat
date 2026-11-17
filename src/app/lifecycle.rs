@@ -88,11 +88,7 @@ pub(super) fn archive(state: &mut State) -> Update {
     if issue.archived_at.is_some() {
         return Update::default();
     }
-    let now = state
-        .sync_status
-        .now()
-        .or(state.store.as_of())
-        .unwrap_or_else(Timestamp::now);
+    let now = state.now();
     let issue_id = issue.id.clone();
     state
         .store

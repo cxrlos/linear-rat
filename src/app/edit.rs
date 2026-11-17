@@ -5,6 +5,7 @@
 //! description are written in `$EDITOR`); the change shows at once, goes to
 //! Linear as one `issueUpdate`, and is rolled back if Linear rejects it.
 
+use jiff::Timestamp;
 use jiff::civil::Date;
 
 use super::picker::{Entry, Note, Picker};
@@ -311,7 +312,7 @@ impl EditPicker {
 
     /// Fills the list from what `store` holds. Returns whether the store
     /// still lacks entries the picker needs, so they must be loaded.
-    fn fill(&mut self, store: &Store) -> bool {
+    fn fill(&mut self, store: &Store, now: Timestamp) -> bool {
         let Some(issue) = store.issue(&self.issue_id) else {
             return false;
         };
@@ -324,7 +325,7 @@ impl EditPicker {
             Editable::Priority => (priority_entries(), false),
             Editable::Labels | Editable::DueDate | Editable::Text => (Vec::new(), false),
             Editable::Estimate => (estimate_entries(store, &self.team_id, issue), false),
-            Editable::Cycle => cycle_entries(store, &self.team_id),
+            Editable::Cycle => cycle_entries(store, &self.team_id, now),
             Editable::Project => project_entries(store, &self.team_id),
             Editable::Milestone => milestone_entries(store, issue.project_id.as_deref()),
         };
@@ -464,11 +465,11 @@ fn estimate_entries(store: &Store, team_id: &str, issue: &Issue) -> Vec<Entry<Ed
         .collect()
 }
 
-/// The team's cycles that have not ended, soonest first: the active one,
-/// the next and those after it, then "No cycle". Missing until the team's
-/// options are loaded; until then only the cycles the store has are listed.
-fn cycle_entries(store: &Store, team_id: &str) -> (Vec<Entry<Edit>>, bool) {
-    let now = store.as_of().unwrap_or_default();
+/// The team's cycles that have not ended by `now`, soonest first: the
+/// active one, the next and those after it, then "No cycle". Missing until
+/// the team's options are loaded; until then only the cycles the store has
+/// are listed.
+fn cycle_entries(store: &Store, team_id: &str, now: Timestamp) -> (Vec<Entry<Edit>>, bool) {
     let mut cycles: Vec<_> = store
         .cycles()
         .filter(|cycle| cycle.team_id == team_id && cycle.ends_at > now)
@@ -678,7 +679,7 @@ pub(super) fn open(state: &mut State, field: Editable) -> Update {
         field,
         list,
     };
-    let missing = picker.fill(&state.store);
+    let missing = picker.fill(&state.store, state.now());
     let team_id = picker.team_id.clone();
     state.modals.push(Modal::Picker(picker));
     // Labels are asked for on every open, even when stored: nothing else
@@ -896,6 +897,7 @@ pub(super) fn milestones_loaded(
 /// Fills each open picker `wanted` picks from the store again, or notes
 /// `failure` in it.
 fn refill(state: &mut State, failure: Option<&str>, wanted: impl Fn(&EditPicker, &Store) -> bool) {
+    let now = state.now();
     for modal in state.modals.iter_mut() {
         let Modal::Picker(picker) = modal else {
             continue;
@@ -906,7 +908,7 @@ fn refill(state: &mut State, failure: Option<&str>, wanted: impl Fn(&EditPicker,
         match failure {
             Some(error) => picker.list.set_note(Some(Note::Failed(error.to_owned()))),
             None => {
-                picker.fill(&state.store);
+                picker.fill(&state.store, now);
             }
         }
     }

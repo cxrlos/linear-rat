@@ -248,6 +248,31 @@ fn a_rejected_cycle_edit_restores_the_cycle_with_the_error() {
 }
 
 #[test]
+fn the_cycle_picker_counts_from_the_latest_tick_not_the_last_load() {
+    let mut app = app();
+    let active_ends = demo::team_options(&demo::workspace(), DES)
+        .cycles
+        .iter()
+        .find(|cycle| cycle.completed_at.is_none())
+        .unwrap()
+        .ends_at;
+    app.handle(Event::Tick(
+        active_ends
+            .checked_add(jiff::SignedDuration::from_hours(1))
+            .unwrap(),
+    ))
+    .unwrap();
+    press(&mut app, "C");
+
+    app.handle(options_loaded(DES)).unwrap();
+
+    assert_eq!(
+        picker_lines(&app),
+        ["1 Cycle 8 (active)", "2 Cycle 9 (next)", "3 No cycle"]
+    );
+}
+
+#[test]
 fn the_cycle_picker_says_when_the_options_could_not_load() {
     let mut app = app();
     press(&mut app, "C");
@@ -482,6 +507,14 @@ fn a_relative_date_counts_from_the_viewers_today() {
 
     assert_eq!(write.edit, Edit::DueDate(Some(date(2026, 11, 3))));
     assert_eq!(write.previous, Edit::DueDate(Some(date(2026, 11, 6))));
+}
+
+#[test]
+fn before_any_load_or_tick_today_does_not_read_the_clock() {
+    let state = State::default();
+
+    assert_eq!(state.today(), State::default().today());
+    assert_eq!(state.today(), date(1970, 1, 1));
 }
 
 #[test]
