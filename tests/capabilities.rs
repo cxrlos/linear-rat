@@ -4,14 +4,18 @@
 // clippy's allow-unwrap-in-tests does not cover helpers outside #[test] functions.
 #![allow(clippy::unwrap_used)]
 
+use std::path::Path;
+
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
 use linear_rat::app::{
     App, Edit, Effect, Event, Failure, Modal, NewComment, Palette, State, Write, WriteClass,
 };
+use linear_rat::config;
 use linear_rat::linear::model::Priority;
 use linear_rat::linear::{ClientError, ErrorKind, FakeClient, GraphQlError, LinearClient, demo};
 use ratatui::backend::TestBackend;
+use ratatui::style::Color;
 
 /// The issue My Issues focuses first in the demo, in team DES.
 const FIRST: &str = "DES-34";
@@ -263,4 +267,95 @@ fn a_team_the_key_cannot_reach_says_so_on_team_issues() {
 
     assert!(shows(&app, "Not accessible with this key"));
     assert_snapshot!(app.backend());
+}
+
+/// The foreground of the cell where `text` starts, after the start of `row`
+/// on the first line that has it.
+fn fg_at(app: &App<TestBackend>, row: &str, text: &str) -> Color {
+    let lines = screen(app);
+    let (y, line) = lines
+        .iter()
+        .enumerate()
+        .find(|(_, line)| line.contains(row))
+        .unwrap_or_else(|| panic!("no line has {row:?}:\n{}", lines.join("\n")));
+    let row_start = line.find(row).unwrap();
+    let start = row_start + line[row_start..].find(text).unwrap();
+    let x = line[..start].chars().count();
+    app.backend().buffer()[(u16::try_from(x).unwrap(), u16::try_from(y).unwrap())].fg
+}
+
+fn muted(app: &App<TestBackend>) -> Color {
+    app.state().theme.muted
+}
+
+fn accent(app: &App<TestBackend>) -> Color {
+    app.state().theme.accent
+}
+
+#[test]
+fn the_bottom_bar_mutes_denied_keys_only() {
+    let mut app = app();
+    assert_eq!(fg_at(&app, " Edit │", "s state"), accent(&app));
+
+    let write = only_write(press(&mut app, "p1"));
+    app.handle(Event::IssueUpdated {
+        write,
+        result: Err(forbidden(&format!("edit {FIRST}"))),
+    })
+    .unwrap();
+
+    assert_eq!(fg_at(&app, " Edit │", "s state"), muted(&app));
+    assert_eq!(fg_at(&app, " Edit │", "p priority"), muted(&app));
+    assert_eq!(fg_at(&app, " Edit │", "c comment"), accent(&app));
+}
+
+#[test]
+fn the_cheatsheet_mutes_denied_keys_only() {
+    let mut app = refused();
+
+    press(&mut app, "?");
+
+    assert_eq!(fg_at(&app, "s  workflow state", "s"), muted(&app));
+    assert_eq!(fg_at(&app, "c  comment", "c"), accent(&app));
+}
+
+#[test]
+fn the_palette_mutes_denied_actions_only() {
+    let mut app = refused();
+    app.handle(key(KeyCode::F(12))).unwrap();
+    press(&mut app, ":");
+    for c in "change".chars() {
+        app.handle(key(KeyCode::Char(c))).unwrap();
+    }
+
+    assert_eq!(fg_at(&app, "Change the assignee", "Change"), muted(&app));
+    assert_eq!(fg_at(&app, "Change the assignee", "a │"), muted(&app));
+
+    for _ in "change".chars() {
+        app.handle(key(KeyCode::Backspace)).unwrap();
+    }
+    for c in "comment".chars() {
+        app.handle(key(KeyCode::Char(c))).unwrap();
+    }
+    assert_eq!(fg_at(&app, "Comment in $EDITOR", "c │"), accent(&app));
+}
+
+#[test]
+fn which_key_mutes_denied_continuations_only() {
+    let loaded = config::parse(
+        "[keys.list]\nedit-priority = \"gp\"\n",
+        Path::new("config.toml"),
+    );
+    let mut app = App::new(TestBackend::new(80, 24), State::demo().with_config(&loaded)).unwrap();
+    let write = only_write(press(&mut app, "gp1"));
+    app.handle(Event::IssueUpdated {
+        write,
+        result: Err(forbidden(&format!("edit {FIRST}"))),
+    })
+    .unwrap();
+
+    press(&mut app, "g");
+
+    assert_eq!(fg_at(&app, "p  Change the priority", "p"), muted(&app));
+    assert_eq!(fg_at(&app, "g  Move to the top", "g"), accent(&app));
 }
