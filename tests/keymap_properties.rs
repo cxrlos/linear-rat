@@ -67,10 +67,18 @@ fn overrides() -> impl Strategy<Value = Vec<Override>> {
     prop::collection::vec(one, 0..12)
 }
 
-/// Any stack of distinct contexts, most specific first, as the screens
-/// stack them.
+/// A stack of contexts the app builds, most specific first: each screen
+/// and pane, and an overlay.
 fn contexts() -> impl Strategy<Value = Vec<Context>> {
-    prop::sample::subsequence(Context::ALL.to_vec(), 1..=3).prop_shuffle()
+    use Context::{Analytics, Detail, Global, List, Overlay, TeamIssues};
+    prop::sample::select(vec![
+        vec![Global],
+        vec![List, Global],
+        vec![TeamIssues, List, Global],
+        vec![Detail, Global],
+        vec![Analytics, Global],
+        vec![Overlay],
+    ])
 }
 
 /// Every key sequence the hints would show for some action in `contexts`.
