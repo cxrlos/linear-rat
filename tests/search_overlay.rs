@@ -355,6 +355,22 @@ fn from_my_issues_the_prompt_offers_comments_but_no_team() {
     );
 }
 
+#[tokio::test]
+async fn back_on_my_issues_the_prompt_forgets_the_team_issues_filter() {
+    let mut app = filtered_team_issues().await;
+    type_text(&mut app, "1");
+
+    app.handle(key('/')).unwrap();
+    let ctrl_t = app.handle(ctrl('t')).unwrap();
+
+    assert!(!shows(&app, "In ENG"), "{:#?}", screen(&app));
+    assert!(ctrl_t.is_empty(), "{ctrl_t:?}");
+    assert_eq!(
+        search_for_typed(&mut app, "cheese"),
+        vec![Effect::Search(SearchQuery::new("cheese"))]
+    );
+}
+
 /// Types `term` into the open prompt and sends it.
 fn search_for_typed(app: &mut App<TestBackend>, term: &str) -> Vec<Effect> {
     type_text(app, term);

@@ -252,6 +252,29 @@ async fn a_search_within_a_team_sends_the_team_and_its_filter() {
 }
 
 #[tokio::test]
+async fn a_search_in_comments_within_a_team_sends_both() {
+    let query = SearchQuery {
+        include_comments: true,
+        within: Some(TeamQuery {
+            team_id: "team-ops".to_owned(),
+            filter: TeamFilter::default(),
+        }),
+        ..SearchQuery::new("vault keys")
+    };
+
+    let variables = search_with(&query).await;
+
+    assert_eq!(
+        variables,
+        json!({
+            "term": "vault keys",
+            "includeComments": true,
+            "filter": { "team": { "id": { "eq": "team-ops" } } },
+        })
+    );
+}
+
+#[tokio::test]
 async fn the_fake_client_finds_a_term_in_comments_only_when_asked() {
     let without = FakeClient
         .search_issues(&SearchQuery::new("standup"))
