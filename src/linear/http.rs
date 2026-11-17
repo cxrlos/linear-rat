@@ -14,7 +14,6 @@ mod search;
 mod team;
 mod team_analytics;
 
-use std::collections::HashSet;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
@@ -27,6 +26,7 @@ use serde_json::{Value, json};
 
 use super::governor::{Governor, SystemTimer, Timer, Urgency};
 use super::model::{Issue, Label, Member, Team, Viewer, WorkflowState, Workspace};
+use super::paging::{Next, RepeatedCursor, Stitch};
 use super::search_bucket::SearchBucket;
 use super::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, Diagnostics, GraphQlError,
@@ -250,10 +250,9 @@ impl HttpClient {
         page_info: fn(&P) -> &PageInfo,
         limit: usize,
     ) -> Result<(Response<Vec<P>>, bool), ClientError> {
-        let mut pages = Vec::new();
+        let mut stitch = Stitch::new(limit);
         let mut errors = Vec::new();
         let mut urgency = first_page;
-        let mut sent_cursors = HashSet::new();
         variables["after"] = Value::Null;
         loop {
             let response: Response<P> = self.send(document, &variables, urgency).await?;
@@ -262,30 +261,26 @@ impl HttpClient {
             }
             errors.extend(response.errors);
             let info = page_info(&response.data);
-            let next = match (info.has_next_page, &info.end_cursor) {
-                (false, _) => None,
-                (true, Some(cursor)) if sent_cursors.insert(cursor.clone()) => Some(cursor.clone()),
-                (true, _) => {
-                    return Err(ClientError::Decode(
+            let (has_next_page, end_cursor) = (info.has_next_page, info.end_cursor.clone());
+            let next = stitch
+                .add(response.data, has_next_page, end_cursor.as_deref())
+                .map_err(|RepeatedCursor| {
+                    ClientError::Decode(
                         "Linear said there are more pages but gave no cursor it had not \
                          given before"
                             .to_owned(),
-                    ));
+                    )
+                })?;
+            match next {
+                Next::After(cursor) => {
+                    variables["after"] = Value::String(cursor);
+                    urgency = Urgency::Background;
                 }
-            };
-            pages.push(response.data);
-            let cut = next.is_some() && pages.len() >= limit;
-            let Some(cursor) = next.filter(|_| !cut) else {
-                return Ok((
-                    Response {
-                        data: pages,
-                        errors,
-                    },
-                    cut,
-                ));
-            };
-            variables["after"] = Value::String(cursor);
-            urgency = Urgency::Background;
+                Next::Done { cut } => {
+                    let data = stitch.into_pages();
+                    return Ok((Response { data, errors }, cut));
+                }
+            }
         }
     }
 

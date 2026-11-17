@@ -6,6 +6,7 @@ mod error;
 mod governor;
 pub mod http;
 pub mod model;
+pub mod paging;
 pub(crate) mod search_bucket;
 
 use std::cell::RefCell;
