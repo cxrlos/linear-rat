@@ -13,6 +13,7 @@ use linear_rat::app::{App, Edit, Effect, Event, Modal, RelationWrite, State, Wri
 use linear_rat::linear::model::{Issue, IssueRelation, RelationKind, RelationType};
 use linear_rat::linear::{
     FakeClient, IssueDetail, LinearClient, Patch, RelationCreate, SearchResults, TeamFilter,
+    TeamQuery,
 };
 use ratatui::backend::TestBackend;
 
@@ -766,6 +767,55 @@ async fn the_blocked_filter_narrows_team_issues_and_toggles_off() {
     settle(&mut app, effects).await;
     assert_eq!(app.state().team_issues.ids().len(), all);
     assert!(screen(&app)[1].trim_end().ends_with("Filters none"));
+}
+
+#[test]
+fn the_demo_blocked_filter_follows_relations_made_and_removed_in_the_demo() {
+    let blocked = TeamQuery {
+        team_id: "team-eng".to_owned(),
+        filter: TeamFilter {
+            blocked: true,
+            ..TeamFilter::default()
+        },
+    };
+    let (before, after_create, after_delete, count) = on_own_thread(async {
+        let keys = |page: linear_rat::linear::TeamIssuesPage| -> Vec<String> {
+            page.issues
+                .into_iter()
+                .map(|issue| issue.identifier)
+                .collect()
+        };
+        let before = keys(FakeClient.team_issues(&blocked, None).await.unwrap());
+        FakeClient
+            .create_relation(&RelationCreate {
+                issue_id: "issue-eng-6".to_owned(),
+                related_issue_id: "issue-eng-60".to_owned(),
+                kind: RelationType::Blocks,
+            })
+            .await
+            .unwrap();
+        let after_create = keys(FakeClient.team_issues(&blocked, None).await.unwrap());
+        let count = FakeClient.count_team_issues(&blocked).await.unwrap();
+        // relation-1 is the demo's ENG-6 blocks ENG-51.
+        FakeClient.delete_relation("relation-1").await.unwrap();
+        let after_delete = keys(FakeClient.team_issues(&blocked, None).await.unwrap());
+        (before, after_create, after_delete, count)
+    });
+
+    assert!(!before.contains(&"ENG-60".to_owned()), "{before:?}");
+    assert!(
+        after_create.contains(&"ENG-60".to_owned()),
+        "{after_create:?}"
+    );
+    assert_eq!(count, after_create.len());
+    assert!(
+        !after_delete.contains(&"ENG-51".to_owned()),
+        "{after_delete:?}"
+    );
+    assert!(
+        after_delete.contains(&"ENG-60".to_owned()),
+        "{after_delete:?}"
+    );
 }
 
 #[test]

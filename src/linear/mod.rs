@@ -745,6 +745,18 @@ thread_local! {
         const { RefCell::new((Vec::new(), Vec::new())) };
 }
 
+/// The demo workspace with the relations created and deleted through the
+/// fake client, so the Blocked filter sees them.
+fn demo_workspace_with_relations() -> demo::DemoWorkspace {
+    let mut data = demo::workspace();
+    DEMO_RELATIONS.with_borrow(|(created, deleted)| {
+        data.relations
+            .retain(|relation| !deleted.contains(&relation.id));
+        data.relations.extend(created.iter().cloned());
+    });
+    data
+}
+
 /// Whether the demo has an issue with id `id`, created ones included.
 fn demo_has_issue(data: &demo::DemoWorkspace, id: &str) -> bool {
     data.issues.iter().any(|issue| issue.id == id)
@@ -1092,7 +1104,7 @@ impl LinearClient for FakeClient {
         query: &TeamQuery,
         after: Option<&str>,
     ) -> Result<TeamIssuesPage, ClientError> {
-        let data = demo::workspace();
+        let data = demo_workspace_with_relations();
         let matching = demo::team_issues(&data, query);
         let start = after.and_then(|cursor| cursor.parse().ok()).unwrap_or(0);
         let end = (start + FAKE_PAGE_SIZE).min(matching.len());
@@ -1127,7 +1139,7 @@ impl LinearClient for FakeClient {
     }
 
     async fn count_team_issues(&self, query: &TeamQuery) -> Result<usize, ClientError> {
-        Ok(demo::team_issues(&demo::workspace(), query).len())
+        Ok(demo::team_issues(&demo_workspace_with_relations(), query).len())
     }
 
     async fn analytics_issues(
