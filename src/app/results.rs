@@ -1,5 +1,5 @@
-//! Results: what a search found, or the one issue a palette jump went to,
-//! shown in the normal panes so every issue action works on the focused one.
+//! Results: what a search found, the one issue a palette jump went to, or
+//! the issues of a cycle or project, shown in the normal panes so every issue action works on the focused one.
 //! Esc from the list goes back to the screen they were opened from.
 
 use super::{Action, Arrangement, IssueList, Names, Pane, Screen, State, arrange};
@@ -98,10 +98,20 @@ impl Results {
     }
 }
 
-/// Shows `ids` under `title`, the first one focused. Opened from the results
-/// themselves, Esc still goes back to where the first results were opened
-/// from.
+/// Shows `ids` under `title` in the order they came, the first one
+/// focused. Opened from the results themselves, Esc still goes back to
+/// where the first results were opened from.
 pub(super) fn show(state: &mut State, title: String, ids: Vec<String>) {
+    show_arranged(state, title, ids, Arrangement::LINEAR_ORDER);
+}
+
+/// Shows `ids` under `title` as `arrangement` says, as [`show`] does.
+pub(super) fn show_arranged(
+    state: &mut State,
+    title: String,
+    ids: Vec<String>,
+    arrangement: Arrangement,
+) {
     let back = match state.screen {
         Screen::Results => state.results.back,
         screen => screen,
@@ -111,7 +121,8 @@ pub(super) fn show(state: &mut State, title: String, ids: Vec<String>) {
         ids,
         names: Names::from_store(&state.store),
         back,
-        ..Results::default()
+        arrangement,
+        list: IssueList::default(),
     };
     state.screen = Screen::Results;
     rebuild(state);

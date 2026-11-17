@@ -21,7 +21,7 @@ A problem in the file shows as a notice above the bottom bar, naming the file an
 | `team-issues-group` | a grouping (below) | `"none"` | How Team Issues starts out grouped. |
 | `team-issues-sort` | a sort (below) | `"updated"` | How Team Issues starts out sorted. |
 
-A grouping is `"state"` (workflow state type: started, unstarted, backlog, triage, completed, canceled), `"priority"`, `"project"`, `"cycle"` (newest first), `"assignee"` or `"none"`. Groups of named things go by name, and the group of issues with no project, cycle or assignee comes last.
+A grouping is `"state"` (workflow state type: started, unstarted, backlog, triage, completed, canceled), `"priority"`, `"project"`, `"milestone"` (project milestone, in each project's own order), `"cycle"` (newest first), `"assignee"` or `"none"`. Groups of named things go by name, and the group of issues with no project, milestone, cycle or assignee comes last. The issues of a cycle open grouped by `"state"`, and those of a project by `"milestone"`.
 
 A sort is `"updated"`, `"created"`, `"priority"`, `"due-date"` or `"estimate"`. On its own each sorts the way you usually want it: newest, most urgent, soonest due and largest estimate first. Add `-asc` or `-desc` to choose: ascending is oldest, urgent, soonest and smallest first. Issues missing the field go last either way, and issues that tie keep the list's own order.
 
@@ -93,7 +93,7 @@ Every Base16 built-in theme keeps a contrast ratio of at least 4.5:1 for text an
 
 ## `[keys]`
 
-One table per context: `global`, `list`, `team-issues` (the Team Issues list, which also takes the `list` keys), `detail`, `overlay` and `analytics`. In each, an action's id maps to its keys in vim notation (`"j"`, `"gg"`, `"<C-d>"`, `"<S-Tab>"`, `"<F1>"`). The `?` cheatsheet lists every action.
+One table per context: `global`, `list`, `team-issues` (the Team Issues list, which also takes the `list` keys), `detail`, `overlay`, `analytics`, `browse` (the Cycles and Projects lists) and `cycles` (the Cycles screen, which also takes the `browse` keys). In each, an action's id maps to its keys in vim notation (`"j"`, `"gg"`, `"<C-d>"`, `"<S-Tab>"`, `"<F1>"`). The `?` cheatsheet lists every action.
 
 While an overlay has a text field, as the pickers, the palette and the search query do, a character typed without Ctrl or Alt goes into the field and Backspace deletes, whatever they are bound to. The one exception is a picker's number keys (`pick-1` to `pick-9`), which pick an entry while the filter leaves that many (in the label picker, which marks several entries, they toggle it, as `toggle-entry` (`<Tab>`) does, and `accept` saves the marked labels). Keys with Ctrl or Alt and named keys such as `<Enter>`, `<Down>` and `<Esc>` still run their `overlay` actions.
 

@@ -203,6 +203,11 @@ fn group_name(view: &View, key: &GroupKey) -> Line<'static> {
             id.as_deref().and_then(|id| names.project_name(id)),
             "No project",
         ),
+        GroupKey::Milestone(id) => named(
+            id,
+            id.as_deref().and_then(|id| names.milestone_name(id)),
+            "No milestone",
+        ),
         GroupKey::Cycle(id) => named(
             id,
             id.as_deref().and_then(|id| names.cycle_name(id)),

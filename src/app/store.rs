@@ -10,12 +10,12 @@ use serde::{Deserialize, Serialize};
 use super::edit::{Edit, Write};
 use crate::analytics::AdministrableTeams;
 use crate::linear::model::{
-    Attachment, Comment, Cycle, Issue, Label, Member, Project, StateSpan, Team, Viewer,
-    WorkflowState, Workspace,
+    Attachment, Comment, Cycle, Issue, Label, Member, Project, ProjectMilestone, StateSpan, Team,
+    Viewer, WorkflowState, Workspace,
 };
 use crate::linear::{
-    AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, PostedComment, SearchResults,
-    TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions,
+    AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, PostedComment, ProjectList,
+    SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions,
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
@@ -33,6 +33,10 @@ pub struct Store {
     /// Comments by issue id, oldest first.
     comments: BTreeMap<String, Vec<Comment>>,
     projects: BTreeMap<String, Project>,
+    /// Each project's milestones in Linear's order, by project id, once
+    /// the Projects screen has loaded them.
+    #[serde(default)]
+    project_milestones: BTreeMap<String, Vec<ProjectMilestone>>,
     workflow_states: BTreeMap<String, WorkflowState>,
     /// The ids of every workflow state of a team, by team id, once loaded.
     team_states: BTreeMap<String, Vec<String>>,
@@ -243,6 +247,16 @@ impl Store {
         by_id(&mut self.teams, &found.teams, |team| &team.id);
         by_id(&mut self.labels, &found.labels, |label| &label.id);
         by_id(&mut self.members, &found.members, |member| &member.id);
+    }
+
+    /// Takes in the Projects screen's projects and their milestones.
+    pub fn merge_projects(&mut self, loaded: &ProjectList) {
+        for overview in &loaded.projects {
+            let project = &overview.project;
+            self.projects.insert(project.id.clone(), project.clone());
+            self.project_milestones
+                .insert(project.id.clone(), overview.milestones.clone());
+        }
     }
 
     /// Takes in an analytics load for `window`. Issues go through
@@ -516,6 +530,11 @@ impl Store {
 
     pub fn projects(&self) -> impl Iterator<Item = &Project> {
         self.projects.values()
+    }
+
+    /// Every loaded project milestone, each project's in Linear's order.
+    pub fn milestones(&self) -> impl Iterator<Item = &ProjectMilestone> {
+        self.project_milestones.values().flatten()
     }
 
     /// Whether the filter options of `team_id` have loaded. A picker's

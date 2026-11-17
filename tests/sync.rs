@@ -492,6 +492,26 @@ fn the_sync_indicator_says_when_sync_is_failing_or_throttled() {
 }
 
 #[test]
+fn tabs_shorten_to_their_keys_to_leave_room_for_the_sync_indicator() {
+    let mut app = synced();
+    app.handle(Event::Tick(at(15))).unwrap();
+    app.handle(failed(SyncFailure::Failed("connection refused".to_owned())))
+        .unwrap();
+    app.handle(Event::Tick(at(20))).unwrap();
+
+    let tabs = tab_row(&app);
+
+    assert!(
+        tabs.starts_with(" [1] My Issues │ [2] │ [3] │ [4] │ [5] "),
+        "{tabs}"
+    );
+    assert!(
+        tabs.trim_end().ends_with("sync failing, synced 20s ago"),
+        "{tabs}"
+    );
+}
+
+#[test]
 fn the_sync_indicator_is_muted_when_fresh_and_accented_when_failing() {
     let mut app = synced();
     let fresh = indicator_style(&app);

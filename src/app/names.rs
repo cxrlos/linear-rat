@@ -3,7 +3,9 @@ use std::collections::{HashMap, HashSet};
 use jiff::Timestamp;
 
 use super::Store;
-use crate::linear::model::{Cycle, Estimation, Issue, Label, Member, Project, Team};
+use crate::linear::model::{
+    Cycle, Estimation, Issue, Label, Member, Project, ProjectMilestone, Team,
+};
 
 /// What issue rows and details look up by id: cycle, label and member
 /// names, which cycles are running, and which teams use estimates.
@@ -16,6 +18,10 @@ pub struct Names {
     member_names: HashMap<String, String>,
     teams_without_estimates: HashSet<String>,
     project_names: HashMap<String, String>,
+    milestone_names: HashMap<String, String>,
+    /// Where each milestone comes among all of them: by project name, then
+    /// in its project's order.
+    milestone_places: HashMap<String, usize>,
 }
 
 impl Names {
@@ -67,6 +73,7 @@ impl Names {
             store.as_of().unwrap_or_default(),
         )
         .with_projects(store.projects())
+        .with_milestones(store.milestones())
     }
 
     /// These names with the names of `projects` too.
@@ -76,6 +83,40 @@ impl Names {
             .map(|project| (project.id.clone(), project.name.clone()))
             .collect();
         self
+    }
+
+    /// These names with the names of `milestones` too, given in each
+    /// project's order. Milestones group by project name first.
+    pub fn with_milestones<'a>(
+        mut self,
+        milestones: impl IntoIterator<Item = &'a ProjectMilestone>,
+    ) -> Self {
+        let mut milestones: Vec<(usize, &ProjectMilestone)> =
+            milestones.into_iter().enumerate().collect();
+        milestones.sort_by_cached_key(|(index, milestone)| {
+            let project = self
+                .project_name(&milestone.project_id)
+                .unwrap_or(&milestone.project_id)
+                .to_lowercase();
+            (project, milestone.project_id.clone(), *index)
+        });
+        for (place, (_, milestone)) in milestones.into_iter().enumerate() {
+            self.milestone_names
+                .insert(milestone.id.clone(), milestone.name.clone());
+            self.milestone_places.insert(milestone.id.clone(), place);
+        }
+        self
+    }
+
+    /// The name of a project milestone, by id.
+    pub fn milestone_name(&self, milestone_id: &str) -> Option<&str> {
+        self.milestone_names.get(milestone_id).map(String::as_str)
+    }
+
+    /// Where a project milestone's group comes, by id; `None`, after every
+    /// known one, for a milestone not loaded.
+    pub fn milestone_place(&self, milestone_id: &str) -> Option<usize> {
+        self.milestone_places.get(milestone_id).copied()
     }
 
     /// When the cycle starts, by id.

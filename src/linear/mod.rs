@@ -21,8 +21,8 @@ pub use error::{ClientError, GraphQlError, Response};
 pub use governor::{SystemTimer, Timer, Urgency};
 pub use http::{ClientConfig, Dial, HttpClient, LIVE_ENDPOINT, LiveConfig, Pipe};
 use model::{
-    Attachment, Comment, Cycle, Issue, Label, Member, Priority, Project, StateSpan, StateType,
-    Team, Viewer, WorkflowState, Workspace,
+    Attachment, Comment, Cycle, Issue, Label, Member, Priority, Project, ProjectOverview,
+    StateSpan, StateType, Team, Viewer, WorkflowState, Workspace,
 };
 
 /// Queries, mutations and live events.
@@ -126,6 +126,33 @@ pub trait LinearClient {
         &self,
         query: &TeamQuery,
     ) -> impl Future<Output = Result<usize, ClientError>> + Send;
+
+    /// The cycles of team `team_id` that the Cycles screen lists: those
+    /// that ended in the last twelve weeks, the active one and the next
+    /// one, with their daily issue counts.
+    fn recent_cycles(
+        &self,
+        team_id: &str,
+    ) -> impl Future<Output = Result<Vec<Cycle>, ClientError>> + Send;
+
+    /// The projects of the viewer's teams, most recently updated first,
+    /// with their status, target date, lead, progress and milestones.
+    fn viewer_projects(&self) -> impl Future<Output = Result<ProjectList, ClientError>> + Send;
+
+    /// The issues of the cycle with id `cycle_id`, closed ones included, up
+    /// to 200.
+    fn cycle_issues(
+        &self,
+        cycle_id: &str,
+    ) -> impl Future<Output = Result<SearchResults, ClientError>> + Send;
+
+    /// The issues of the project with id `project_id`, closed ones
+    /// included, up to 200, each naming its project milestone so the list
+    /// can be grouped by milestone.
+    fn project_issues(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<SearchResults, ClientError>> + Send;
 
     /// What personal analytics needs for `window`: the issues assigned to
     /// the viewer that were created or completed in it, the viewer's teams
@@ -332,8 +359,8 @@ pub enum Patch<T> {
     Set(T),
 }
 
-/// What a search found: the issues, best match first, and the cycles,
-/// labels, members and teams they refer to.
+/// What a search found, best match first, or the issues of a cycle or
+/// project, and the cycles, labels, members and teams they refer to.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct SearchResults {
     pub issues: Vec<Issue>,
@@ -408,6 +435,14 @@ impl TeamFilter {
                 .as_ref()
                 .is_none_or(|label| issue.label_ids.contains(label))
     }
+}
+
+/// The projects the Projects screen lists.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProjectList {
+    pub projects: Vec<ProjectOverview>,
+    /// What Linear could not give, such as a list cut short.
+    pub problems: Vec<String>,
 }
 
 /// What the filters of one team can pick from.
@@ -1062,6 +1097,34 @@ impl LinearClient for FakeClient {
         Ok(demo::team_issues(&demo::workspace(), query).len())
     }
 
+    async fn recent_cycles(&self, team_id: &str) -> Result<Vec<Cycle>, ClientError> {
+        let since = demo::NOW - SignedDuration::from_hours(12 * 7 * 24);
+        Ok(demo::workspace()
+            .cycles
+            .into_iter()
+            .filter(|cycle| cycle.team_id == team_id && cycle.ends_at > since)
+            .collect())
+    }
+
+    async fn viewer_projects(&self) -> Result<ProjectList, ClientError> {
+        Ok(ProjectList {
+            projects: demo::project_overviews(&demo::workspace()),
+            problems: Vec::new(),
+        })
+    }
+
+    async fn cycle_issues(&self, cycle_id: &str) -> Result<SearchResults, ClientError> {
+        Ok(demo_listed(|issue| {
+            issue.cycle_id.as_deref() == Some(cycle_id)
+        }))
+    }
+
+    async fn project_issues(&self, project_id: &str) -> Result<SearchResults, ClientError> {
+        Ok(demo_listed(|issue| {
+            issue.project_id.as_deref() == Some(project_id)
+        }))
+    }
+
     async fn analytics_issues(
         &self,
         window: AnalyticsWindow,
@@ -1172,6 +1235,26 @@ impl LinearClient for FakeClient {
                     .map(|issue| issue.updated_at)
             })
             .ok_or_else(|| not_found("issue", issue_id))
+    }
+}
+
+/// The demo issues `keep` picks, most recently updated first, with what
+/// they refer to.
+fn demo_listed(keep: impl Fn(&Issue) -> bool) -> SearchResults {
+    let data = demo::workspace();
+    let mut issues: Vec<Issue> = data
+        .issues
+        .into_iter()
+        .filter(|issue| keep(issue))
+        .collect();
+    issues.sort_by_key(|issue| Reverse(issue.updated_at));
+    SearchResults {
+        issues,
+        cycles: data.cycles,
+        labels: data.labels,
+        members: data.members,
+        teams: data.teams,
+        problems: Vec::new(),
     }
 }
 

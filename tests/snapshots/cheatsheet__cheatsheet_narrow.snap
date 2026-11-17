@@ -2,7 +2,7 @@
 source: tests/cheatsheet.rs
 expression: "text(&cheatsheet(50, 24))"
 ---
- [1] My Issues │ [2] Team Issues │ [3] Analytics  
+ [1] My Issues │ [2] │ [3] │ [4] │ [5]            
 ┌My Issues · group: workflow state · sort: active┐
 │◐ Starte┌ Keys ────────────────────────┐        │
 │▸ DES-34│ Move                         │Cycle 7 │

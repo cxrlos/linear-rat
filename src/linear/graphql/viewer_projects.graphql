@@ -1,0 +1,41 @@
+# budget: 2300
+# The projects of the teams the viewer is a member of, most recently updated
+# first, with their status, target date, lead, progress and milestones. One
+# page of 50 projects with up to 20 milestones each; `hasNextPage` says when
+# either list was cut short.
+query ViewerProjects {
+  projects(
+    first: 50
+    orderBy: updatedAt
+    filter: { accessibleTeams: { some: { members: { some: { isMe: { eq: true } } } } } }
+  ) {
+    nodes {
+      id
+      name
+      status {
+        name
+        type
+      }
+      targetDate
+      progress
+      lead {
+        id
+        name
+        displayName
+      }
+      projectMilestones(first: 20) {
+        nodes {
+          id
+          name
+          sortOrder
+        }
+        pageInfo {
+          hasNextPage
+        }
+      }
+    }
+    pageInfo {
+      hasNextPage
+    }
+  }
+}

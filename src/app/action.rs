@@ -65,6 +65,10 @@ pub enum Action {
     ToggleAnalyticsView,
     /// Pick another of the viewer's teams for the Team view of Analytics.
     SwitchAnalyticsTeam,
+    /// Pick another of the viewer's teams for the Cycles screen.
+    SwitchCyclesTeam,
+    /// List the issues of the focused cycle or project.
+    ListIssues,
 }
 
 /// What [`Action::Copy`] puts on the clipboard.

@@ -2,7 +2,7 @@
 source: tests/app.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    "
 "┌My Issues · group: workflow state · sort: active cycle, then priority─────────┐"
 "│  DES-16 Accessible focus rings across wh ○ Todo        ▮▮▮ High    5         │"
 "│  ENG-56 Notification settings reset afte ○ Todo        ▮▮▮ High    2         │"

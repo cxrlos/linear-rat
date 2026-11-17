@@ -712,7 +712,7 @@ async fn team_issues_grouped_by_assignee_and_sorted_by_priority() {
     let mut app = team_issues(160, 30).await;
 
     // v g 5 is assignee; v s 5 is priority, urgent first.
-    press(&mut app, "vg5vs5");
+    press(&mut app, "vg6vs5");
 
     assert_snapshot!(screen(&app).join("\n"));
 }

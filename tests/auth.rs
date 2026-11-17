@@ -14,11 +14,13 @@ use linear_rat::auth::{
     self, ApiKey, AuthError, Credentials, EntryReader, InvalidApiKey, KeySource, KeyStore,
     KeyringEntry, KeyringError, KeyringStore, WorkspaceFile,
 };
-use linear_rat::linear::model::{Issue, Label, Member, Team, Viewer, WorkflowState, Workspace};
+use linear_rat::linear::model::{
+    Cycle, Issue, Label, Member, Team, Viewer, WorkflowState, Workspace,
+};
 use linear_rat::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, Diagnostics, FakeClient,
-    IssueDetail, IssueLink, IssueUpdate, LinearClient, SearchResults, TeamAnalyticsIssues,
-    TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery, Urgency,
+    IssueDetail, IssueLink, IssueUpdate, LinearClient, ProjectList, SearchResults,
+    TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery, Urgency,
 };
 
 const SECRET: &str = "lin_api_fictional0000000000000000000000000000";
@@ -199,6 +201,22 @@ impl LinearClient for RejectingClient {
     }
 
     async fn count_team_issues(&self, _: &TeamQuery) -> Result<usize, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn recent_cycles(&self, _: &str) -> Result<Vec<Cycle>, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn viewer_projects(&self) -> Result<ProjectList, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn cycle_issues(&self, _: &str) -> Result<SearchResults, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn project_issues(&self, _: &str) -> Result<SearchResults, ClientError> {
         Err(ClientError::InvalidKey)
     }
 

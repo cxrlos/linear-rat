@@ -154,7 +154,7 @@ fn each_tab_shows_the_key_that_opens_it() {
 
     assert_eq!(
         row(&app, 0).trim_end(),
-        " [1] My Issues │ [2] Team Issues │ [3] Analytics"
+        " [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects"
     );
 }
 
@@ -170,7 +170,7 @@ noop = ["3"]
 
     assert_eq!(
         row(&app, 0).trim_end(),
-        " [1] My Issues │ [t] Team Issues │ Analytics"
+        " [1] My Issues │ [t] Team Issues │ Analytics │ [4] Cycles │ [5] Projects"
     );
 }
 
@@ -185,7 +185,7 @@ move-down = "2"
 
     assert_eq!(
         row(&app, 0).trim_end(),
-        " [1] My Issues │ Team Issues │ [3] Analytics"
+        " [1] My Issues │ Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects"
     );
 }
 

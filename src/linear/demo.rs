@@ -8,8 +8,9 @@
 use jiff::{SignedDuration, Timestamp};
 
 use super::model::{
-    Attachment, Comment, Cycle, Estimation, Issue, Label, Member, Priority, Project, StateSpan,
-    StateType, Team, Viewer, WorkflowState, Workspace,
+    Attachment, Comment, Cycle, Estimation, Issue, Label, Member, Priority, Project,
+    ProjectMilestone, ProjectOverview, ProjectStatus, ProjectStatusType, StateSpan, StateType,
+    Team, Viewer, WorkflowState, Workspace,
 };
 use super::{TeamOptions, TeamOrder, TeamQuery};
 
@@ -86,7 +87,142 @@ pub fn workspace() -> DemoWorkspace {
         add_team(&mut data, spec, &mut rng);
     }
     add_links(&mut data);
+    add_milestones(&mut data);
     data
+}
+
+/// Each demo project's milestones by name, in order, as `PROJECTS` lists
+/// the projects. The last project has none.
+const MILESTONES: [&[&str]; 4] = [
+    &["Beta", "Launch"],
+    &["Invites", "Sync", "Polish"],
+    &["Pairing", "Readings"],
+    &[],
+];
+
+/// A demo project's status name and type, target date (year, month, day)
+/// and lead's handle.
+type ProjectDetails = (
+    &'static str,
+    ProjectStatusType,
+    Option<(i16, i8, i8)>,
+    Option<&'static str>,
+);
+
+/// Each demo project's details, as `PROJECTS` lists the projects.
+const PROJECT_DETAILS: [ProjectDetails; 4] = [
+    (
+        "In Progress",
+        ProjectStatusType::Started,
+        Some((2026, 12, 15)),
+        Some("mira"),
+    ),
+    (
+        "In Progress",
+        ProjectStatusType::Started,
+        Some((2027, 1, 31)),
+        Some("ada"),
+    ),
+    ("Planned", ProjectStatusType::Planned, None, Some("jun")),
+    (
+        "Paused",
+        ProjectStatusType::Paused,
+        Some((2026, 11, 30)),
+        None,
+    ),
+];
+
+fn milestone_id(project_index: usize, milestone_index: usize) -> String {
+    format!(
+        "project-{}-milestone-{}",
+        project_index + 1,
+        milestone_index + 1
+    )
+}
+
+/// Puts the issues of each project with milestones in one of them, or in
+/// none, by issue number. Added after the generated data, so the seed's
+/// draws stay as they were.
+fn add_milestones(data: &mut DemoWorkspace) {
+    for issue in &mut data.issues {
+        let Some(project_index) = issue
+            .project_id
+            .as_deref()
+            .and_then(|id| id.strip_prefix("project-"))
+            .and_then(|n| n.parse::<usize>().ok())
+            .and_then(|n| n.checked_sub(1))
+        else {
+            continue;
+        };
+        let Some(names) = MILESTONES
+            .get(project_index)
+            .filter(|names| !names.is_empty())
+        else {
+            continue;
+        };
+        let number: usize = issue
+            .identifier
+            .rsplit('-')
+            .next()
+            .and_then(|n| n.parse().ok())
+            .unwrap_or(0);
+        let slot = number % (names.len() + 1);
+        issue.project_milestone_id =
+            (slot < names.len()).then(|| milestone_id(project_index, slot));
+    }
+}
+
+/// The demo projects as the Projects screen shows them, each with its
+/// progress the share of its issues that are completed.
+pub fn project_overviews(data: &DemoWorkspace) -> Vec<ProjectOverview> {
+    data.projects
+        .iter()
+        .enumerate()
+        .map(|(index, project)| {
+            let (name, status_type, target, lead) = PROJECT_DETAILS[index % PROJECT_DETAILS.len()];
+            let issues: Vec<&Issue> = data
+                .issues
+                .iter()
+                .filter(|issue| issue.project_id.as_ref() == Some(&project.id))
+                .collect();
+            let done = issues
+                .iter()
+                .filter(|issue| issue.state.state_type == StateType::Completed)
+                .count();
+            let progress = if issues.is_empty() {
+                0.0
+            } else {
+                f64::from(count(done)) / f64::from(count(issues.len()))
+            };
+            ProjectOverview {
+                project: project.clone(),
+                status: ProjectStatus {
+                    name: name.to_owned(),
+                    status_type,
+                },
+                target_date: target.map(|(year, month, day)| jiff::civil::date(year, month, day)),
+                lead: lead.and_then(|handle| {
+                    data.members
+                        .iter()
+                        .find(|member| member.id == member_id(handle))
+                        .cloned()
+                }),
+                progress,
+                milestones: MILESTONES
+                    .get(index)
+                    .copied()
+                    .unwrap_or_default()
+                    .iter()
+                    .enumerate()
+                    .map(|(slot, name)| ProjectMilestone {
+                        id: milestone_id(index, slot),
+                        name: (*name).to_owned(),
+                        project_id: project.id.clone(),
+                    })
+                    .collect(),
+            }
+        })
+        .collect()
 }
 
 /// The issue DES-34's pull requests and other attachments.

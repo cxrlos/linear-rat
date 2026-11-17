@@ -83,6 +83,8 @@ pub enum Purpose {
     Filter(FilterField),
     /// Show this team in the Team view of Analytics.
     AnalyticsTeam,
+    /// Show this team's cycles on the Cycles screen.
+    CyclesTeam,
     /// Group the issue list on screen this way, by its config name.
     Group,
     /// Sort the issue list on screen this way, by its config name, or its
@@ -94,7 +96,7 @@ impl Choice {
     /// What the popup is titled.
     pub fn title(&self) -> String {
         match self.purpose {
-            Purpose::Team | Purpose::AnalyticsTeam => "Team".to_owned(),
+            Purpose::Team | Purpose::AnalyticsTeam | Purpose::CyclesTeam => "Team".to_owned(),
             Purpose::Filter(field) => format!("Filter by {}", field.name().to_lowercase()),
             Purpose::Group => "Group by".to_owned(),
             Purpose::Sort => "Sort by".to_owned(),

@@ -7,7 +7,9 @@ use jiff::Timestamp;
 use jiff::civil::date;
 use linear_rat::app::{Arrangement, GroupKey, Grouping, Names, Sort, SortKey, arrange};
 use linear_rat::linear::demo;
-use linear_rat::linear::model::{Cycle, Issue, Member, Priority, Project, StateType};
+use linear_rat::linear::model::{
+    Cycle, Issue, Member, Priority, Project, ProjectMilestone, StateType,
+};
 
 fn at(seconds: i64) -> Timestamp {
     Timestamp::from_second(seconds).unwrap()
@@ -23,6 +25,7 @@ fn issue(id: &str) -> Issue {
     issue.estimate = None;
     issue.due_date = None;
     issue.project_id = None;
+    issue.project_milestone_id = None;
     issue.cycle_id = None;
     issue.assignee_id = None;
     issue.created_at = at(0);
@@ -67,6 +70,15 @@ fn names() -> Names {
         at(0),
     )
     .with_projects(&[project("p-z", "Zebra"), project("p-a", "Aardvark")])
+    .with_milestones(&[milestone("m-z", "Zeta"), milestone("m-a", "Alpha")])
+}
+
+fn milestone(id: &str, name: &str) -> ProjectMilestone {
+    ProjectMilestone {
+        id: id.to_owned(),
+        name: name.to_owned(),
+        project_id: "p-z".to_owned(),
+    }
 }
 
 fn sorted(issues: Vec<Issue>, key: SortKey, descending: bool) -> Vec<String> {
@@ -272,6 +284,30 @@ fn project_groups_go_by_name_with_no_project_last() {
                 vec!["z".to_owned()]
             ),
             (GroupKey::Project(None), vec!["loose".to_owned()]),
+        ]
+    );
+}
+
+#[test]
+fn milestone_groups_follow_the_projects_order_with_no_milestone_last() {
+    let issues = vec![
+        issue("loose"),
+        with("a", |i| i.project_milestone_id = Some("m-a".to_owned())),
+        with("z", |i| i.project_milestone_id = Some("m-z".to_owned())),
+    ];
+
+    assert_eq!(
+        grouped(issues, Grouping::Milestone),
+        [
+            (
+                GroupKey::Milestone(Some("m-z".to_owned())),
+                vec!["z".to_owned()]
+            ),
+            (
+                GroupKey::Milestone(Some("m-a".to_owned())),
+                vec!["a".to_owned()]
+            ),
+            (GroupKey::Milestone(None), vec!["loose".to_owned()]),
         ]
     );
 }

@@ -2,7 +2,7 @@
 source: tests/team_issues.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics                                                                                                                                                        "
+" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects                                                                                                                            "
 "t ENG Engineering · 50 of 70 m more · f Filters none                                                                                                                                                    "
 "┏Team Issues · group: none · sort: updated, newest first━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓┌ENG-69────────────────────────────────────────────────────────────────────────┐"
 "┃▸ ENG-69 Make the importer resumable                                              ● Done        ▮▮▯ Medium  8 Cycle 7 ┃│Make the importer resumable                                                   │"

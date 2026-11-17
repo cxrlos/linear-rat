@@ -3,6 +3,7 @@
 
 mod analytics;
 mod assigned;
+mod browse;
 mod changes;
 mod create;
 mod detail;
@@ -26,13 +27,13 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use super::governor::{Governor, SystemTimer, Timer, Urgency};
-use super::model::{Issue, Label, Member, Team, Viewer, WorkflowState, Workspace};
+use super::model::{Cycle, Issue, Label, Member, Team, Viewer, WorkflowState, Workspace};
 use super::search_bucket::SearchBucket;
 use super::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, Diagnostics, GraphQlError,
     IssueCreate, IssueDetail, IssueLink, IssueUpdate, LinearClient, LiveEvent, PostedComment,
-    Response, SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions,
-    TeamQuery,
+    ProjectList, Response, SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage,
+    TeamOptions, TeamQuery,
 };
 use crate::auth::ApiKey;
 
@@ -400,6 +401,22 @@ impl LinearClient for HttpClient {
 
     async fn count_team_issues(&self, query: &TeamQuery) -> Result<usize, ClientError> {
         team::count(self, query).await
+    }
+
+    async fn recent_cycles(&self, team_id: &str) -> Result<Vec<Cycle>, ClientError> {
+        browse::recent_cycles(self, team_id).await
+    }
+
+    async fn viewer_projects(&self) -> Result<ProjectList, ClientError> {
+        browse::projects(self).await
+    }
+
+    async fn cycle_issues(&self, cycle_id: &str) -> Result<SearchResults, ClientError> {
+        browse::cycle_issues(self, cycle_id).await
+    }
+
+    async fn project_issues(&self, project_id: &str) -> Result<SearchResults, ClientError> {
+        browse::project_issues(self, project_id).await
     }
 
     async fn analytics_issues(

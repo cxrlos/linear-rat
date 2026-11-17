@@ -6,8 +6,8 @@ use ratatui::layout::Size;
 use jiff::Timestamp;
 
 use super::{
-    AnalyticsScreen, Detail, Drafts, Load, LoadError, ModalStack, MyIssues, Names, Results, Store,
-    SyncStatus, TeamIssues,
+    AnalyticsScreen, Cycles, Detail, Drafts, Load, LoadError, ModalStack, MyIssues, Names,
+    Projects, Results, Store, SyncStatus, TeamIssues,
 };
 use crate::auth::KeySource;
 use crate::config::{AnalyticsSettings, Loaded, SyncSettings, UiSettings};
@@ -57,6 +57,10 @@ pub struct State {
     /// `[analytics]`: the range the Analytics screen opens on.
     pub analytics: AnalyticsSettings,
     pub analytics_screen: AnalyticsScreen,
+    /// The Cycles screen: a team's recent cycles.
+    pub cycles: Cycles,
+    /// The Projects screen: the projects of the viewer's teams.
+    pub projects: Projects,
     /// Comments and descriptions Linear did not take, to write again.
     pub drafts: Drafts,
 }
@@ -168,7 +172,7 @@ impl State {
                 .results
                 .focused_id()
                 .and_then(|id| self.store.issue(id)),
-            Screen::Analytics => None,
+            Screen::Analytics | Screen::Cycles | Screen::Projects => None,
         }
     }
 
@@ -210,19 +214,29 @@ pub enum Screen {
     MyIssues,
     TeamIssues,
     Analytics,
-    /// Search results or a palette jump, opened over another screen and
-    /// left with Esc. It has no tab.
+    Cycles,
+    Projects,
+    /// Search results, a palette jump, or the issues of a cycle or project,
+    /// opened over another screen and left with Esc. It has no tab.
     Results,
 }
 
 impl Screen {
-    pub const ALL: [Screen; 3] = [Screen::MyIssues, Screen::TeamIssues, Screen::Analytics];
+    pub const ALL: [Screen; 5] = [
+        Screen::MyIssues,
+        Screen::TeamIssues,
+        Screen::Analytics,
+        Screen::Cycles,
+        Screen::Projects,
+    ];
 
     pub fn title(self) -> &'static str {
         match self {
             Screen::MyIssues => "My Issues",
             Screen::TeamIssues => "Team Issues",
             Screen::Analytics => "Analytics",
+            Screen::Cycles => "Cycles",
+            Screen::Projects => "Projects",
             Screen::Results => "Results",
         }
     }

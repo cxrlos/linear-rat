@@ -68,6 +68,7 @@ Press `?` anywhere to see the keys for the screen you are on.
 - **Edits without waiting**: change the workflow state, assignee, priority, labels or estimate from a filterable picker. The change shows at once and rolls back with a notice if Linear refuses it. Write comments in `$EDITOR`, and create issues with `n`.
 - **The palette** (`:` or `Ctrl-k`) finds any action or loaded issue by fuzzy match, and `/` searches every issue in the workspace.
 - **Team Issues**: a team's issues, filtered by workflow state, assignee, label, cycle or project, and grouped and sorted like My Issues.
+- **Cycles and Projects**: a team's active, next and recent cycles with how many of their issues are done, and your teams' projects with their status, target date, lead and progress. Enter lists a cycle's issues, or a project's grouped by project milestone, with every issue action and the same grouping and sorting.
 - **Analytics**: throughput, net flow, cycle time and lead time, issue age and completion by project, label and priority, for you or for a team, over 4, 12 or 26 weeks. The per-person breakdown is shown only to team owners.
 - **Copy and open**: copy an issue's identifier, URL, branch name or a Markdown link, and open the issue or its pull requests in the browser.
 - **Stays current**: lrat polls Linear for changes, can take live updates from Linear's websocket, and shows the last session's snapshot while it loads, which stays on screen when Linear cannot be reached.

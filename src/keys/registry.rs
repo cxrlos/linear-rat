@@ -120,6 +120,10 @@ const fn views(word: &'static str) -> Option<Hint> {
 const LIST: &[Context] = &[Context::List];
 const TEAM_ISSUES: &[Context] = &[Context::TeamIssues];
 const PANES: &[Context] = &[Context::List, Context::Detail];
+/// Moves also go through the Cycles and Projects lists.
+const MOVES: &[Context] = &[Context::List, Context::Detail, Context::Browse];
+const BROWSE: &[Context] = &[Context::Browse];
+const CYCLES: &[Context] = &[Context::Cycles];
 const GLOBAL: &[Context] = &[Context::Global];
 const OVERLAY: &[Context] = &[Context::Overlay];
 const ANALYTICS: &[Context] = &[Context::Analytics];
@@ -136,7 +140,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         label: "down / up",
         group: Group::Move,
         hint: moves("down"),
-        contexts: PANES,
+        contexts: MOVES,
         default_keys: &[&[Key::char('j')]],
         available: can_move_down,
     },
@@ -147,7 +151,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         label: "down / up",
         group: Group::Move,
         hint: moves("up"),
-        contexts: PANES,
+        contexts: MOVES,
         default_keys: &[&[Key::char('k')]],
         available: can_move_up,
     },
@@ -158,7 +162,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         label: "top / bottom",
         group: Group::Move,
         hint: moves("top"),
-        contexts: PANES,
+        contexts: MOVES,
         default_keys: &[&[Key::char('g'), Key::char('g')]],
         available: can_move_up,
     },
@@ -169,7 +173,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         label: "top / bottom",
         group: Group::Move,
         hint: moves("bottom"),
-        contexts: PANES,
+        contexts: MOVES,
         default_keys: &[&[Key::char('G')]],
         available: can_move_down,
     },
@@ -180,7 +184,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         label: "half page",
         group: Group::Move,
         hint: moves("page"),
-        contexts: PANES,
+        contexts: MOVES,
         default_keys: &[&[Key::ctrl('d')]],
         available: can_move_down,
     },
@@ -191,7 +195,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         label: "half page",
         group: Group::Move,
         hint: moves("page"),
-        contexts: PANES,
+        contexts: MOVES,
         default_keys: &[&[Key::ctrl('u')]],
         available: can_move_up,
     },
@@ -227,6 +231,21 @@ pub static ACTIONS: &[ActionSpec] = &[
         contexts: LIST,
         default_keys: &[&[Key::named(KeyCode::Enter)]],
         available: always,
+    },
+    ActionSpec {
+        action: Action::ListIssues,
+        id: "list-issues",
+        description: "List the issues of the focused cycle or project",
+        label: "list its issues",
+        group: Group::Open,
+        hint: does("issues"),
+        contexts: BROWSE,
+        default_keys: &[&[Key::named(KeyCode::Enter)]],
+        available: |state| match state.screen {
+            Screen::Cycles => state.cycles.focused().is_some(),
+            Screen::Projects => state.projects.focused().is_some(),
+            _ => false,
+        },
     },
     ActionSpec {
         action: Action::Copy(Copyable::Identifier),
@@ -501,6 +520,17 @@ pub static ACTIONS: &[ActionSpec] = &[
         available: |state| state.store.viewer_teams().next().is_some(),
     },
     ActionSpec {
+        action: Action::SwitchCyclesTeam,
+        id: "switch-cycles-team",
+        description: "Switch the team of the Cycles screen",
+        label: "switch team",
+        group: Group::Screen,
+        hint: views("team"),
+        contexts: CYCLES,
+        default_keys: &[&[Key::char('t')]],
+        available: |state| state.store.viewer_teams().next().is_some(),
+    },
+    ActionSpec {
         action: Action::FilterBy(FilterField::State),
         id: "filter-by-state",
         description: "Filter by workflow state",
@@ -737,6 +767,28 @@ pub static ACTIONS: &[ActionSpec] = &[
         available: |state| state.screen != Screen::Analytics,
     },
     ActionSpec {
+        action: Action::ShowScreen(Screen::Cycles),
+        id: "show-cycles",
+        description: "Show Cycles",
+        label: "cycles",
+        group: Group::App,
+        hint: None,
+        contexts: GLOBAL,
+        default_keys: &[&[Key::char('4')]],
+        available: |state| state.screen != Screen::Cycles,
+    },
+    ActionSpec {
+        action: Action::ShowScreen(Screen::Projects),
+        id: "show-projects",
+        description: "Show Projects",
+        label: "projects",
+        group: Group::App,
+        hint: None,
+        contexts: GLOBAL,
+        default_keys: &[&[Key::char('5')]],
+        available: |state| state.screen != Screen::Projects,
+    },
+    ActionSpec {
         action: Action::Refresh,
         id: "refresh",
         description: "Refresh now",
@@ -940,7 +992,7 @@ fn in_detail(state: &State) -> bool {
         Screen::MyIssues => state.my_issues.pane() == Pane::Detail,
         Screen::TeamIssues => state.team_issues.pane() == Pane::Detail,
         Screen::Results => state.results.pane() == Pane::Detail,
-        Screen::Analytics => false,
+        Screen::Analytics | Screen::Cycles | Screen::Projects => false,
     }
 }
 

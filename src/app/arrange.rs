@@ -16,6 +16,8 @@ pub enum Grouping {
     State,
     Priority,
     Project,
+    /// By project milestone, in each project's own milestone order.
+    Milestone,
     Cycle,
     Assignee,
     /// One list with no group headers.
@@ -24,10 +26,11 @@ pub enum Grouping {
 
 impl Grouping {
     /// Every grouping, in the order the picker lists them.
-    pub const ALL: [Grouping; 6] = [
+    pub const ALL: [Grouping; 7] = [
         Grouping::State,
         Grouping::Priority,
         Grouping::Project,
+        Grouping::Milestone,
         Grouping::Cycle,
         Grouping::Assignee,
         Grouping::None,
@@ -39,6 +42,7 @@ impl Grouping {
             Grouping::State => "state",
             Grouping::Priority => "priority",
             Grouping::Project => "project",
+            Grouping::Milestone => "milestone",
             Grouping::Cycle => "cycle",
             Grouping::Assignee => "assignee",
             Grouping::None => "none",
@@ -57,6 +61,7 @@ impl Grouping {
             Grouping::State => "workflow state",
             Grouping::Priority => "priority",
             Grouping::Project => "project",
+            Grouping::Milestone => "project milestone",
             Grouping::Cycle => "cycle",
             Grouping::Assignee => "assignee",
             Grouping::None => "none",
@@ -240,10 +245,21 @@ impl Arrangement {
         sort: Some(Sort::new(SortKey::Updated, true)),
     };
 
-    /// Search results and the issues of a cycle or project: one list in
-    /// the order Linear sent.
+    /// Search results: one list in the order Linear sent.
     pub const LINEAR_ORDER: Arrangement = Arrangement {
         group: Grouping::None,
+        sort: None,
+    };
+
+    /// The issues of a cycle: by workflow state, in the order Linear sent.
+    pub const CYCLE_ISSUES: Arrangement = Arrangement {
+        group: Grouping::State,
+        sort: None,
+    };
+
+    /// The issues of a project: by milestone, in the order Linear sent.
+    pub const PROJECT_ISSUES: Arrangement = Arrangement {
+        group: Grouping::Milestone,
         sort: None,
     };
 }
@@ -255,6 +271,8 @@ pub enum GroupKey {
     Priority(Priority),
     /// A project id, `None` for issues in no project.
     Project(Option<String>),
+    /// A project milestone id, `None` for issues in no milestone.
+    Milestone(Option<String>),
     Cycle(Option<String>),
     /// A member id, `None` for unassigned issues.
     Assignee(Option<String>),
@@ -289,8 +307,8 @@ const STATE_ORDER: [StateType; 6] = [
 
 /// `issues`, given in the list's own order, grouped and sorted as
 /// `arrangement` says. Empty groups are left out. Groups of named things
-/// come in name order (cycles newest first), with the group of issues that
-/// have none last. Issues that tie on the sort keep their own order.
+/// come in name order (cycles newest first, milestones in their project's
+/// order), with the group of issues that have none last. Issues that tie on the sort keep their own order.
 pub fn arrange(mut issues: Vec<Issue>, arrangement: Arrangement, names: &Names) -> Vec<Group> {
     if let Some(sort) = arrangement.sort {
         issues.sort_by(|a, b| sort.compare(a, b));
@@ -299,6 +317,7 @@ pub fn arrange(mut issues: Vec<Issue>, arrangement: Arrangement, names: &Names) 
         Grouping::State => GroupKey::State(issue.state.state_type),
         Grouping::Priority => GroupKey::Priority(issue.priority),
         Grouping::Project => GroupKey::Project(issue.project_id.clone()),
+        Grouping::Milestone => GroupKey::Milestone(issue.project_milestone_id.clone()),
         Grouping::Cycle => GroupKey::Cycle(issue.cycle_id.clone()),
         Grouping::Assignee => GroupKey::Assignee(issue.assignee_id.clone()),
         Grouping::None => GroupKey::All,
@@ -336,6 +355,12 @@ fn group_order(a: &GroupKey, b: &GroupKey, names: &Names) -> Ordering {
         (GroupKey::Assignee(a), GroupKey::Assignee(b)) => named(a, b, &|id| {
             names.member_name(id).unwrap_or(id).to_lowercase()
         }),
+        (GroupKey::Milestone(a), GroupKey::Milestone(b)) => {
+            missing_last(a.as_deref(), b.as_deref(), |a, b| {
+                let place = |id| names.milestone_place(id).unwrap_or(usize::MAX);
+                place(a).cmp(&place(b)).then_with(|| a.cmp(b))
+            })
+        }
         (GroupKey::Cycle(a), GroupKey::Cycle(b)) => {
             missing_last(a.as_deref(), b.as_deref(), |a, b| {
                 names

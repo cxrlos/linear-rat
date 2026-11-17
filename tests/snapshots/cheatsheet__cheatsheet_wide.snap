@@ -2,7 +2,7 @@
 source: tests/cheatsheet.rs
 expression: "text(&cheatsheet(160, 40))"
 ---
- [1] My Issues │ [2] Team Issues │ [3] Analytics                                                                                                                
+ [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects                                                                                    
 ┏My Issues · group: workflow state · sort: active cycle, then priority━━━━━━━━━━━━━━━━━━━━━━━━━┓┌DES-34────────────────────────────────────────────────────────┐
 ┃◐ Started (9)                                                                                 ┃│Design QA for the autumn release                              │
 ┃▸ DES-34 Design QA for the autumn release                 ◐ In Progress ▮▮▮ High    3 Cycle 7 ┃│                                                              │
@@ -17,14 +17,14 @@ expression: "text(&cheatsheet(160, 40))"
 ┃○ Unstarted (10)                                                                              ┃│                                                              │
 ┃┌ Keys ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐ │
 ┃│ Move                                 │ Edit the issue                       │ Open & copy                          │ App                                  │ │
-┃│  j/k      down / up                  │  s  workflow state                   │  Enter  open the issue               │  1/2/3  screens   r      refresh     │ │
-┃│  gg/G     top / bottom               │  a  assignee                         │  yi/yu  copy key / URL               │  ?      keys      :,C-k  palette     │ │
-┃│  C-d/C-u  half page                  │  p  priority                         │  yb/ym  copy branch / link           │  /      search    q      quit        │ │
-┃│  h/l      pane left / right          │  L  labels                           │  o      Linear page or PR            │  C-z    suspend                      │ │
-┃│  Esc      close or step back         │  e  estimate                         │  O      other links                  │                                      │ │
-┃│                                      │  E  title and description            │                                      │ Issue list                           │ │
-┃│                                      │  c  comment                          │                                      │  vg/vs  group / sort                 │ │
-┃│                                      │  n  new issue                        │                                      │                                      │ │
+┃│  j/k      down / up                  │  s  workflow state                   │  Enter  open the issue               │  1/2/3  screens    4      cycles     │ │
+┃│  gg/G     top / bottom               │  a  assignee                         │  yi/yu  copy key / URL               │  5      projects   r      refresh    │ │
+┃│  C-d/C-u  half page                  │  p  priority                         │  yb/ym  copy branch / link           │  ?      keys       :,C-k  palette    │ │
+┃│  h/l      pane left / right          │  L  labels                           │  o      Linear page or PR            │  /      search     q      quit       │ │
+┃│  Esc      close or step back         │  e  estimate                         │  O      other links                  │  C-z    suspend                      │ │
+┃│                                      │  E  title and description            │                                      │                                      │ │
+┃│ Issue list                           │  c  comment                          │                                      │                                      │ │
+┃│  vg/vs  group / sort                 │  n  new issue                        │                                      │                                      │ │
 ┃└ Esc close ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘ │
 ┃  DES-2  Redesign the empty pantry screen                 ◌ Backlog     ▮▮▮ High              ┃│Updated   2026-10-29 01:25 UTC (4 days ago)                   │
 ┃  ENG-35 Split the auth module out of the monolith        ◌ Backlog     ▮▮▯ Medium            ┃│                                                              │

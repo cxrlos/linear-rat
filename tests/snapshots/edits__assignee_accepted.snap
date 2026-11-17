@@ -2,7 +2,7 @@
 source: tests/edits.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    "
 "┌My Issues · group: workflow state · sort: active cycle, then priority─────────┐"
 "│◐ Started (8)                                                                 │"
 "│▸ ENG-51 Add a dry-run mode to the import ◐ In Progress ▮▮▯ Medium  2 Cycle 7 │"

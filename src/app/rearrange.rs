@@ -31,7 +31,7 @@ pub fn own_order(screen: Screen) -> Option<&'static str> {
     match screen {
         Screen::MyIssues => Some("active cycle, then priority"),
         Screen::Results => Some("Linear's order"),
-        Screen::TeamIssues | Screen::Analytics => None,
+        Screen::TeamIssues | Screen::Analytics | Screen::Cycles | Screen::Projects => None,
     }
 }
 
@@ -93,7 +93,9 @@ pub(super) fn pick(state: &mut State, nth: Option<usize>) -> Option<Vec<Effect>>
             arrangement.group = name.as_deref().and_then(Grouping::from_name)?;
         }
         Purpose::Sort => arrangement.sort = name.as_deref().and_then(Sort::from_name),
-        Purpose::Team | Purpose::AnalyticsTeam | Purpose::Filter(_) => return None,
+        Purpose::Team | Purpose::AnalyticsTeam | Purpose::CyclesTeam | Purpose::Filter(_) => {
+            return None;
+        }
     }
     Some(apply(state, arrangement))
 }
@@ -112,6 +114,6 @@ fn apply(state: &mut State, arrangement: Arrangement) -> Vec<Effect> {
             results::rearrange(state, arrangement);
             Vec::new()
         }
-        Screen::Analytics => Vec::new(),
+        Screen::Analytics | Screen::Cycles | Screen::Projects => Vec::new(),
     }
 }

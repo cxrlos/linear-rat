@@ -2,7 +2,7 @@
 source: tests/keys.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    "
 "┌My Issues · group: workflow state · sort: active cycle, then priority─────────┐"
 "│┌ Keys ─────────────────────────────────────────────────────────────────────┐ │"
 "││ Move                                │ Edit the issue                      │ │"
@@ -16,11 +16,11 @@ expression: app.backend()
 "││  Enter  open the issue              │  n  new issue                       │ │"
 "││  yi/yu  copy key / URL              │                                     │ │"
 "││  yb/ym  copy branch / link          │ App                                 │ │"
-"││  o      Linear page or PR           │  1/2/3  screens   r      refresh    │ │"
-"││  O      other links                 │  ?      keys      :,C-k  palette    │ │"
-"││                                     │  /      search    q      quit       │ │"
-"││ Issue list                          │  C-z    suspend                     │ │"
-"││  vg/vs  group / sort                │                                     │ │"
+"││  o      Linear page or PR           │  1/2/3  screens    4      cycles    │ │"
+"││  O      other links                 │  5      projects   r      refresh   │ │"
+"││                                     │  ?      keys       :,C-k  palette   │ │"
+"││ Issue list                          │  /      search     q      quit      │ │"
+"││  vg/vs  group / sort                │  C-z    suspend                     │ │"
 "│└ Esc close ────────────────────────────────────────────────────────────────┘ │"
 "└──────────────────────────────────────────────────────────────────────────────┘"
 " Move │ j/k move                                                                "

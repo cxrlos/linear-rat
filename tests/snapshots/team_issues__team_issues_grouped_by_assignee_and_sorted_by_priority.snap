@@ -2,7 +2,7 @@
 source: tests/team_issues.rs
 expression: "screen(&app).join(\"\\n\")"
 ---
- [1] My Issues │ [2] Team Issues │ [3] Analytics                                                                                                                
+ [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects                                                                                    
 t ENG Engineering · 50 of 70 m more · f Filters none                                                                                                            
 ┏Team Issues · group: assignee · sort: priority, urgent first, loaded 50 of 70━━━━━━━━━━━━━━━━━┓┌ENG-69────────────────────────────────────────────────────────┐
 ┃Ada Roquefort (4)                                                                             ┃│Make the importer resumable                                   │

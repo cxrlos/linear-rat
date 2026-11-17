@@ -109,7 +109,8 @@ fn a_bad_group_or_sort_warns_and_ui_falls_back_to_its_defaults() {
         messages(&loaded),
         vec![
             "config.toml:2: `ui.my-issues-group` must be one of \"state\", \"priority\", \
-             \"project\", \"cycle\", \"assignee\", \"none\"; [ui] uses its defaults",
+             \"project\", \"milestone\", \"cycle\", \"assignee\", \"none\"; [ui] uses its \
+             defaults",
             "config.toml:3: `ui.team-issues-sort` must be one of \"updated\", \"created\", \
              \"priority\", \"due-date\", \"estimate\", each optionally ending in -asc or \
              -desc; [ui] uses its defaults",

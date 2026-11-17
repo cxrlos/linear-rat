@@ -2,7 +2,7 @@
 source: tests/group_and_sort.rs
 expression: "screen(&app).join(\"\\n\")"
 ---
- [1] My Issues │ [2] Team Issues │ [3] Analytics                                                                        
+ [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects                                            
 ┏My Issues · group: workflow state · sort: active cycle, then priority━┓┌DES-34────────────────────────────────────────┐
 ┃◐ Started (9)                                                         ┃│Design QA for the autumn release              │
 ┃▸ DES-34 Design QA for the autumn ◐ In Progress ▮▮▮ High    3 Cycle 7 ┃│                                              │
@@ -16,11 +16,11 @@ expression: "screen(&app).join(\"\\n\")"
 ┃  DES-12 Motion guidelines for li ◐ │ 1 workflow state ✓                        │                                     │
 ┃○ Unstarted (10)                    │ 2 priority                                │                                     │
 ┃  DES-40 Color-blind safe workflo ○ │ 3 project                                 │                                     │
-┃  ENG-57 Throttle sensor writes d ○ │ 4 cycle                                   │                                     │
-┃  OPS-38 Add synthetic checks for ○ │ 5 assignee                                │                                     │
-┃  DES-31 Review copy for permissi ○ │ 6 none                                    │                                     │
-┃  ENG-65 Rotate refresh tokens on ○ └ Down/Up select  Enter choose  Esc close ──┘ Design                              │
-┃  DES-16 Accessible focus rings a ○ Todo        ▮▮▮ High    5         ┃│Project   None                                │
+┃  ENG-57 Throttle sensor writes d ○ │ 4 project milestone                       │                                     │
+┃  OPS-38 Add synthetic checks for ○ │ 5 cycle                                   │                                     │
+┃  DES-31 Review copy for permissi ○ │ 6 assignee                                │                                     │
+┃  ENG-65 Rotate refresh tokens on ○ │ 7 none                                    │ Design                              │
+┃  DES-16 Accessible focus rings a ○ └ Down/Up select  Enter choose  Esc close ──┘ None                                │
 ┃  ENG-56 Notification settings re ○ Todo        ▮▮▮ High    2         ┃│Cycle     Cycle 7 (active)                    │
 ┃  ENG-6  Migrate burrow storage t ○ Todo        ▮▮▯ Medium  3         ┃│Labels    improvement                         │
 ┃  OPS-26 Archive the old marketin ○ Todo        ▮▮▯ Medium            ┃│Assignee  Mira Gouda                          │
