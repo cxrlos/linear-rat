@@ -8,7 +8,8 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
 use jiff::civil::date;
-use linear_rat::app::{App, Edit, Effect, Event, Modal, State, Write};
+use linear_rat::app::{Action, App, Edit, Effect, Event, Modal, State, Write};
+use linear_rat::keys;
 use linear_rat::linear::model::{Cycle, Issue};
 use linear_rat::linear::{FakeClient, IssueDetail, IssueUpdate, LinearClient, Patch, demo};
 use ratatui::backend::TestBackend;
@@ -529,6 +530,16 @@ fn clear_removes_the_due_date_and_a_rejection_puts_it_back() {
     app.handle(rejected(&write)).unwrap();
     assert_eq!(issue(&app, FIRST).due_date, Some(date(2026, 11, 6)));
     assert!(shows(&app, "Could not change the due date of DES-34"));
+}
+
+#[test]
+fn enter_is_available_while_the_due_date_prompt_is_open() {
+    let mut app = app();
+    let accept = keys::spec(Action::Accept).unwrap();
+
+    press(&mut app, "d");
+
+    assert!((accept.available)(app.state()));
 }
 
 #[test]

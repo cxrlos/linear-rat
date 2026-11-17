@@ -963,7 +963,7 @@ fn can_accept(state: &State) -> bool {
             Phase::Typing { .. } | Phase::NothingFound { .. } => !search.query.trim().is_empty(),
             Phase::Searching { .. } => false,
         },
-        Some(Modal::Confirm(_)) => true,
+        Some(Modal::Confirm(_) | Modal::DueDate(_)) => true,
         _ => false,
     }
 }
