@@ -1,6 +1,6 @@
 pkgbase = lrat-bin
 	pkgdesc = A fast, keyboard-first terminal client for Linear (prebuilt binary)
-	pkgver = 0.1.0
+	pkgver = 0.2.0
 	pkgrel = 1
 	url = https://github.com/cxrlos/linear-rat
 	arch = x86_64
@@ -11,9 +11,9 @@ pkgbase = lrat-bin
 	provides = lrat
 	conflicts = lrat
 	options = !debug
-	source_x86_64 = lrat-0.1.0-x86_64.tar.xz::https://github.com/cxrlos/linear-rat/releases/download/v0.1.0/linear-rat-x86_64-unknown-linux-gnu.tar.xz
-	sha256sums_x86_64 = c310b8c301892de03fd86ebe78dbe1335ea5e3e81de53fe855a6bf1c7e9afff1
-	source_aarch64 = lrat-0.1.0-aarch64.tar.xz::https://github.com/cxrlos/linear-rat/releases/download/v0.1.0/linear-rat-aarch64-unknown-linux-gnu.tar.xz
-	sha256sums_aarch64 = 82c39bfd596e172667c8fcf5ffe71cf9416caf70a89226690d0140add4f92124
+	source_x86_64 = lrat-0.2.0-x86_64.tar.xz::https://github.com/cxrlos/linear-rat/releases/download/v0.2.0/linear-rat-x86_64-unknown-linux-gnu.tar.xz
+	sha256sums_x86_64 = cbf2f5b34f4544b9a46748e090d343095494b59a775bb74f6e233fb6d690c772
+	source_aarch64 = lrat-0.2.0-aarch64.tar.xz::https://github.com/cxrlos/linear-rat/releases/download/v0.2.0/linear-rat-aarch64-unknown-linux-gnu.tar.xz
+	sha256sums_aarch64 = c22d0433a287af527625e7fcffaad09dd50fe6237c9a8591c6f4101be0a70b07
 
 pkgname = lrat-bin

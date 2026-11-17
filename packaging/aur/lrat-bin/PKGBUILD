@@ -1,7 +1,7 @@
 # Maintainer: Carlos García <31284110+cxrlos at users dot noreply dot github dot com>
 
 pkgname=lrat-bin
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
 pkgdesc='A fast, keyboard-first terminal client for Linear (prebuilt binary)'
 arch=('x86_64' 'aarch64')
@@ -16,8 +16,8 @@ options=('!debug')
 # to keep makepkg's source cache from mixing up releases.
 source_x86_64=("lrat-$pkgver-x86_64.tar.xz::$url/releases/download/v$pkgver/linear-rat-x86_64-unknown-linux-gnu.tar.xz")
 source_aarch64=("lrat-$pkgver-aarch64.tar.xz::$url/releases/download/v$pkgver/linear-rat-aarch64-unknown-linux-gnu.tar.xz")
-sha256sums_x86_64=('c310b8c301892de03fd86ebe78dbe1335ea5e3e81de53fe855a6bf1c7e9afff1')
-sha256sums_aarch64=('82c39bfd596e172667c8fcf5ffe71cf9416caf70a89226690d0140add4f92124')
+sha256sums_x86_64=('cbf2f5b34f4544b9a46748e090d343095494b59a775bb74f6e233fb6d690c772')
+sha256sums_aarch64=('c22d0433a287af527625e7fcffaad09dd50fe6237c9a8591c6f4101be0a70b07')
 
 package() {
   cd "linear-rat-$CARCH-unknown-linux-gnu"
