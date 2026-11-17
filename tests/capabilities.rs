@@ -9,11 +9,14 @@ use std::path::Path;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
 use linear_rat::app::{
-    App, Edit, Effect, Event, Failure, Modal, NewComment, Palette, State, Write, WriteClass,
+    App, Edit, Effect, Event, Failure, Modal, NewComment, NewIssue, Palette, State, Write,
+    WriteClass,
 };
 use linear_rat::config;
 use linear_rat::linear::model::Priority;
-use linear_rat::linear::{ClientError, ErrorKind, FakeClient, GraphQlError, LinearClient, demo};
+use linear_rat::linear::{
+    ClientError, ErrorKind, FakeClient, GraphQlError, IssueCreate, LinearClient, demo,
+};
 use ratatui::backend::TestBackend;
 use ratatui::style::Color;
 
@@ -242,6 +245,44 @@ fn a_forbidden_comment_denies_comments_in_the_team() {
     assert_eq!(
         app.state().notice.as_deref(),
         Some("this API key cannot comment on issues in DES")
+    );
+}
+
+#[test]
+fn a_forbidden_create_denies_creating_issues_in_its_team_only() {
+    let mut app = app();
+
+    app.handle(Event::IssueCreated {
+        issue: NewIssue {
+            local_id: "local-1".to_owned(),
+            input: IssueCreate {
+                team_id: "team-eng".to_owned(),
+                state_id: "team-eng-state-todo".to_owned(),
+                assignee_id: None,
+                priority: Priority::None,
+                title: "Gouda".to_owned(),
+                description: String::new(),
+            },
+        },
+        result: Err(forbidden("create an issue")),
+    })
+    .unwrap();
+
+    let capabilities = app.state().store.capabilities();
+    assert!(
+        capabilities
+            .write("team-eng", WriteClass::CreateIssue)
+            .is_denied()
+    );
+    assert!(
+        !capabilities
+            .write("team-eng", WriteClass::UpdateIssue)
+            .is_denied()
+    );
+    assert!(
+        !capabilities
+            .write("team-des", WriteClass::CreateIssue)
+            .is_denied()
     );
 }
 
