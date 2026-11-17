@@ -10,10 +10,11 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
 use jiff::Timestamp;
 use linear_rat::app::{
-    App, Edit, Event, Failure, Modal, NewComment, NewIssue, State, SyncFailure, Write, Writing,
+    App, Edit, Effect, Event, Failure, Modal, NewComment, NewIssue, State, SyncFailure, Write,
+    Writing,
 };
 use linear_rat::linear::model::Priority;
-use linear_rat::linear::{ErrorKind, IssueCreate};
+use linear_rat::linear::{ErrorKind, IssueCreate, TeamQuery, demo};
 use ratatui::backend::TestBackend;
 
 /// 2026-11-03T09:00:00Z.
@@ -275,4 +276,65 @@ fn an_empty_log_says_so() {
     app.handle(key('M')).unwrap();
 
     assert!(screen(&app).contains("No errors yet."), "{}", screen(&app));
+}
+
+/// The app on Team Issues with the first team's load in flight, and the
+/// query and count it asked for.
+fn on_team_issues() -> (App<TestBackend>, TeamQuery) {
+    let mut app = app();
+    let mut effects = app.handle(key('2')).unwrap();
+    let mut guard = 0;
+    while let Some(effect) = effects.pop() {
+        guard += 1;
+        assert!(guard < 20, "loads never settled");
+        match effect {
+            Effect::LoadTeams => {
+                effects.extend(
+                    app.handle(Event::TeamsLoaded(Ok(demo::workspace().teams)))
+                        .unwrap(),
+                );
+            }
+            Effect::LoadTeamIssues { query, .. } => return (app, query),
+            _ => {}
+        }
+    }
+    panic!("Team Issues asked for no page");
+}
+
+#[test]
+fn a_team_issues_first_page_failure_goes_in_the_log() {
+    let (mut app, query) = on_team_issues();
+
+    app.handle(Event::TeamIssuesLoaded {
+        query,
+        after: None,
+        result: Err(Failure::new(
+            ErrorKind::ServerError,
+            "load the team's issues",
+            "HTTP 503",
+        )),
+    })
+    .unwrap();
+
+    let newest = app.state().errors.newest_first().next().unwrap();
+    assert_eq!(newest.failure.action, "load the team's issues");
+    assert_eq!(newest.failure.kind, ErrorKind::ServerError);
+}
+
+#[test]
+fn a_team_issues_count_failure_goes_in_the_log() {
+    let (mut app, query) = on_team_issues();
+
+    app.handle(Event::TeamIssuesCounted {
+        query,
+        result: Err(Failure::new(
+            ErrorKind::ServerError,
+            "count the team's issues",
+            "HTTP 503",
+        )),
+    })
+    .unwrap();
+
+    let newest = app.state().errors.newest_first().next().unwrap();
+    assert_eq!(newest.failure.action, "count the team's issues");
 }
