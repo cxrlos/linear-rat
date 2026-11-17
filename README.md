@@ -71,7 +71,7 @@ Press `?` anywhere to see the keys for the screen you are on.
 - **Analytics**: throughput, net flow, cycle time and lead time, issue age and completion by project, label and priority, for you or for a team, over 4, 12 or 26 weeks. The per-person breakdown is shown only to team owners.
 - **Copy and open**: copy an issue's identifier, URL, branch name or a Markdown link, and open the issue or its pull requests in the browser.
 - **Stays current**: lrat polls Linear for changes, can take live updates from Linear's websocket, and shows the last session's snapshot while it loads, which stays on screen when Linear cannot be reached.
-- **Errors you can act on**: a failure shows once as a notice and stays in a log of the last 100 (`M`, or `:messages` in the palette), each with when it happened, what lrat was doing, what kind of failure it was and a suggested fix. Once Linear refuses a kind of write for your API key in a team, lrat mutes those actions there with the reason and says why instead of trying again, and a team the key cannot reach says so on Team Issues.
+- **Errors you can act on**: a failure shows once as a notice and stays in a log of the last 100 (`M`, or `:messages` in the palette), each with when it happened, what lrat was doing, what kind of failure it was and a suggested fix. Once Linear refuses a kind of write for your API key in a team, lrat mutes those actions there with the reason and says why instead of trying again, for 15 minutes or until you press `r`, and a team the key cannot reach says so on Team Issues.
 - **Yours to configure**: every key can be rebound, and there are ten Base16 themes built in, or bring your own.
 
 ## Docs

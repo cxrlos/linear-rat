@@ -127,21 +127,22 @@ impl State {
 
     /// Why the API key cannot do `class` to the focused issue, as `this API
     /// key cannot edit issues in ENG`, or `None` when it is not known to be
-    /// denied.
+    /// denied or the denial no longer holds.
     pub fn write_denied(&self, class: WriteClass) -> Option<String> {
         let team_id = &self.focused_issue()?.team_id;
         let capabilities = self.store.capabilities();
+        let now = self.sync_status.now();
         let team = self
             .store
             .teams()
             .find(|team| &team.id == team_id)
             .map_or(team_id.as_str(), |team| team.key.as_str());
-        if capabilities.reach(team_id).is_denied() {
+        if capabilities.reach(team_id).holds_at(now) {
             return Some(format!("this API key cannot reach {team}"));
         }
         capabilities
             .write(team_id, class)
-            .is_denied()
+            .holds_at(now)
             .then(|| format!("this API key cannot {} in {team}", class.verb()))
     }
 

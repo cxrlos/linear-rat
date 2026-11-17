@@ -8,6 +8,7 @@ use std::path::Path;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
+use jiff::{SignedDuration, Timestamp};
 use linear_rat::app::{
     App, Edit, Effect, Event, Failure, Modal, NewComment, NewIssue, Palette, State, Write,
     WriteClass,
@@ -155,6 +156,86 @@ fn a_later_success_allows_the_class_again() {
     app.handle(accepted(&write)).unwrap();
 
     assert!(!press(&mut app, "s").is_empty());
+}
+
+/// 2026-11-03T09:00:00Z.
+const START: Timestamp = Timestamp::constant(1_793_696_400, 0);
+
+fn tick(minutes: i64) -> Event {
+    Event::Tick(
+        START
+            .checked_add(SignedDuration::from_mins(minutes))
+            .unwrap(),
+    )
+}
+
+/// The app after Linear refused a priority edit of the focused issue at
+/// [`START`].
+fn refused_at_start() -> App<TestBackend> {
+    let mut app = app();
+    app.handle(tick(0)).unwrap();
+    let write = only_write(press(&mut app, "p1"));
+    app.handle(Event::IssueUpdated {
+        write,
+        result: Err(forbidden(&format!("edit {FIRST}"))),
+    })
+    .unwrap();
+    app
+}
+
+#[test]
+fn a_denial_holds_for_a_quarter_of_an_hour_then_the_key_is_tried_again() {
+    let mut app = refused_at_start();
+
+    app.handle(tick(14)).unwrap();
+    assert_eq!(press(&mut app, "p"), Vec::new());
+    assert_eq!(
+        app.state().notice.as_deref(),
+        Some("this API key cannot edit issues in DES")
+    );
+
+    app.handle(tick(15)).unwrap();
+    let write = only_write(press(&mut app, "p1"));
+    app.handle(accepted(&write)).unwrap();
+    app.handle(tick(16)).unwrap();
+    assert!(app.state().write_denied(WriteClass::UpdateIssue).is_none());
+}
+
+#[test]
+fn a_denial_learned_again_holds_from_then() {
+    let mut app = refused_at_start();
+    app.handle(tick(15)).unwrap();
+    let write = only_write(press(&mut app, "p1"));
+
+    app.handle(Event::IssueUpdated {
+        write,
+        result: Err(forbidden(&format!("edit {FIRST}"))),
+    })
+    .unwrap();
+    app.handle(tick(29)).unwrap();
+
+    assert_eq!(press(&mut app, "p"), Vec::new());
+}
+
+#[test]
+fn refresh_forgets_what_was_denied() {
+    let mut app = refused_at_start();
+    // The first tick started a poll, and `r` waits for it.
+    app.handle(Event::Polled {
+        changes: Vec::new(),
+        failure: None,
+    })
+    .unwrap();
+    assert!(app.state().write_denied(WriteClass::UpdateIssue).is_some());
+    // Any key clears the notice and redraws; `r` must redraw on its own.
+    app.handle(key(KeyCode::F(12))).unwrap();
+
+    press(&mut app, "r");
+
+    assert_eq!(fg_at(&app, " Edit │", "s state"), accent(&app));
+
+    assert!(app.state().write_denied(WriteClass::UpdateIssue).is_none());
+    only_write(press(&mut app, "p1"));
 }
 
 #[test]

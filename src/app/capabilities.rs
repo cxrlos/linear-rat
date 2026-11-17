@@ -2,11 +2,13 @@
 //! no query for a key's limits and no dry run for a mutation, so the map is
 //! inferred: a team starts unknown, or reachable when the viewer is a member
 //! of it, a forbidden write denies its class there and a later success of
-//! that class allows it again.
+//! that class allows it again. A denial holds for [`DENIAL_HOLDS`], so a
+//! key that gained access, or a refusal that was not about access, gets
+//! that success.
 
 use std::collections::BTreeMap;
 
-use jiff::Timestamp;
+use jiff::{SignedDuration, Timestamp};
 use serde::{Deserialize, Serialize};
 
 use crate::linear::ErrorKind;
@@ -48,9 +50,27 @@ pub enum Capability {
     },
 }
 
+/// How long a denial stops lrat from sending a write of its class before
+/// the next press tries again.
+pub const DENIAL_HOLDS: SignedDuration = SignedDuration::from_mins(15);
+
 impl Capability {
     pub fn is_denied(self) -> bool {
         matches!(self, Capability::Denied { .. })
+    }
+
+    /// Whether it is denied and the denial still holds at `now`, the
+    /// latest tick. Before the first tick every denial holds; one learned
+    /// before the first tick holds until it.
+    pub fn holds_at(self, now: Option<Timestamp>) -> bool {
+        match (self, now) {
+            (Capability::Denied { .. }, None) => true,
+            (Capability::Denied { since: Some(since) }, Some(now)) => {
+                now.duration_since(since) < DENIAL_HOLDS
+            }
+            (Capability::Denied { since: None }, Some(_))
+            | (Capability::Unknown | Capability::Allowed, _) => false,
+        }
     }
 }
 
@@ -125,6 +145,19 @@ impl Capabilities {
         };
         self.teams.entry(team_id.to_owned()).or_default().reach = learned;
     }
+
+    /// Forgets every write class denied in any team, so the next press of
+    /// each tries again. Reach is left alone: loading the team's issues
+    /// learns it again. Returns whether there was any to forget.
+    pub fn forget_denied_writes(&mut self) -> bool {
+        let mut forgot = false;
+        for team in self.teams.values_mut() {
+            let before = team.writes.len();
+            team.writes.retain(|_, capability| !capability.is_denied());
+            forgot |= team.writes.len() != before;
+        }
+        forgot
+    }
 }
 
 #[cfg(test)]
@@ -165,6 +198,46 @@ mod tests {
             map.write("team-eng", WriteClass::UpdateIssue),
             Capability::Allowed
         );
+    }
+
+    #[test]
+    fn a_denial_holds_until_it_lapses() {
+        let later = |mins| Some(AT.checked_add(SignedDuration::from_mins(mins)).unwrap());
+        let denied = Capability::Denied { since: Some(AT) };
+
+        assert!(denied.holds_at(None));
+        assert!(denied.holds_at(later(14)));
+        assert!(!denied.holds_at(later(15)));
+        assert!(Capability::Denied { since: None }.holds_at(None));
+        assert!(!Capability::Denied { since: None }.holds_at(Some(AT)));
+        assert!(!Capability::Allowed.holds_at(None));
+        assert!(!Capability::Unknown.holds_at(Some(AT)));
+    }
+
+    #[test]
+    fn forgetting_denied_writes_keeps_allowed_writes_and_reach() {
+        let mut map = Capabilities::default();
+        map.learn_write("team-eng", WriteClass::CreateIssue, Ok(()), None);
+        map.learn_write(
+            "team-eng",
+            WriteClass::UpdateIssue,
+            Err(&ErrorKind::Forbidden),
+            Some(AT),
+        );
+        map.learn_reach("team-ops", Err(&ErrorKind::Forbidden), Some(AT));
+
+        assert!(map.forget_denied_writes());
+        assert!(!map.forget_denied_writes());
+
+        assert_eq!(
+            map.write("team-eng", WriteClass::UpdateIssue),
+            Capability::Unknown
+        );
+        assert_eq!(
+            map.write("team-eng", WriteClass::CreateIssue),
+            Capability::Allowed
+        );
+        assert!(map.reach("team-ops").is_denied());
     }
 
     #[test]

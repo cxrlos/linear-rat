@@ -318,17 +318,20 @@ impl State {
 }
 
 /// `r`: polls now, focused or not, unless a poll is already in flight. While
-/// the snapshot's load has failed, tries that load again instead.
+/// the snapshot's load has failed, tries that load again instead. Either
+/// way it forgets the writes the API key was denied, so their keys try
+/// again.
 pub(super) fn refresh(state: &mut State) -> Update {
     if !state.can_refresh() {
         return Update::default();
     }
+    let unmuted = state.store.capabilities_mut().forget_denied_writes();
     let effect = match state.sync_status.refresh {
         Refresh::Failed(_) => retry_load(state),
         Refresh::Loading | Refresh::Done => start_poll(state),
     };
     Update {
-        redraw: false,
+        redraw: unmuted,
         effects: vec![effect],
     }
 }
