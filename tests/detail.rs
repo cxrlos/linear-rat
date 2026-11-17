@@ -298,6 +298,42 @@ fn attachments_list_pull_requests_first_then_the_rest_with_source_and_url() {
 }
 
 #[test]
+fn pull_requests_come_first_whatever_order_linear_gives() {
+    let (mut app, effects) = detail_of("DES-34", 40);
+    let [Effect::LoadIssueDetail { issue_id, .. }] = &effects[..] else {
+        panic!("{effects:?}");
+    };
+    let mut detail = IssueDetail::demo(issue_id);
+    detail.attachments.reverse();
+    assert!(!detail.attachments[0].is_pull_request());
+    app.handle(Event::IssueDetailLoaded {
+        issue_id: issue_id.clone(),
+        result: Ok(detail),
+    })
+    .unwrap();
+
+    send(&mut app, [key('G')]);
+
+    let lines = screen(&app).join("\n");
+    let at = |title: &str| {
+        lines
+            .find(title)
+            .unwrap_or_else(|| panic!("no {title}: {lines}"))
+    };
+    let last_pull_request = at("Autumn release spacing fixes").max(at("Tidy the release"));
+    for other in [
+        "Autumn QA board",
+        "Thread in #design",
+        "Screenshots are blurry",
+    ] {
+        assert!(
+            last_pull_request < at(other),
+            "{other} before a pull request: {lines}"
+        );
+    }
+}
+
+#[test]
 fn attachments_say_they_are_loading_until_the_detail_loads() {
     let (mut app, _) = detail_of("DES-34", 60);
 
