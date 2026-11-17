@@ -1,8 +1,8 @@
 use crossterm::event::KeyEvent;
 use jiff::Timestamp;
 
-use super::{LoadError, NewComment, NewIssue, SyncFailure, Write, Writing};
-use crate::linear::model::{Issue, Label, Member, Team, WorkflowState};
+use super::{LoadError, NewComment, NewIssue, RelationWrite, SyncFailure, Write, Writing};
+use crate::linear::model::{Issue, IssueRelation, Label, Member, Team, WorkflowState};
 use crate::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, LiveEvent, PostedComment,
     SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
@@ -127,6 +127,19 @@ pub enum Event {
     IssueUpdated {
         write: Write,
         result: Result<Box<Issue>, String>,
+    },
+    /// Linear's answer to
+    /// [`Effect::CreateRelation`](super::Effect::CreateRelation): the
+    /// relation as it stored it, or why it was not created.
+    RelationCreated {
+        write: RelationWrite,
+        result: Result<IssueRelation, String>,
+    },
+    /// Linear's answer to
+    /// [`Effect::DeleteRelation`](super::Effect::DeleteRelation).
+    RelationDeleted {
+        write: RelationWrite,
+        result: Result<(), String>,
     },
     /// The editor of [`Effect::OpenEditor`](super::Effect::OpenEditor)
     /// closed: what the viewer saved, or why it could not run.

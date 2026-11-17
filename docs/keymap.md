@@ -47,6 +47,11 @@ The Team Issues list also takes the Issue list keys. While an overlay has a text
 | `edit-text` | `E` | Edit the title and description |
 | `comment` | `c` | Comment in $EDITOR |
 | `create-issue` | `n` | Create an issue |
+| `set-parent` | `P` | Set the parent issue |
+| `clear-parent` | `dp` | Clear the parent issue |
+| `add-relation` | `R` | Add a relation to other issues |
+| `remove-relation` | `dr` | Remove relations to other issues |
+| `go-to-related` | `gr` | Go to a related issue |
 | `close` | `<Esc>` | Close the top overlay or step back |
 
 ## Team Issues (`[keys.team-issues]`)
@@ -59,6 +64,7 @@ The Team Issues list also takes the Issue list keys. While an overlay has a text
 | `filter-by-label` | `fl` | Filter by label |
 | `filter-by-cycle` | `fc` | Filter by cycle |
 | `filter-by-project` | `fp` | Filter by project |
+| `filter-blocked` | `fb` | Show only blocked issues, or all again |
 | `load-more` | `m` | Load the next page of Team Issues |
 
 ## Issue detail (`[keys.detail]`)
@@ -87,6 +93,11 @@ The Team Issues list also takes the Issue list keys. While an overlay has a text
 | `edit-text` | `E` | Edit the title and description |
 | `comment` | `c` | Comment in $EDITOR |
 | `create-issue` | `n` | Create an issue |
+| `set-parent` | `P` | Set the parent issue |
+| `clear-parent` | `dp` | Clear the parent issue |
+| `add-relation` | `R` | Add a relation to other issues |
+| `remove-relation` | `dr` | Remove relations to other issues |
+| `go-to-related` | `gr` | Go to a related issue |
 | `close` | `<Esc>` | Close the top overlay or step back |
 
 ## Overlays (`[keys.overlay]`)

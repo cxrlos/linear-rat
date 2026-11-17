@@ -87,6 +87,8 @@ pub enum Purpose {
     Filter(FilterField),
     /// Show this team in the Team view of Analytics.
     AnalyticsTeam,
+    /// Add a relation of this kind to the focused issue.
+    RelationKind,
 }
 
 impl Choice {
@@ -95,6 +97,7 @@ impl Choice {
         match self.purpose {
             Purpose::Team | Purpose::AnalyticsTeam => "Team".to_owned(),
             Purpose::Filter(field) => format!("Filter by {}", field.name().to_lowercase()),
+            Purpose::RelationKind => "Add a relation".to_owned(),
         }
     }
 

@@ -10,7 +10,7 @@ use ratatui::widgets::{Block, BorderType, Paragraph};
 
 use super::theme::Theme;
 use super::{detail, icons, style};
-use crate::app::{Group, Names, Pane, State};
+use crate::app::{Group, Names, Pane, State, Store};
 use crate::linear::model::{Issue, Priority, StateType, WorkflowState};
 
 /// From `ui.wide-layout-columns` columns on, the detail shows beside the
@@ -67,6 +67,8 @@ pub(super) struct View<'a> {
     icons: icons::IconSet,
     /// Why the last edit of an issue failed, by issue id.
     row_errors: &'a BTreeMap<String, String>,
+    /// Which issues an open issue blocks.
+    store: &'a Store,
 }
 
 impl<'a> View<'a> {
@@ -76,6 +78,7 @@ impl<'a> View<'a> {
             theme: &state.theme,
             icons: state.ui.icons,
             row_errors: &state.row_errors,
+            store: &state.store,
         }
     }
 }
@@ -198,14 +201,23 @@ pub(super) fn render_row(
         frame.render_widget("▸", marker);
     }
     frame.render_widget(Span::raw(&issue.identifier).fg(theme.muted), identifier);
-    let title_line = if view.row_errors.contains_key(&issue.id) {
-        Line::from(vec![
-            Span::styled("✘ ", style::error(theme)),
-            Span::styled(issue.title.as_str(), style::error(theme)),
-        ])
+    let mut title_spans = Vec::new();
+    let failed = view.row_errors.contains_key(&issue.id);
+    if failed {
+        title_spans.push(Span::styled("✘ ", style::error(theme)));
+    }
+    if view.store.is_blocked(&issue.id) {
+        title_spans.push(Span::styled(
+            format!("{} ", view.icons.blocked()),
+            style::error(theme),
+        ));
+    }
+    title_spans.push(if failed {
+        Span::styled(issue.title.as_str(), style::error(theme))
     } else {
-        Line::from(issue.title.as_str())
-    };
+        Span::raw(issue.title.as_str())
+    });
+    let title_line = Line::from(title_spans);
     frame.render_widget(title_line, title);
     frame.render_widget(state_line(view, &issue.state), state);
     frame.render_widget(priority_line(view, issue.priority), priority);

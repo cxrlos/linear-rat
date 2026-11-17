@@ -1,6 +1,6 @@
 use jiff::Timestamp;
 
-use super::{NewComment, NewIssue, TeamPoll, Write, Writing};
+use super::{NewComment, NewIssue, RelationWrite, TeamPoll, Write, Writing};
 use crate::linear::{AnalyticsWindow, TeamQuery, Urgency};
 
 /// A request to the outside world, returned by [`update`](super::update) and
@@ -102,6 +102,14 @@ pub enum Effect {
         writing: Writing,
         text: String,
     },
+    /// Send one `issueRelationCreate` for [`RelationWrite::relation`]; the
+    /// result comes back as
+    /// [`Event::RelationCreated`](super::Event::RelationCreated).
+    CreateRelation(RelationWrite),
+    /// Send one `issueRelationDelete` for [`RelationWrite::relation`]; the
+    /// result comes back as
+    /// [`Event::RelationDeleted`](super::Event::RelationDeleted).
+    DeleteRelation(RelationWrite),
     /// Send one `commentCreate`; the result comes back as
     /// [`Event::CommentCreated`](super::Event::CommentCreated).
     CreateComment(NewComment),

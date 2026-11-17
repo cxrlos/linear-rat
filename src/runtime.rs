@@ -17,9 +17,12 @@ use ratatui::backend::Backend;
 use tokio::time::{Instant, MissedTickBehavior};
 
 use crate::app::{
-    App, Effect, Event, LoadError, NewComment, NewIssue, SEARCH_PAUSE, SyncFailure, TeamPoll, Write,
+    App, Effect, Event, LoadError, NewComment, NewIssue, RelationWrite, SEARCH_PAUSE, SyncFailure,
+    TeamPoll, Write,
 };
-use crate::linear::{AnalyticsWindow, ClientError, LinearClient, LiveEvent, Urgency};
+use crate::linear::{
+    AnalyticsWindow, ClientError, LinearClient, LiveEvent, RelationCreate, Urgency,
+};
 use crate::snapshot::SnapshotCache;
 use crate::terminal::JobControl;
 use crate::{browser, clipboard, terminal};
@@ -447,6 +450,14 @@ where
             let closed = Event::EditorClosed { writing, result };
             return feed(app, closed, reach, in_flight, outside);
         }
+        Effect::CreateRelation(write) => {
+            in_flight.push(Box::pin(create_relation(reach.client, write)));
+            Ok(())
+        }
+        Effect::DeleteRelation(write) => {
+            in_flight.push(Box::pin(delete_relation(reach.client, write)));
+            Ok(())
+        }
         Effect::CreateComment(comment) => {
             in_flight.push(Box::pin(create_comment(reach.client, comment)));
             Ok(())
@@ -623,6 +634,43 @@ async fn update_issue_text<C: LinearClient>(
         }
     };
     Event::IssueUpdated { write, result }
+}
+
+async fn create_relation<C: LinearClient>(client: Option<&C>, write: RelationWrite) -> Event {
+    let relation = &write.relation;
+    let input = RelationCreate {
+        issue_id: relation.issue_id.clone(),
+        related_issue_id: relation.related_issue_id.clone(),
+        kind: relation.kind,
+    };
+    let result = match client {
+        Some(client) => client.create_relation(&input).await.map_err(message),
+        None => Err(NO_CLIENT.to_owned()),
+    };
+    match &result {
+        Ok(_) => tracing::info!(issue = %write.identifier, "Linear created a relation"),
+        Err(error) => {
+            tracing::warn!(issue = %write.identifier, %error, "Linear did not create a relation")
+        }
+    }
+    Event::RelationCreated { write, result }
+}
+
+async fn delete_relation<C: LinearClient>(client: Option<&C>, write: RelationWrite) -> Event {
+    let result = match client {
+        Some(client) => client
+            .delete_relation(&write.relation.id)
+            .await
+            .map_err(message),
+        None => Err(NO_CLIENT.to_owned()),
+    };
+    match &result {
+        Ok(()) => tracing::info!(issue = %write.identifier, "Linear deleted a relation"),
+        Err(error) => {
+            tracing::warn!(issue = %write.identifier, %error, "Linear did not delete a relation")
+        }
+    }
+    Event::RelationDeleted { write, result }
 }
 
 async fn create_comment<C: LinearClient>(client: Option<&C>, comment: NewComment) -> Event {

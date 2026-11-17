@@ -14,7 +14,7 @@ A problem in the file shows as a notice above the bottom bar, naming the file an
 
 | Key | Values | Default | Effect |
 | --- | --- | --- | --- |
-| `icons` | `"unicode"`, `"nerd"` | `"unicode"` | The glyphs for workflow state types and priorities. `"nerd"` needs a patched [Nerd Font](https://www.nerdfonts.com/). |
+| `icons` | `"unicode"`, `"nerd"` | `"unicode"` | The glyphs for workflow state types, priorities and blocked issues. `"nerd"` needs a patched [Nerd Font](https://www.nerdfonts.com/). |
 | `wide-layout-columns` | 0 to 65535 | `120` | From this terminal width on, My Issues shows the focused issue's detail beside the list. Below it, the focused pane fills the screen. |
 
 In both icon sets every workflow state type and every priority has its own glyph, so none is told apart by color alone:
@@ -32,6 +32,7 @@ In both icon sets every workflow state type and every priority has its own glyph
 | Medium | `▮▮▯` | `angle_up` |
 | Low | `▮▯▯` | `angle_down` |
 | No priority | `···` | `minus` |
+| Blocked by an open issue | `▲` | `lock` |
 
 ## `[theme]`
 

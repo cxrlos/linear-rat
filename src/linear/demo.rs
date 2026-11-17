@@ -8,8 +8,8 @@
 use jiff::{SignedDuration, Timestamp};
 
 use super::model::{
-    Attachment, Comment, Cycle, Estimation, Issue, Label, Member, Priority, Project, StateSpan,
-    StateType, Team, Viewer, WorkflowState, Workspace,
+    Attachment, Comment, Cycle, Estimation, Issue, IssueRelation, Label, Member, Priority, Project,
+    RelationType, StateSpan, StateType, Team, Viewer, WorkflowState, Workspace,
 };
 use super::{TeamOptions, TeamQuery};
 
@@ -39,6 +39,7 @@ pub struct DemoWorkspace {
     pub issues: Vec<Issue>,
     pub comments: Vec<Comment>,
     pub attachments: Vec<Attachment>,
+    pub relations: Vec<IssueRelation>,
 }
 
 /// Builds the demo workspace. Deterministic: no clock, no OS randomness.
@@ -81,12 +82,41 @@ pub fn workspace() -> DemoWorkspace {
         issues: Vec::new(),
         comments: Vec::new(),
         attachments: Vec::new(),
+        relations: Vec::new(),
     };
     for spec in &TEAMS {
         add_team(&mut data, spec, &mut rng);
     }
     add_links(&mut data);
+    add_relations(&mut data);
     data
+}
+
+/// ENG-51, the importer's dry run, is the parent of four importer issues,
+/// is blocked by the storage migration, blocks the catalog cleanup and is
+/// related to the CSV export.
+fn add_relations(data: &mut DemoWorkspace) {
+    let id = |identifier: &str| format!("issue-{}", identifier.to_lowercase());
+    for child in ["ENG-17", "ENG-29", "ENG-60", "ENG-69"] {
+        if let Some(issue) = data.issues.iter_mut().find(|issue| issue.id == id(child)) {
+            issue.parent_id = Some(id("ENG-51"));
+        }
+    }
+    for (n, (from, kind, to)) in [
+        ("ENG-6", RelationType::Blocks, "ENG-51"),
+        ("ENG-51", RelationType::Blocks, "ENG-27"),
+        ("ENG-51", RelationType::Related, "ENG-8"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        data.relations.push(IssueRelation {
+            id: format!("relation-{}", n + 1),
+            kind,
+            issue_id: id(from),
+            related_issue_id: id(to),
+        });
+    }
 }
 
 /// The issue DES-34's pull requests and other attachments.
@@ -216,7 +246,12 @@ pub fn team_issues(data: &DemoWorkspace, query: &TeamQuery) -> Vec<Issue> {
     let mut issues: Vec<Issue> = data
         .issues
         .iter()
-        .filter(|issue| issue.team_id == query.team_id && query.filter.matches(issue))
+        .filter(|issue| {
+            let blocked = data.relations.iter().any(|relation| {
+                relation.kind == RelationType::Blocks && relation.related_issue_id == issue.id
+            });
+            issue.team_id == query.team_id && query.filter.matches(issue, blocked)
+        })
         .cloned()
         .collect();
     issues.sort_by(|a, b| {

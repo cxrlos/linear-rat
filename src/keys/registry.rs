@@ -480,6 +480,71 @@ pub static ACTIONS: &[ActionSpec] = &[
         available: |state| state.store.teams().next().is_some(),
     },
     ActionSpec {
+        action: Action::Edit(Editable::Parent),
+        id: "set-parent",
+        description: "Set the parent issue",
+        label: "parent / relations",
+        group: Group::Edit,
+        hint: None,
+        contexts: PANES,
+        overlays: &[],
+        default_keys: &[&[Key::char('P')]],
+        available: has_confirmed_issue,
+    },
+    ActionSpec {
+        action: Action::ClearParent,
+        id: "clear-parent",
+        description: "Clear the parent issue",
+        label: "parent / relations",
+        group: Group::Edit,
+        hint: None,
+        contexts: PANES,
+        overlays: &[],
+        default_keys: &[&[Key::char('d'), Key::char('p')]],
+        available: |state| {
+            has_confirmed_issue(state)
+                && state
+                    .focused_issue()
+                    .is_some_and(|issue| issue.parent_id.is_some())
+        },
+    },
+    ActionSpec {
+        action: Action::AddRelation,
+        id: "add-relation",
+        description: "Add a relation to other issues",
+        label: "parent / relations",
+        group: Group::Edit,
+        hint: None,
+        contexts: PANES,
+        overlays: &[],
+        default_keys: &[&[Key::char('R')]],
+        available: has_confirmed_issue,
+    },
+    ActionSpec {
+        action: Action::RemoveRelation,
+        id: "remove-relation",
+        description: "Remove relations to other issues",
+        label: "parent / relations",
+        group: Group::Edit,
+        hint: None,
+        contexts: PANES,
+        overlays: &[],
+        default_keys: &[&[Key::char('d'), Key::char('r')]],
+        available: has_confirmed_issue,
+    },
+    ActionSpec {
+        action: Action::GoToRelated,
+        id: "go-to-related",
+        description: "Go to a related issue",
+        label: "related issue",
+        group: Group::Open,
+        hint: None,
+        contexts: PANES,
+        overlays: &[],
+        default_keys: &[&[Key::char('g'), Key::char('r')]],
+        available: has_confirmed_issue,
+    },
+    ActionSpec {
         action: Action::PickNumber(1),
         id: "pick-1",
         description: "Pick entry 1 of the list",
@@ -657,6 +722,18 @@ pub static ACTIONS: &[ActionSpec] = &[
         contexts: TEAM_ISSUES,
         overlays: &[],
         default_keys: &[&[Key::char('f'), Key::char('p')]],
+        available: has_team,
+    },
+    ActionSpec {
+        action: Action::ToggleBlocked,
+        id: "filter-blocked",
+        description: "Show only blocked issues, or all again",
+        label: "blocked only",
+        group: Group::Screen,
+        hint: views("filter"),
+        contexts: TEAM_ISSUES,
+        overlays: &[],
+        default_keys: &[&[Key::char('f'), Key::char('b')]],
         available: has_team,
     },
     ActionSpec {
@@ -1035,6 +1112,13 @@ fn has_team(state: &State) -> bool {
 
 fn has_focused_issue(state: &State) -> bool {
     state.focused_issue().is_some()
+}
+
+/// Whether an issue Linear has confirmed is focused, not a stand-in.
+fn has_confirmed_issue(state: &State) -> bool {
+    state
+        .focused_issue()
+        .is_some_and(|issue| !app::is_local(&issue.id))
 }
 
 // In the detail, moves scroll it, so they are available while it has more

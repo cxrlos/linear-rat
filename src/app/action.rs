@@ -57,6 +57,17 @@ pub enum Action {
     Comment,
     /// Open the form that creates an issue.
     CreateIssue,
+    /// Choose a kind of relation, then the issues to relate the focused
+    /// issue to.
+    AddRelation,
+    /// Choose related issues to remove the focused issue's relations with.
+    RemoveRelation,
+    /// Make the focused issue a top-level issue again.
+    ClearParent,
+    /// Go to the focused issue's parent, a sub-issue or a related issue.
+    GoToRelated,
+    /// Show only Team Issues blocked by another issue, or all again.
+    ToggleBlocked,
     /// Switch the Analytics screen between its Personal and Team views.
     ToggleAnalyticsView,
     /// Pick another of the viewer's teams for the Team view of Analytics.

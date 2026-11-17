@@ -120,10 +120,14 @@ fn header(state: &State, width: u16) -> Line<'static> {
     spans.push(separator());
     spans.extend(filter_prefix(state));
     spans.push(Span::styled("Filters ", style::muted(theme)));
-    let filters: Vec<(FilterField, String)> = FilterField::ALL
+    // Each filter's name and, but for Blocked, its value.
+    let mut filters: Vec<(&str, Option<String>)> = FilterField::ALL
         .into_iter()
-        .filter_map(|field| filter_label(state, field).map(|value| (field, value)))
+        .filter_map(|field| filter_label(state, field).map(|value| (field.name(), Some(value))))
         .collect();
+    if query.filter.blocked {
+        filters.push(("Blocked", None));
+    }
     if filters.is_empty() {
         spans.push(Span::raw("none"));
         return Line::from(spans);
@@ -131,12 +135,15 @@ fn header(state: &State, width: u16) -> Line<'static> {
     let room = usize::from(width).saturating_sub(Line::from(spans.clone()).width());
     let named = filters
         .iter()
-        .map(|(field, value)| format!("{} {value}", field.name()))
+        .map(|(name, value)| match value {
+            Some(value) => format!("{name} {value}"),
+            None => (*name).to_owned(),
+        })
         .collect::<Vec<_>>()
         .join(", ");
     let fields = filters
         .iter()
-        .map(|(field, _)| field.name())
+        .map(|(name, _)| *name)
         .collect::<Vec<_>>()
         .join(", ");
     let text = [named, fields]

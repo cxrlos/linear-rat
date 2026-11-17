@@ -4,8 +4,8 @@ use ratatui::layout::Size;
 use super::edit::{self, Editable};
 use super::{
     Action, Copyable, Effect, Event, Load, Modal, Palette, Pane, Purpose, Screen, Search, State,
-    analytics_screen, compose, create, detail, issue_picker, links, palette, results, search, sync,
-    team_issues,
+    analytics_screen, compose, create, detail, issue_picker, links, palette, relations, results,
+    search, sync, team_issues,
 };
 use crate::keys::{self, Key, Resolution};
 use crate::ui;
@@ -177,6 +177,8 @@ fn apply(state: &mut State, event: Event) -> Update {
             edit::loaded(state, Editable::Labels, &team_id, failure)
         }
         Event::IssueUpdated { write, result } => edit::finished(state, &write, result),
+        Event::RelationCreated { write, result } => relations::created(state, &write, result),
+        Event::RelationDeleted { write, result } => relations::deleted(state, &write, result),
         Event::EditorClosed { writing, result } => compose::closed(state, writing, result),
         Event::CommentCreated { comment, result } => compose::commented(state, &comment, result),
         Event::IssueCreated { issue, result } => compose::created(state, &issue, result),
@@ -438,6 +440,14 @@ pub fn perform(state: &mut State, action: Action) -> Update {
         },
         Action::Comment => compose::comment(state),
         Action::CreateIssue => create::open(state),
+        Action::AddRelation => relations::open_add(state),
+        Action::RemoveRelation => relations::open_remove(state),
+        Action::ClearParent => relations::clear_parent(state),
+        Action::GoToRelated => relations::open_related(state),
+        Action::ToggleBlocked if state.screen == Screen::TeamIssues => Update {
+            redraw: true,
+            effects: team_issues::toggle_blocked(state),
+        },
         _ => Update::default(),
     }
 }
@@ -475,6 +485,9 @@ fn choose(state: &mut State, nth: Option<usize>) -> Update {
     let Some(Modal::Choice(choice)) = state.modals.top() else {
         return Update::default();
     };
+    if choice.purpose == Purpose::RelationKind {
+        return relations::kind_chosen(state, nth);
+    }
     if choice.purpose == Purpose::AnalyticsTeam {
         let update = analytics_screen::pick_team(state, nth);
         clamp_analytics_scroll(state);

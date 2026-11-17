@@ -375,3 +375,14 @@ fn waiting_on_the_search() {
     app.handle(Event::TypingPaused("cave".to_owned())).unwrap();
     assert_snapshot!(app.backend());
 }
+
+#[test]
+fn typing_further_selects_the_best_match_again() {
+    let mut app = picker_app(Mode::One, Scope::default());
+
+    press(&mut app, "ENG-60");
+    assert_eq!(selected(&app).as_deref(), Some("issue-eng-60"));
+    app.handle(key(KeyCode::Backspace)).unwrap();
+
+    assert_eq!(selected(&app).as_deref(), Some("issue-eng-6"));
+}

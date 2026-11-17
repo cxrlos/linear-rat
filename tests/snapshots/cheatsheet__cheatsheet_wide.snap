@@ -17,16 +17,16 @@ expression: "text(&cheatsheet(160, 40))"
 ┃○ Unstarted (10)                                                                              ┃│                                                              │
 ┃┌ Keys ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐ │
 ┃│ Move                                 │ Edit the issue                       │ Open & copy                          │ App                                  │ │
-┃│  j/k      down / up                  │  s  workflow state                   │  Enter  open the issue               │  1/2/3  screens   r      refresh     │ │
-┃│  gg/G     top / bottom               │  a  assignee                         │  yi/yu  copy key / URL               │  ?      keys      :,C-k  palette     │ │
-┃│  C-d/C-u  half page                  │  p  priority                         │  yb/ym  copy branch / link           │  /      search    q      quit        │ │
-┃│  h/l      pane left / right          │  L  labels                           │  o      Linear page or PR            │  C-z    suspend                      │ │
-┃│  Esc      close or step back         │  e  estimate                         │  O      other links                  │                                      │ │
-┃│                                      │  E  title and description            │                                      │                                      │ │
-┃│                                      │  c  comment                          │                                      │                                      │ │
-┃│                                      │  n  new issue                        │                                      │                                      │ │
+┃│  j/k      down / up                  │  s          workflow state           │  Enter  open the issue               │  1/2/3  screens   r      refresh     │ │
+┃│  gg/G     top / bottom               │  a          assignee                 │  yi/yu  copy key / URL               │  ?      keys      :,C-k  palette     │ │
+┃│  C-d/C-u  half page                  │  p          priority                 │  yb/ym  copy branch / link           │  /      search    q      quit        │ │
+┃│  h/l      pane left / right          │  L          labels                   │  o      Linear page or PR            │  C-z    suspend                      │ │
+┃│  Esc      close or step back         │  e          estimate                 │  O      other links                  │                                      │ │
+┃│                                      │  E          title and description    │  gr     related issue                │                                      │ │
+┃│                                      │  c          comment                  │                                      │                                      │ │
+┃│                                      │  n          new issue                │                                      │                                      │ │
+┃│                                      │  P/dp/R/dr  parent / relations       │                                      │                                      │ │
 ┃└ Esc close ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘ │
-┃  DES-2  Redesign the empty pantry screen                 ◌ Backlog     ▮▮▮ High              ┃│Updated   2026-10-29 01:25 UTC (4 days ago)                   │
 ┃  ENG-35 Split the auth module out of the monolith        ◌ Backlog     ▮▮▯ Medium            ┃│                                                              │
 ┃  ENG-23 Dark mode text is unreadable on the cellar map   ◌ Backlog     ▮▯▯ Low               ┃│                                                              │
 ┃  OPS-4  Document the incident review process             ◌ Backlog     ··· None              ┃│                                                              │

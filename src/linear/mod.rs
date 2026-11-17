@@ -21,8 +21,8 @@ pub use error::{ClientError, GraphQlError, Response};
 pub use governor::{SystemTimer, Timer, Urgency};
 pub use http::{ClientConfig, Dial, HttpClient, LIVE_ENDPOINT, LiveConfig, Pipe};
 use model::{
-    Attachment, Comment, Cycle, Issue, Label, Member, Priority, Project, StateSpan, StateType,
-    Team, Viewer, WorkflowState, Workspace,
+    Attachment, Comment, Cycle, Issue, IssueRelation, Label, Member, Priority, Project,
+    RelationType, StateSpan, StateType, Team, Viewer, WorkflowState, Workspace,
 };
 
 /// Queries, mutations and live events.
@@ -86,8 +86,9 @@ pub trait LinearClient {
     ) -> impl Future<Output = Result<Issue, ClientError>> + Send;
 
     /// What the detail of the issue with id `issue_id` shows beyond what a
-    /// list loads: its comments and its workflow state history. `urgency`
-    /// says whether the viewer opened the detail and waits on it.
+    /// list loads: its comments, its workflow state history, its parent,
+    /// sub-issues and relations. `urgency` says whether the viewer opened
+    /// the detail and waits on it.
     fn issue_detail(
         &self,
         issue_id: &str,
@@ -135,6 +136,16 @@ pub trait LinearClient {
         &self,
         window: AnalyticsWindow,
     ) -> impl Future<Output = Result<AnalyticsIssues, ClientError>> + Send;
+
+    /// Sends one `issueRelationCreate` and returns the relation as Linear
+    /// stored it.
+    fn create_relation(
+        &self,
+        input: &RelationCreate,
+    ) -> impl Future<Output = Result<IssueRelation, ClientError>> + Send;
+
+    /// Sends one `issueRelationDelete` for the relation with id `id`.
+    fn delete_relation(&self, id: &str) -> impl Future<Output = Result<(), ClientError>> + Send;
 
     /// Sends one `commentCreate` adding `body` to the issue with id
     /// `issue_id`, and returns the comment as Linear stored it.
@@ -271,6 +282,15 @@ pub struct IssueCreate {
     pub description: String,
 }
 
+/// A relation to create: the issue with id `issue_id` relates to the one
+/// with id `related_issue_id` as `kind` says.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RelationCreate {
+    pub issue_id: String,
+    pub related_issue_id: String,
+    pub kind: RelationType,
+}
+
 /// What changed in one team: its issues updated after a watermark, and the
 /// cycles, labels, members and teams they refer to.
 #[derive(Debug, Clone, PartialEq)]
@@ -366,6 +386,9 @@ pub struct TeamFilter {
     pub cycle: Option<String>,
     /// A project id.
     pub project: Option<String>,
+    /// Only issues blocked by another issue, as Linear's
+    /// `hasBlockedByRelations`, whatever that issue's state.
+    pub blocked: bool,
 }
 
 impl TeamFilter {
@@ -374,8 +397,9 @@ impl TeamFilter {
         *self == Self::default()
     }
 
-    /// Whether `issue` matches every field that is set.
-    pub fn matches(&self, issue: &Issue) -> bool {
+    /// Whether `issue` matches every field that is set. `blocked` says
+    /// whether another issue blocks it, as far as the caller knows.
+    pub fn matches(&self, issue: &Issue, blocked: bool) -> bool {
         let field = |wanted: &Option<String>, actual: Option<&String>| {
             wanted.as_ref().is_none_or(|wanted| actual == Some(wanted))
         };
@@ -387,6 +411,7 @@ impl TeamFilter {
                 .label
                 .as_ref()
                 .is_none_or(|label| issue.label_ids.contains(label))
+            && (!self.blocked || blocked)
     }
 }
 
@@ -615,8 +640,8 @@ impl AssignedIssues {
     }
 }
 
-/// One issue's comments and workflow state history, and the people, states
-/// and project they refer to.
+/// One issue's comments, workflow state history, parent, sub-issues and
+/// relations, and the people, states, project and issues they refer to.
 #[derive(Debug, Clone, PartialEq)]
 pub struct IssueDetail {
     /// Oldest first.
@@ -630,6 +655,15 @@ pub struct IssueDetail {
     pub project: Option<Project>,
     /// The first 50 attachments, oldest first; any more are left out.
     pub attachments: Vec<Attachment>,
+    /// The first 25 relations the issue is the source of and the first 25
+    /// it is the target of.
+    pub relations: Vec<IssueRelation>,
+    /// The parent, the first 50 sub-issues and the issue at the other end of
+    /// each relation.
+    pub related_issues: Vec<Issue>,
+    /// The teams and cycles of `related_issues`.
+    pub teams: Vec<Team>,
+    pub cycles: Vec<Cycle>,
     /// What Linear could not give, as in [`AssignedIssues::problems`].
     pub problems: Vec<String>,
 }
@@ -642,7 +676,32 @@ impl IssueDetail {
         let issue = data.issues.iter().find(|issue| issue.id == issue_id);
         let team_id = issue.map(|issue| issue.team_id.as_str());
         let project_id = issue.and_then(|issue| issue.project_id.as_deref());
+        let relations: Vec<IssueRelation> = data
+            .relations
+            .iter()
+            .filter(|relation| {
+                relation.issue_id == issue_id || relation.related_issue_id == issue_id
+            })
+            .cloned()
+            .collect();
+        let parent_id = issue.and_then(|issue| issue.parent_id.as_deref());
+        let related_issues: Vec<Issue> = data
+            .issues
+            .iter()
+            .filter(|other| {
+                Some(other.id.as_str()) == parent_id
+                    || other.parent_id.as_deref() == Some(issue_id)
+                    || relations.iter().any(|relation| {
+                        relation.seen_from(issue_id).map(|(_, id)| id) == Some(other.id.as_str())
+                    })
+            })
+            .cloned()
+            .collect();
         Self {
+            relations,
+            related_issues,
+            teams: data.teams.clone(),
+            cycles: data.cycles.clone(),
             comments: data
                 .comments
                 .into_iter()
@@ -681,6 +740,15 @@ thread_local! {
     static DEMO_EDITS: RefCell<BTreeMap<String, Issue>> = const { RefCell::new(BTreeMap::new()) };
     static DEMO_COMMENTS: RefCell<Vec<Comment>> = const { RefCell::new(Vec::new()) };
     static DEMO_CREATED: RefCell<u32> = const { RefCell::new(0) };
+    /// Relations created through this client, and the ids of those deleted.
+    static DEMO_RELATIONS: RefCell<(Vec<IssueRelation>, Vec<String>)> =
+        const { RefCell::new((Vec::new(), Vec::new())) };
+}
+
+/// Whether the demo has an issue with id `id`, created ones included.
+fn demo_has_issue(data: &demo::DemoWorkspace, id: &str) -> bool {
+    data.issues.iter().any(|issue| issue.id == id)
+        || DEMO_EDITS.with_borrow(|edits| edits.contains_key(id))
 }
 
 /// The issue `input` creates in the demo workspace, numbered after the
@@ -949,8 +1017,28 @@ impl LinearClient for FakeClient {
         Ok(updated)
     }
 
+    /// The demo detail, with the relations created and deleted through
+    /// this client and the issues as edits left them.
     async fn issue_detail(&self, issue_id: &str, _: Urgency) -> Result<IssueDetail, ClientError> {
         let mut detail = IssueDetail::demo(issue_id);
+        DEMO_RELATIONS.with_borrow(|(created, deleted)| {
+            detail
+                .relations
+                .retain(|relation| !deleted.contains(&relation.id));
+            detail.relations.extend(
+                created
+                    .iter()
+                    .filter(|relation| relation.seen_from(issue_id).is_some())
+                    .cloned(),
+            );
+        });
+        DEMO_EDITS.with_borrow(|edits| {
+            for issue in &mut detail.related_issues {
+                if let Some(edited) = edits.get(&issue.id) {
+                    issue.clone_from(edited);
+                }
+            }
+        });
         DEMO_COMMENTS.with_borrow(|comments| {
             detail.comments.extend(
                 comments
@@ -1092,6 +1180,41 @@ impl LinearClient for FakeClient {
 
     async fn administrable_teams(&self) -> Result<Vec<String>, ClientError> {
         Ok(demo::administrable_team_ids())
+    }
+
+    async fn create_relation(&self, input: &RelationCreate) -> Result<IssueRelation, ClientError> {
+        let data = demo::workspace();
+        for id in [&input.issue_id, &input.related_issue_id] {
+            if !demo_has_issue(&data, id) {
+                return Err(not_found("issue", id));
+            }
+        }
+        Ok(DEMO_RELATIONS.with_borrow_mut(|(created, _)| {
+            let relation = IssueRelation {
+                id: format!("demo-relation-new-{}", created.len() + 1),
+                kind: input.kind,
+                issue_id: input.issue_id.clone(),
+                related_issue_id: input.related_issue_id.clone(),
+            };
+            created.push(relation.clone());
+            relation
+        }))
+    }
+
+    async fn delete_relation(&self, id: &str) -> Result<(), ClientError> {
+        let known = demo::workspace()
+            .relations
+            .iter()
+            .any(|relation| relation.id == id)
+            || DEMO_RELATIONS.with_borrow(|(created, _)| created.iter().any(|r| r.id == id));
+        if !known {
+            return Err(not_found("issue relation", id));
+        }
+        DEMO_RELATIONS.with_borrow_mut(|(created, deleted)| {
+            created.retain(|relation| relation.id != id);
+            deleted.push(id.to_owned());
+        });
+        Ok(())
     }
 
     async fn team_analytics(

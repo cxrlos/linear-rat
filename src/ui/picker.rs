@@ -114,7 +114,11 @@ fn edit_glyph(state: &State) -> impl Fn(&Edit) -> Option<Span<'static>> + '_ {
         Edit::Priority(priority) => {
             Some(Span::raw(state.ui.icons.priority(*priority)).fg(state.theme.priority(*priority)))
         }
-        Edit::Assignee(_) | Edit::Labels(_) | Edit::Estimate(_) | Edit::Text { .. } => None,
+        Edit::Assignee(_)
+        | Edit::Labels(_)
+        | Edit::Estimate(_)
+        | Edit::Text { .. }
+        | Edit::Parent(_) => None,
     }
 }
 
@@ -130,7 +134,14 @@ pub fn render_issues(state: &State, picker: &IssuePicker, frame: &mut Frame, are
         let state_type = state.store.issue(id)?.state.state_type;
         Some(Span::raw(state.ui.icons.state(state_type)).fg(state.theme.state(state_type)))
     };
-    render(state, &picker.title(), &picker.list, glyph, frame, area);
+    render(
+        state,
+        &picker.title(&state.store),
+        &picker.list,
+        glyph,
+        frame,
+        area,
+    );
 }
 
 /// Draws a team switcher or filter centered inside `area`'s border.

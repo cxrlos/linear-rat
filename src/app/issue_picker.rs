@@ -10,10 +10,11 @@ use std::time::Duration;
 use nucleo_matcher::pattern::{AtomKind, CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 
+use super::edit::{self, Edit};
 use super::picker::{Entry, Note, Picker};
 use super::update::Update;
-use super::{Effect, Modal, State, palette, results};
-use crate::linear::model::Issue;
+use super::{Effect, Modal, State, Store, palette, relations, results};
+use crate::linear::model::{Issue, RelationKind};
 
 /// How long typing must pause before the query goes to Linear's search.
 pub const SEARCH_PAUSE: Duration = Duration::from_millis(400);
@@ -27,14 +28,76 @@ pub enum IssuePurpose {
     /// Show them: one opens like a palette jump, several open together in
     /// the results view.
     Show,
+    /// Go to the parent, a sub-issue or a related issue of the issue with
+    /// this id.
+    GoToRelated { issue_id: String },
+    /// Make the chosen issue the parent of the issue with this id.
+    SetParent { issue_id: String },
+    /// Relate the issue with this id to each chosen issue as `kind` says.
+    AddRelation {
+        issue_id: String,
+        kind: RelationKind,
+    },
+    /// Remove every relation between the issue with this id and each
+    /// chosen issue.
+    RemoveRelation { issue_id: String },
 }
 
 impl IssuePurpose {
-    /// What the picker's border says.
-    pub fn title(&self) -> String {
+    /// What the picker's border says, naming the issue by its key.
+    pub fn title(&self, store: &Store) -> String {
+        let key = |id: &str| {
+            store
+                .issue(id)
+                .map_or_else(|| id.to_owned(), |issue| issue.identifier.clone())
+        };
         match self {
             IssuePurpose::Show => "Go to an issue".to_owned(),
+            IssuePurpose::GoToRelated { issue_id } => format!("Go from {}", key(issue_id)),
+            IssuePurpose::SetParent { issue_id } => format!("Parent of {}", key(issue_id)),
+            IssuePurpose::AddRelation { issue_id, kind } => {
+                let phrase = match kind {
+                    RelationKind::Blocks => "blocks",
+                    RelationKind::BlockedBy => "is blocked by",
+                    RelationKind::Related => "is related to",
+                    RelationKind::DuplicateOf => "is a duplicate of",
+                    RelationKind::DuplicatedBy => "is duplicated by",
+                };
+                format!("{} {phrase}", key(issue_id))
+            }
+            IssuePurpose::RemoveRelation { issue_id } => {
+                format!("Remove relations of {}", key(issue_id))
+            }
         }
+    }
+
+    /// What a row says before the issue `other_id`: how it relates to the
+    /// purpose's issue, for the purposes that list related issues.
+    fn prefix(&self, store: &Store, other_id: &str) -> Option<String> {
+        let (issue_id, family) = match self {
+            IssuePurpose::GoToRelated { issue_id } => (issue_id, true),
+            IssuePurpose::RemoveRelation { issue_id } => (issue_id, false),
+            _ => return None,
+        };
+        let mut names: Vec<&str> = Vec::new();
+        if family {
+            let issue = store.issue(issue_id);
+            if issue.and_then(|issue| issue.parent_id.as_deref()) == Some(other_id) {
+                names.push("Parent");
+            }
+            if store
+                .issue(other_id)
+                .is_some_and(|other| other.parent_id.as_deref() == Some(issue_id.as_str()))
+            {
+                names.push("Sub-issue");
+            }
+        }
+        for (kind, _, other) in store.relations(issue_id) {
+            if other == other_id && !names.contains(&kind.name()) {
+                names.push(kind.name());
+            }
+        }
+        (!names.is_empty()).then(|| names.join(", "))
     }
 }
 
@@ -100,8 +163,13 @@ impl IssuePicker {
         }
     }
 
-    pub fn title(&self) -> String {
-        self.purpose.title()
+    pub fn title(&self, store: &Store) -> String {
+        self.purpose.title(store)
+    }
+
+    /// Which issues the picker may offer.
+    pub fn scope(&self) -> &Scope {
+        &self.scope
     }
 
     /// The marked issues, those the query hides included, in the order they
@@ -137,9 +205,15 @@ impl IssuePicker {
         let entries: Vec<Entry<String>> = ids
             .into_iter()
             .filter_map(|id| state.store.issue(&id))
-            .map(|issue| Entry {
-                label: format!("{} {}", issue.identifier, issue.title),
-                value: issue.id.clone(),
+            .map(|issue| {
+                let label = format!("{} {}", issue.identifier, issue.title);
+                Entry {
+                    label: match self.purpose.prefix(&state.store, &issue.id) {
+                        Some(prefix) => format!("{prefix} · {label}"),
+                        None => label,
+                    },
+                    value: issue.id.clone(),
+                }
             })
             .collect();
         let current = self
@@ -217,8 +291,9 @@ pub fn open(state: &mut State, mut picker: IssuePicker) -> Update {
     Update::redraw()
 }
 
-/// The query of the picker on top changed: ranks again, forgets what an
-/// older query's search found, and asks to be told when typing pauses.
+/// The query of the picker on top changed: ranks again with the best match
+/// selected, forgets what an older query's search found, and asks to be
+/// told when typing pauses.
 pub(super) fn typed(state: &mut State) -> Update {
     let Some(Modal::IssuePicker(mut picker)) = state.modals.pop() else {
         return Update::redraw();
@@ -227,6 +302,7 @@ pub(super) fn typed(state: &mut State) -> Update {
     picker.searched = None;
     picker.list.set_note(None);
     picker.fill(state);
+    picker.list.select(0);
     let effects = if picker.searches() {
         vec![Effect::SearchAfterPause(
             picker.list.query().trim().to_owned(),
@@ -343,12 +419,20 @@ pub(super) fn choose(state: &mut State, nth: Option<usize>) -> Update {
 /// Does what `purpose` does with the `chosen` issue ids.
 fn carry_out(state: &mut State, purpose: IssuePurpose, chosen: Vec<String>) -> Update {
     match purpose {
-        IssuePurpose::Show => {
+        IssuePurpose::Show | IssuePurpose::GoToRelated { .. } => {
             match chosen.as_slice() {
                 [one] => palette::jump_to(state, one.clone()),
                 _ => results::show(state, "Issues".to_owned(), chosen),
             }
             Update::redraw()
         }
+        IssuePurpose::SetParent { issue_id } => match chosen.into_iter().next() {
+            Some(parent) => edit::write(state, &issue_id, Edit::Parent(Some(parent))),
+            None => Update::redraw(),
+        },
+        IssuePurpose::AddRelation { issue_id, kind } => {
+            relations::add(state, &issue_id, kind, &chosen)
+        }
+        IssuePurpose::RemoveRelation { issue_id } => relations::remove(state, &issue_id, &chosen),
     }
 }

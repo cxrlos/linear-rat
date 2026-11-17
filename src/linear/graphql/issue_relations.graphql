@@ -1,0 +1,95 @@
+# budget: 970
+# An issue's parent, its first 50 sub-issues and its first 25 relations each
+# way, with every related issue as the assigned issues query has it, so they
+# can be listed, shown and jumped to. `relations` are those the issue is the
+# source of; `inverseRelations` those it is the target of. Anything past the
+# first page is left out.
+query IssueRelations($id: String!) {
+  issue(id: $id) {
+    id
+    parent {
+      ...RelatedIssue
+    }
+    children(first: 50) {
+      nodes {
+        ...RelatedIssue
+      }
+    }
+    relations(first: 25) {
+      nodes {
+        id
+        type
+        relatedIssue {
+          ...RelatedIssue
+        }
+      }
+    }
+    inverseRelations(first: 25) {
+      nodes {
+        id
+        type
+        issue {
+          ...RelatedIssue
+        }
+      }
+    }
+  }
+}
+
+fragment RelatedIssue on Issue {
+  id
+  identifier
+  title
+  description
+  url
+  branchName
+  priority
+  estimate
+  labelIds
+  createdAt
+  updatedAt
+  startedAt
+  completedAt
+  canceledAt
+  triagedAt
+  team {
+    id
+    key
+    name
+    issueEstimationType
+  }
+  state {
+    id
+    name
+    type
+    position
+  }
+  assignee {
+    id
+    name
+    displayName
+  }
+  creator {
+    id
+    name
+    displayName
+  }
+  cycle {
+    id
+    number
+    name
+    startsAt
+    endsAt
+    completedAt
+  }
+  project {
+    id
+  }
+  projectMilestone {
+    id
+  }
+  parent {
+    id
+  }
+  dueDate
+}

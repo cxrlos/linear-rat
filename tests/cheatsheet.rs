@@ -133,7 +133,7 @@ fn keys_that_cannot_run_now_are_muted() {
     let app = cheatsheet(80, 24);
 
     assert_eq!(fg_of(&app, "1/2/3"), Some(Color::DarkGray), "already on 1");
-    assert_eq!(fg_of(&app, "s  workflow state"), Some(Color::Cyan));
+    assert_eq!(fg_of(&app, "s          workflow state"), Some(Color::Cyan));
 }
 
 /// Carries out the Team Issues loads in `effects` with the fake client.

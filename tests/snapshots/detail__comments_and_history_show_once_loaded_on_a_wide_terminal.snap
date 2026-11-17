@@ -6,7 +6,7 @@ expression: app.backend()
 "┏My Issues━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓┌OPS-37────────────────────────────────────────────────────────────────────────┐"
 "┃◐ Started (9)                                                                                                         ┃│Clean up unused API keys                                                      │"
 "┃  DES-34 Design QA for the autumn release                                         ◐ In Progress ▮▮▮ High    3 Cycle 7 ┃│                                                                              │"
-"┃  ENG-51 Add a dry-run mode to the importer                                       ◐ In Progress ▮▮▯ Medium  2 Cycle 7 ┃│State     ◐ In Review                                                         │"
+"┃  ENG-51 ▲ Add a dry-run mode to the importer                                     ◐ In Progress ▮▮▯ Medium  2 Cycle 7 ┃│State     ◐ In Review                                                         │"
 "┃▸ OPS-37 Clean up unused API keys                                                 ◐ In Review   ▮▮▯ Medium    Cycle 7 ┃│Priority  ▮▮▯ Medium                                                          │"
 "┃  ENG-61 Add contract tests for the recipes API                                   ◐ In Progress ▮▯▯ Low     2 Cycle 7 ┃│                                                                              │"
 "┃  OPS-36 Plan the office cheese cave move                                         ◐ In Review   ▮▯▯ Low       Cycle 7 ┃│Schedule this outside the evening sync peak and post in the ops channel before│"

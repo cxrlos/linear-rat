@@ -298,3 +298,31 @@ async fn team_options_name_the_lists_linear_cut_short() {
         ]
     );
 }
+
+#[tokio::test]
+async fn the_blocked_filter_goes_as_has_blocked_by_relations() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(ok(issues_page(json!([issue(3)]), None)))
+        .mount(&server)
+        .await;
+    let query = TeamQuery {
+        filter: TeamFilter {
+            state: Some("state-todo".to_owned()),
+            blocked: true,
+            ..TeamFilter::default()
+        },
+        ..eng()
+    };
+
+    client_for(&server).team_issues(&query, None).await.unwrap();
+
+    let body = &bodies(&server.received_requests().await.unwrap())[0];
+    assert_eq!(
+        body["variables"]["filter"],
+        json!({
+            "state": { "id": { "eq": "state-todo" } },
+            "hasBlockedByRelations": { "eq": true },
+        })
+    );
+}

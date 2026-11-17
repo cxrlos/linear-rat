@@ -84,7 +84,9 @@ impl CreateForm {
             Editable::Priority => (edit::priority_entries(), false),
             // The form does not set labels or an estimate, and asks for
             // the title and description apart.
-            Editable::Labels | Editable::Estimate | Editable::Text => (Vec::new(), false),
+            Editable::Labels | Editable::Estimate | Editable::Text | Editable::Parent => {
+                (Vec::new(), false)
+            }
         };
         let default = entries
             .iter()
@@ -92,7 +94,7 @@ impl CreateForm {
                 Edit::State(state) => state.state_type == StateType::Unstarted,
                 Edit::Assignee(_) => true,
                 Edit::Priority(priority) => *priority == Priority::None,
-                Edit::Labels(_) | Edit::Estimate(_) | Edit::Text { .. } => false,
+                Edit::Labels(_) | Edit::Estimate(_) | Edit::Text { .. } | Edit::Parent(_) => false,
             })
             .unwrap_or(0);
         picker.set_entries(entries, None);
@@ -199,7 +201,7 @@ pub(super) fn accept(state: &mut State, nth: Option<usize>) -> Update {
                     form.priority = Some(priority);
                     None
                 }
-                Edit::Labels(_) | Edit::Estimate(_) | Edit::Text { .. } => {
+                Edit::Labels(_) | Edit::Estimate(_) | Edit::Text { .. } | Edit::Parent(_) => {
                     return Update::default();
                 }
             };
