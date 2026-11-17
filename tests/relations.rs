@@ -165,6 +165,45 @@ fn the_detail_lists_the_parent_sub_issues_and_each_relation() {
 }
 
 #[test]
+fn the_detail_lists_duplicates_both_ways() {
+    let mut app = App::new(TestBackend::new(80, 42), State::demo()).unwrap();
+    focus(&mut app, "ENG-51");
+    press(&mut app, "\n");
+    let mut detail = IssueDetail::demo(DRY_RUN);
+    detail.relations.extend([
+        IssueRelation {
+            id: "relation-dup-of".to_owned(),
+            kind: RelationType::Duplicate,
+            issue_id: DRY_RUN.to_owned(),
+            related_issue_id: "issue-eng-8".to_owned(),
+        },
+        IssueRelation {
+            id: "relation-dup-by".to_owned(),
+            kind: RelationType::Duplicate,
+            issue_id: "issue-eng-27".to_owned(),
+            related_issue_id: DRY_RUN.to_owned(),
+        },
+    ]);
+    app.handle(Event::IssueDetailLoaded {
+        issue_id: DRY_RUN.to_owned(),
+        result: Ok(detail),
+    })
+    .unwrap();
+
+    let lines = screen(&app);
+    let line = |label: &str| lines.iter().find(|line| line.contains(label)).cloned();
+    assert!(
+        line("Duplicate of").is_some_and(|line| line.contains("ENG-8 Export")),
+        "{lines:#?}"
+    );
+    assert!(
+        line("Duplicated by").is_some_and(|line| line.contains("ENG-27 Deduplicate")),
+        "{lines:#?}"
+    );
+    assert_snapshot!(app.backend());
+}
+
+#[test]
 fn a_sub_issue_shows_its_parent() {
     let mut app = App::new(TestBackend::new(80, 40), State::demo()).unwrap();
     focus(&mut app, "ENG-60");
