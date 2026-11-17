@@ -5,34 +5,34 @@ expression: "text(&cheatsheet(160, 40))"
  [1] My Issues │ [2] Team Issues │ [3] Analytics                                                                                                                
 ┏My Issues━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓┌DES-34────────────────────────────────────────────────────────┐
 ┃◐ Started (9)                                                                                 ┃│Design QA for the autumn release                              │
-┃▸ DES-34 Design QA for the autumn release                 ◐ In Progress ▮▮▮ High    3 Cycle 7 ┃│                                                              │
-┃  ENG-51 Add a dry-run mode to the importer               ◐ In Progress ▮▮▯ Medium  2 Cycle 7 ┃│State     ◐ In Progress                                       │
-┃  OPS-37 Clean up unused API keys                         ◐ In Review   ▮▮▯ Medium    Cycle 7 ┃│Priority  ▮▮▮ High                                            │
+┃▸ DES-34 Design QA for the autumn release       due Nov 6 ◐ In Progress ▮▮▮ High    3 Cycle 7 ┃│                                                              │
+┃  ENG-51 Add a dry-run mode to the importer    due Oct 30 ◐ In Progress ▮▮▯ Medium  2 Cycle 7 ┃│State     ◐ In Progress                                       │
+┃  OPS-37 Clean up unused API keys              due Nov 20 ◐ In Review   ▮▮▯ Medium    Cycle 7 ┃│Priority  ▮▮▮ High                                            │
 ┃  ENG-61 Add contract tests for the recipes API           ◐ In Progress ▮▯▯ Low     2 Cycle 7 ┃│Estimate  3                                                   │
 ┃  OPS-36 Plan the office cheese cave move                 ◐ In Review   ▮▯▯ Low       Cycle 7 ┃│                                                              │
 ┃  ENG-60 Improve error messages on sync conflicts         ◐ In Progress ··· None    5 Cycle 7 ┃│Bring two options to the critique on Thursday.                │
 ┃  ENG-22 Store the last sync watermark per device         ◐ In Progress ▮▮▮ High    3         ┃│                                                              │
 ┃  OPS-15 Tag cloud resources by team                      ◐ In Review   ▮▮▯ Medium            ┃│Comments                                                      │
-┃  DES-12 Motion guidelines for list reordering            ◐ In Review   ··· None    3         ┃│Loading…                                                      │
-┃○ Unstarted (10)                                                                              ┃│                                                              │
 ┃┌ Keys ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐ │
 ┃│ Move                                 │ Edit the issue                       │ Open & copy                          │ App                                  │ │
-┃│  j/k      down / up                  │  s  workflow state                   │  Enter  open the issue               │  1/2/3  screens   r      refresh     │ │
-┃│  gg/G     top / bottom               │  a  assignee                         │  yi/yu  copy key / URL               │  ?      keys      :,C-k  palette     │ │
-┃│  C-d/C-u  half page                  │  p  priority                         │  yb/ym  copy branch / link           │  /      search    q      quit        │ │
-┃│  h/l      pane left / right          │  L  labels                           │  o      Linear page or PR            │  C-z    suspend                      │ │
-┃│  Esc      close or step back         │  e  estimate                         │  O      other links                  │                                      │ │
-┃│                                      │  E  title and description            │                                      │                                      │ │
-┃│                                      │  c  comment                          │                                      │                                      │ │
-┃│                                      │  n  new issue                        │                                      │                                      │ │
+┃│  j/k      down / up                  │  s    workflow state                 │  Enter  open the issue               │  1/2/3  screens   r      refresh     │ │
+┃│  gg/G     top / bottom               │  a    assignee                       │  yi/yu  copy key / URL               │  ?      keys      :,C-k  palette     │ │
+┃│  C-d/C-u  half page                  │  p    priority                       │  yb/ym  copy branch / link           │  /      search    q      quit        │ │
+┃│  h/l      pane left / right          │  L    labels                         │  o      Linear page or PR            │  C-z    suspend                      │ │
+┃│  Esc      close or step back         │  e    estimate                       │  O      other links                  │                                      │ │
+┃│                                      │  C/P  cycle / project                │                                      │                                      │ │
+┃│                                      │  M/d  milestone / due date           │                                      │                                      │ │
+┃│                                      │  E    title and description          │                                      │                                      │ │
+┃│                                      │  c    comment                        │                                      │                                      │ │
+┃│                                      │  A/U  archive / unarchive            │                                      │                                      │ │
+┃│                                      │  X/S  trash / subscribe              │                                      │                                      │ │
+┃│                                      │  n    new issue                      │                                      │                                      │ │
 ┃└ Esc close ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘ │
-┃  DES-2  Redesign the empty pantry screen                 ◌ Backlog     ▮▮▮ High              ┃│Assignee  Mira Gouda                                          │
-┃  ENG-35 Split the auth module out of the monolith        ◌ Backlog     ▮▮▯ Medium            ┃│Creator   Pia Brie                                            │
-┃  ENG-23 Dark mode text is unreadable on the cellar map   ◌ Backlog     ▮▯▯ Low               ┃│Created   2026-10-19 00:06 UTC (2 weeks ago)                  │
-┃  OPS-4  Document the incident review process             ◌ Backlog     ··· None              ┃│Updated   2026-10-29 01:25 UTC (4 days ago)                   │
-┃  ENG-47 Clean up unused GraphQL resolvers                ◌ Backlog     ··· None              ┃│                                                              │
-┃  OPS-35 Reduce container image sizes                     ◌ Backlog     ··· None              ┃│                                                              │
-┃  ENG-66 Add keyboard shortcuts to the web cellar view    ◌ Backlog     ··· None              ┃│                                                              │
+┃  ENG-23 Dark mode text is unreadable on the cellar map   ◌ Backlog     ▮▯▯ Low               ┃│Assignee  Mira Gouda                                          │
+┃  OPS-4  Document the incident review process             ◌ Backlog     ··· None              ┃│Creator   Pia Brie                                            │
+┃  ENG-47 Clean up unused GraphQL resolvers                ◌ Backlog     ··· None              ┃│Created   2026-10-19 00:06 UTC (2 weeks ago)                  │
+┃  OPS-35 Reduce container image sizes                     ◌ Backlog     ··· None              ┃│Updated   2026-10-29 01:25 UTC (4 days ago)                   │
+┃  ENG-66 Add keyboard shortcuts to the web cellar view    ◌ Backlog     ··· None              ┃│Updates   Subscribed                                          │
 ┃◇ Triage (4)                                                                                  ┃│                                                              │
 ┃  OPS-33 Review the disaster recovery plan                ◇ Triage      !!! Urgent            ┃│                                                              │
 ┃  ENG-70 Gouda batch labels print off-center              ◇ Triage      ▮▮▯ Medium  3         ┃│                                                              │

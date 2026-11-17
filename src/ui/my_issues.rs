@@ -2,6 +2,8 @@
 
 use std::collections::BTreeMap;
 
+use jiff::civil::Date;
+
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style, Stylize};
@@ -67,6 +69,8 @@ pub(super) struct View<'a> {
     icons: icons::IconSet,
     /// Why the last edit of an issue failed, by issue id.
     row_errors: &'a BTreeMap<String, String>,
+    /// The viewer's day, which due dates are overdue after.
+    today: Date,
 }
 
 impl<'a> View<'a> {
@@ -76,6 +80,7 @@ impl<'a> View<'a> {
             theme: &state.theme,
             icons: state.ui.icons,
             row_errors: &state.row_errors,
+            today: state.today(),
         }
     }
 }
@@ -181,8 +186,12 @@ pub(super) fn row_cells<'a>(issues: impl Iterator<Item = &'a Issue>) -> Layout {
     .spacing(1)
 }
 
-/// One issue row: marker, identifier, title, state, priority, estimate and
-/// cycle, highlighted when it is the focused issue.
+/// The columns a row's title keeps before its due date is shown beside it.
+const TITLE_BESIDE_DUE: u16 = 12;
+
+/// One issue row: marker, identifier, title with its due date when there is
+/// room, state, priority, estimate and cycle, highlighted when it is the
+/// focused issue.
 pub(super) fn render_row(
     view: &View,
     frame: &mut Frame,
@@ -198,6 +207,24 @@ pub(super) fn render_row(
         frame.render_widget("▸", marker);
     }
     frame.render_widget(Span::raw(&issue.identifier).fg(theme.muted), identifier);
+    let due = issue
+        .due_date
+        .map(|date| due_span(view, issue, date))
+        .map(|due| (u16::try_from(due.width()).unwrap_or(u16::MAX), due))
+        .filter(|(width, _)| {
+            title.width >= width.saturating_add(1).saturating_add(TITLE_BESIDE_DUE)
+        });
+    let title = match due {
+        Some((width, due)) => {
+            let [title, due_area] =
+                Layout::horizontal([Constraint::Fill(1), Constraint::Length(width)])
+                    .spacing(1)
+                    .areas(title);
+            frame.render_widget(due, due_area);
+            title
+        }
+        None => title,
+    };
     let title_line = if view.row_errors.contains_key(&issue.id) {
         Line::from(vec![
             Span::styled("✘ ", style::error(theme)),
@@ -273,6 +300,21 @@ fn priority_line(view: &View, priority: Priority) -> Line<'static> {
         Span::raw(" "),
         Span::raw(icons::priority_name(priority)),
     ])
+}
+
+/// When `issue` is due, as `due Nov 6`, in the alert style once it is
+/// overdue and still open.
+fn due_span(view: &View, issue: &Issue, date: Date) -> Span<'static> {
+    let text = if date.year() == view.today.year() {
+        date.strftime("due %b %-d").to_string()
+    } else {
+        date.strftime("due %b %-d %Y").to_string()
+    };
+    if detail::is_overdue(issue, date, view.today) {
+        Span::styled(text, style::error(view.theme))
+    } else {
+        Span::styled(text, style::muted(view.theme))
+    }
 }
 
 fn cycle_span<'a>(view: &View<'a>, issue: &'a Issue) -> Span<'a> {

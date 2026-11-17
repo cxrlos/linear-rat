@@ -1,6 +1,6 @@
 //! What the pickers load and what an edit sends: a team's workflow states,
-//! members and labels, one `issueUpdate`, and the `updatedAt` a text save
-//! checks first.
+//! members and labels, a project's milestones, one `issueUpdate`, and the
+//! `updatedAt` a text save checks first.
 
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
@@ -8,12 +8,13 @@ use serde_json::{Map, Value, json};
 
 use super::assigned::{Connection, IssueNode, LabelsPage, PersonNode, StateNode, timestamp};
 use super::{HttpClient, Urgency};
-use crate::linear::model::{Issue, Label, Member, Priority, WorkflowState};
+use crate::linear::model::{Issue, Label, Member, Priority, ProjectMilestone, WorkflowState};
 use crate::linear::{ClientError, IssueUpdate, Patch, Response};
 
 const TEAM_STATES: &str = include_str!("../graphql/team_states.graphql");
 const TEAM_MEMBERS: &str = include_str!("../graphql/team_members.graphql");
 const TEAM_LABELS: &str = include_str!("../graphql/team_labels.graphql");
+const PROJECT_MILESTONES: &str = include_str!("../graphql/project_milestones.graphql");
 const ISSUE_UPDATE: &str = include_str!("../graphql/issue_update.graphql");
 const ISSUE_UPDATED_AT: &str = include_str!("../graphql/issue_updated_at.graphql");
 
@@ -71,6 +72,29 @@ pub(super) async fn team_labels(
         .into_iter()
         .flat_map(|page| page.issue_labels.nodes)
         .map(Label::from)
+        .collect())
+}
+
+pub(super) async fn project_milestones(
+    client: &HttpClient,
+    project_id: &str,
+) -> Result<Vec<ProjectMilestone>, ClientError> {
+    let Response { data: pages, .. } = client
+        .all_pages(
+            PROJECT_MILESTONES,
+            json!({ "projectId": project_id }),
+            Urgency::Urgent,
+            |page: &MilestonesPage| &page.project.project_milestones.page_info,
+        )
+        .await?;
+    Ok(pages
+        .into_iter()
+        .flat_map(|page| page.project.project_milestones.nodes)
+        .map(|node| ProjectMilestone {
+            id: node.id,
+            name: node.name,
+            project_id: project_id.to_owned(),
+        })
         .collect())
 }
 
@@ -204,6 +228,23 @@ struct MembersPage {
 #[derive(Deserialize)]
 struct TeamMembers {
     members: Connection<PersonNode>,
+}
+
+#[derive(Deserialize)]
+struct MilestonesPage {
+    project: ProjectMilestones,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectMilestones {
+    project_milestones: Connection<MilestoneNode>,
+}
+
+#[derive(Deserialize)]
+struct MilestoneNode {
+    id: String,
+    name: String,
 }
 
 #[derive(Deserialize)]

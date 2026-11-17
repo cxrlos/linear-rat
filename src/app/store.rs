@@ -10,8 +10,8 @@ use serde::{Deserialize, Serialize};
 use super::edit::{Edit, Write};
 use crate::analytics::AdministrableTeams;
 use crate::linear::model::{
-    Attachment, Comment, Cycle, Issue, Label, Member, Project, StateSpan, Team, Viewer,
-    WorkflowState, Workspace,
+    Attachment, Comment, Cycle, Issue, Label, Member, Project, ProjectMilestone, StateSpan, Team,
+    Viewer, WorkflowState, Workspace,
 };
 use crate::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, PostedComment, SearchResults,
@@ -60,6 +60,13 @@ pub struct Store {
     /// Project ids by team id, for the teams whose filter options have
     /// loaded.
     team_projects: BTreeMap<String, Vec<String>>,
+    /// Project milestones by id, from the detail and the milestone picker.
+    #[serde(default)]
+    milestones: BTreeMap<String, ProjectMilestone>,
+    /// The ids of a project's milestones, in Linear's order, by project id,
+    /// once loaded for a milestone picker.
+    #[serde(default)]
+    project_milestones: BTreeMap<String, Vec<String>>,
     /// The windows analytics loads have covered in this session. Left out
     /// of the snapshot, so a new session loads analytics afresh rather than
     /// trusting cycle histories from the last one.
@@ -223,6 +230,49 @@ impl Store {
         self.issues.remove(id).is_some()
     }
 
+    /// Changes the stored issue with id `id` in place. The issue keeps its
+    /// `updated_at`, so Linear's next copy replaces it. Returns whether it
+    /// is stored.
+    pub fn change_issue(&mut self, id: &str, change: impl FnOnce(&mut Issue)) -> bool {
+        let issue = self.issues.get_mut(id);
+        let stored = issue.is_some();
+        if let Some(issue) = issue {
+            change(issue);
+        }
+        stored
+    }
+
+    /// Takes the issue with id `id` out with everything stored about it,
+    /// so [`Store::put_back`] can restore it.
+    pub fn take_issue(&mut self, id: &str) -> Option<Trashed> {
+        let issue = self.issues.remove(id)?;
+        Some(Trashed {
+            issue,
+            comments: self.comments.remove(id),
+            state_history: self.state_histories.remove(id),
+            attachments: self.attachments.remove(id),
+        })
+    }
+
+    /// Restores what [`Store::take_issue`] took, unless the issue has come
+    /// back meanwhile.
+    pub fn put_back(&mut self, trashed: Trashed) {
+        let id = trashed.issue.id.clone();
+        if self.issues.contains_key(&id) {
+            return;
+        }
+        if let Some(comments) = trashed.comments {
+            self.comments.insert(id.clone(), comments);
+        }
+        if let Some(history) = trashed.state_history {
+            self.state_histories.insert(id.clone(), history);
+        }
+        if let Some(attachments) = trashed.attachments {
+            self.attachments.insert(id.clone(), attachments);
+        }
+        self.issues.insert(id, trashed.issue);
+    }
+
     /// The newest `updatedAt` a poll of `team_id` has returned, if any.
     pub fn watermark(&self, team_id: &str) -> Option<Timestamp> {
         self.watermarks.get(team_id).copied()
@@ -367,6 +417,32 @@ impl Store {
         self.team_labels.insert(team_id.to_owned(), ids);
     }
 
+    /// Replaces the milestones of project `project_id`, and stores each
+    /// milestone by id.
+    pub fn set_project_milestones(&mut self, project_id: &str, milestones: &[ProjectMilestone]) {
+        by_id(&mut self.milestones, milestones, |milestone| &milestone.id);
+        let ids = milestones
+            .iter()
+            .map(|milestone| milestone.id.clone())
+            .collect();
+        self.project_milestones.insert(project_id.to_owned(), ids);
+    }
+
+    /// The milestones of project `project_id`, in Linear's order, if they
+    /// have been loaded.
+    pub fn project_milestones(&self, project_id: &str) -> Option<Vec<&ProjectMilestone>> {
+        let ids = self.project_milestones.get(project_id)?;
+        Some(
+            ids.iter()
+                .filter_map(|id| self.milestones.get(id))
+                .collect(),
+        )
+    }
+
+    pub fn milestone(&self, id: &str) -> Option<&ProjectMilestone> {
+        self.milestones.get(id)
+    }
+
     /// The labels team `team_id`'s issues can carry, if they have been
     /// loaded.
     pub fn team_labels(&self, team_id: &str) -> Option<Vec<&Label>> {
@@ -413,6 +489,10 @@ impl Store {
         );
         if let Some(project) = &detail.project {
             self.projects.insert(project.id.clone(), project.clone());
+        }
+        if let Some(milestone) = &detail.milestone {
+            self.milestones
+                .insert(milestone.id.clone(), milestone.clone());
         }
     }
 
@@ -532,6 +612,15 @@ impl Store {
             .flatten()
             .filter_map(|id| self.projects.get(id))
     }
+}
+
+/// An issue taken out of the store with what the store kept about it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Trashed {
+    pub issue: Issue,
+    comments: Option<Vec<Comment>>,
+    state_history: Option<Vec<StateSpan>>,
+    attachments: Option<Vec<Attachment>>,
 }
 
 /// How far back `windows` reach without a gap up to now.

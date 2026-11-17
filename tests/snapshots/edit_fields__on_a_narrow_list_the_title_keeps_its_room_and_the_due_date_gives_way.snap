@@ -1,0 +1,16 @@
+---
+source: tests/edit_fields.rs
+expression: app.backend()
+---
+" [1] My Issues │ [2] Team Issues │ [3] Analytics                "
+"┌My Issues─────────────────────────────────────────────────────┐"
+"│◐ Started (9)                                                 │"
+"│▸ DES-34 Design QA for th ◐ In Progress ▮▮▮ High    3 Cycle 7 │"
+"│  ENG-51 Add a dry-run mo ◐ In Progress ▮▮▯ Medium  2 Cycle 7 │"
+"│  OPS-37 Clean up unused  ◐ In Review   ▮▮▯ Medium    Cycle 7 │"
+"│  ENG-61 Add contract tes ◐ In Progress ▮▯▯ Low     2 Cycle 7 │"
+"│  OPS-36 Plan the office  ◐ In Review   ▮▯▯ Low       Cycle 7 │"
+"└──────────────────────────────────────────────────────────────┘"
+" Move │ j down  k up  gg top  G bottom  C-d/C-u page  h/l pane  "
+" Do   │ Enter open  y yank  o links  Esc close  ? keys          "
+" Edit │ s state  a assignee  p priority  L labels  e estimate   "

@@ -60,23 +60,25 @@ fn fg_of(app: &App<TestBackend>, needle: &str) -> Option<Color> {
 }
 
 #[test]
-fn at_80x24_every_pane_of_my_issues_fits_without_scrolling() {
+fn at_80x24_every_pane_of_my_issues_shows_or_scrolls_into_view() {
     let mut app = cheatsheet(80, 24);
     let before = text(&app);
-
     for needle in [
         "Move",
         "Edit the issue",
         "Open & copy",
-        "App",
-        "C-z",
         "new issue",
         "copy branch / link",
     ] {
         assert!(before.contains(needle), "{needle} in\n{before}");
     }
-    press(&mut app, "j");
-    assert_eq!(text(&app), before, "nothing below to scroll to");
+
+    press(&mut app, &"j".repeat(20));
+
+    let after = text(&app);
+    for needle in ["App", "C-z"] {
+        assert!(after.contains(needle), "{needle} in\n{after}");
+    }
 }
 
 #[test]
@@ -133,7 +135,7 @@ fn keys_that_cannot_run_now_are_muted() {
     let app = cheatsheet(80, 24);
 
     assert_eq!(fg_of(&app, "1/2/3"), Some(Color::DarkGray), "already on 1");
-    assert_eq!(fg_of(&app, "s  workflow state"), Some(Color::Cyan));
+    assert_eq!(fg_of(&app, "s    workflow state"), Some(Color::Cyan));
 }
 
 /// Carries out the Team Issues loads in `effects` with the fake client.

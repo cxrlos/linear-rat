@@ -11,7 +11,7 @@ pub(crate) mod search_bucket;
 
 use std::cell::RefCell;
 use std::cmp::Reverse;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
 
 use futures_util::Stream;
@@ -22,8 +22,8 @@ pub use error::{ClientError, GraphQlError, Response};
 pub use governor::{SystemTimer, Timer, Urgency};
 pub use http::{ClientConfig, Dial, HttpClient, LIVE_ENDPOINT, LiveConfig, Pipe};
 use model::{
-    Attachment, Comment, Cycle, Issue, Label, Member, Priority, Project, StateSpan, StateType,
-    Team, Viewer, WorkflowState, Workspace,
+    Attachment, Comment, Cycle, Issue, Label, Member, Priority, Project, ProjectMilestone,
+    StateSpan, StateType, Team, Viewer, WorkflowState, Workspace,
 };
 
 /// Queries, mutations and live events.
@@ -77,6 +77,41 @@ pub trait LinearClient {
         &self,
         team_id: &str,
     ) -> impl Future<Output = Result<Vec<Label>, ClientError>> + Send;
+
+    /// Every milestone of the project with id `project_id`, in Linear's
+    /// order.
+    fn project_milestones(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<Vec<ProjectMilestone>, ClientError>> + Send;
+
+    /// Archives the issue with id `issue_id`.
+    fn archive_issue(&self, issue_id: &str)
+    -> impl Future<Output = Result<(), ClientError>> + Send;
+
+    /// Brings the archived issue with id `issue_id` back.
+    fn unarchive_issue(
+        &self,
+        issue_id: &str,
+    ) -> impl Future<Output = Result<(), ClientError>> + Send;
+
+    /// Moves the issue with id `issue_id` and its sub-issues to the trash,
+    /// where Linear keeps them for 30 days. There is no permanent delete.
+    fn trash_issue(&self, issue_id: &str) -> impl Future<Output = Result<(), ClientError>> + Send;
+
+    /// Subscribes the viewer to the notifications of the issue with id
+    /// `issue_id`.
+    fn subscribe_to_issue(
+        &self,
+        issue_id: &str,
+    ) -> impl Future<Output = Result<(), ClientError>> + Send;
+
+    /// Unsubscribes the viewer from the notifications of the issue with id
+    /// `issue_id`.
+    fn unsubscribe_from_issue(
+        &self,
+        issue_id: &str,
+    ) -> impl Future<Output = Result<(), ClientError>> + Send;
 
     /// Sends one `issueUpdate` for the issue with id `issue_id` and returns
     /// the issue as Linear stored it.
@@ -651,6 +686,7 @@ pub struct IssueDetail {
     /// The comment authors.
     pub members: Vec<Member>,
     pub project: Option<Project>,
+    pub milestone: Option<ProjectMilestone>,
     /// The first 50 attachments, oldest first; any more are left out.
     pub attachments: Vec<Attachment>,
     /// What Linear could not give, as in [`AssignedIssues::problems`].
@@ -665,6 +701,7 @@ impl IssueDetail {
         let issue = data.issues.iter().find(|issue| issue.id == issue_id);
         let team_id = issue.map(|issue| issue.team_id.as_str());
         let project_id = issue.and_then(|issue| issue.project_id.as_deref());
+        let milestone_id = issue.and_then(|issue| issue.project_milestone_id.as_deref());
         Self {
             comments: data
                 .comments
@@ -684,6 +721,10 @@ impl IssueDetail {
                 .projects
                 .into_iter()
                 .find(|project| Some(project.id.as_str()) == project_id),
+            milestone: data
+                .milestones
+                .into_iter()
+                .find(|milestone| Some(milestone.id.as_str()) == milestone_id),
             attachments: data
                 .attachments
                 .into_iter()
@@ -704,6 +745,34 @@ thread_local! {
     static DEMO_EDITS: RefCell<BTreeMap<String, Issue>> = const { RefCell::new(BTreeMap::new()) };
     static DEMO_COMMENTS: RefCell<Vec<Comment>> = const { RefCell::new(Vec::new()) };
     static DEMO_CREATED: RefCell<u32> = const { RefCell::new(0) };
+    static DEMO_TRASHED: RefCell<BTreeSet<String>> = const { RefCell::new(BTreeSet::new()) };
+}
+
+/// The demo issue with id `issue_id` as edits through the fake client left
+/// it, unless it is in the trash.
+fn demo_issue(data: &demo::DemoWorkspace, issue_id: &str) -> Result<Issue, ClientError> {
+    if DEMO_TRASHED.with_borrow(|trashed| trashed.contains(issue_id)) {
+        return Err(not_found("issue", issue_id));
+    }
+    DEMO_EDITS
+        .with_borrow(|edits| edits.get(issue_id).cloned())
+        .or_else(|| {
+            data.issues
+                .iter()
+                .find(|issue| issue.id == issue_id)
+                .cloned()
+        })
+        .ok_or_else(|| not_found("issue", issue_id))
+}
+
+/// Applies `change` to the demo issue with id `issue_id` and remembers it,
+/// one second newer.
+fn demo_change(issue_id: &str, change: impl FnOnce(&mut Issue)) -> Result<(), ClientError> {
+    let mut issue = demo_issue(&demo::workspace(), issue_id)?;
+    change(&mut issue);
+    issue.updated_at += SignedDuration::from_secs(1);
+    DEMO_EDITS.with_borrow_mut(|edits| edits.insert(issue_id.to_owned(), issue));
+    Ok(())
 }
 
 /// The issue `input` creates in the demo workspace, numbered after the
@@ -765,6 +834,8 @@ fn demo_create(
         project_milestone_id: None,
         parent_id: None,
         due_date: None,
+        archived_at: None,
+        subscribed: true,
         label_ids: Vec::new(),
         created_at: demo::NOW,
         updated_at: demo::NOW + SignedDuration::from_secs(1),
@@ -927,6 +998,7 @@ impl LinearClient for FakeClient {
                 data.issues.iter().any(|issue| &issue.id == *id)
                     || DEMO_EDITS.with_borrow(|edits| edits.contains_key(id.as_str()))
             })
+            .filter(|id| !DEMO_TRASHED.with_borrow(|trashed| trashed.contains(id.as_str())))
             .cloned()
             .collect())
     }
@@ -952,21 +1024,48 @@ impl LinearClient for FakeClient {
         Ok(demo::team_options(&demo::workspace(), team_id).labels)
     }
 
+    async fn project_milestones(
+        &self,
+        project_id: &str,
+    ) -> Result<Vec<ProjectMilestone>, ClientError> {
+        Ok(demo::workspace()
+            .milestones
+            .into_iter()
+            .filter(|milestone| milestone.project_id == project_id)
+            .collect())
+    }
+
+    async fn archive_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        demo_change(issue_id, |issue| issue.archived_at = Some(demo::NOW))
+    }
+
+    async fn unarchive_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        demo_change(issue_id, |issue| issue.archived_at = None)
+    }
+
+    /// Remembers the issue as trashed: later edits and existence checks no
+    /// longer find it.
+    async fn trash_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        demo_issue(&demo::workspace(), issue_id)?;
+        DEMO_TRASHED.with_borrow_mut(|trashed| trashed.insert(issue_id.to_owned()));
+        Ok(())
+    }
+
+    async fn subscribe_to_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        demo_change(issue_id, |issue| issue.subscribed = true)
+    }
+
+    async fn unsubscribe_from_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        demo_change(issue_id, |issue| issue.subscribed = false)
+    }
+
     async fn update_issue(
         &self,
         issue_id: &str,
         update: &IssueUpdate,
     ) -> Result<Issue, ClientError> {
         let data = demo::workspace();
-        let stored = DEMO_EDITS
-            .with_borrow(|edits| edits.get(issue_id).cloned())
-            .or_else(|| {
-                data.issues
-                    .iter()
-                    .find(|issue| issue.id == issue_id)
-                    .cloned()
-            })
-            .ok_or_else(|| not_found("issue", issue_id))?;
+        let stored = demo_issue(&data, issue_id)?;
         let updated = demo_update(&data, stored, update)?;
         DEMO_EDITS.with_borrow_mut(|edits| edits.insert(issue_id.to_owned(), updated.clone()));
         Ok(updated)

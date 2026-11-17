@@ -4,6 +4,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use insta::assert_snapshot;
 use linear_rat::app::{App, Effect, Event, State};
 use linear_rat::config;
+use linear_rat::keys::{ACTIONS, Context, Key};
 use ratatui::backend::TestBackend;
 use ratatui::style::Color;
 
@@ -517,4 +518,34 @@ fn suspend_can_be_rebound() {
 
     assert!(app.handle(ctrl('z')).unwrap().is_empty());
     assert_eq!(app.handle(ctrl('s')).unwrap(), vec![Effect::Suspend]);
+}
+
+/// Each set of contexts that takes keys together, most specific first.
+const STACKS: &[&[Context]] = &[
+    &[Context::TeamIssues, Context::List, Context::Global],
+    &[Context::List, Context::Global],
+    &[Context::Detail, Context::Global],
+    &[Context::Analytics, Context::Global],
+    &[Context::Overlay],
+];
+
+#[test]
+fn no_two_default_bindings_clash_where_they_take_keys_together() {
+    for stack in STACKS {
+        let bound: Vec<(&str, &[Key])> = ACTIONS
+            .iter()
+            .filter(|spec| spec.contexts.iter().any(|context| stack.contains(context)))
+            .flat_map(|spec| spec.default_keys.iter().map(move |keys| (spec.id, *keys)))
+            .collect();
+        for (index, (id, keys)) in bound.iter().enumerate() {
+            for (other, other_keys) in &bound[index + 1..] {
+                let shorter = keys.len().min(other_keys.len());
+                assert_ne!(
+                    keys[..shorter],
+                    other_keys[..shorter],
+                    "{id} and {other} clash in {stack:?}"
+                );
+            }
+        }
+    }
 }

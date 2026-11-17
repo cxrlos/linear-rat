@@ -188,6 +188,8 @@ fn show_stand_in(state: &mut State, draft: IssueDraft, description: &str) -> New
         project_milestone_id: None,
         parent_id: None,
         due_date: None,
+        archived_at: None,
+        subscribed: true,
         label_ids: Vec::new(),
         created_at: now,
         updated_at: now,

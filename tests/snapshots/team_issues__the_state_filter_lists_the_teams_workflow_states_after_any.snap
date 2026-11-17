@@ -21,7 +21,7 @@ expression: app.backend()
 "│  ENG-61 Add con└ Down/Up select  Enter choose  Esc close ──┘ow     2 Cycle 7 │"
 "│  ENG-60 Improve error messages on sync c ◐ In Progress ··· None    5 Cycle 7 │"
 "│  ENG-59 Show who last moved a wheel      ◌ Backlog     ▮▯▯ Low     2         │"
-"│  ENG-51 Add a dry-run mode to the import ◐ In Progress ▮▮▯ Medium  2 Cycle 7 │"
+"│  ENG-51 Add a dry-run mode to due Oct 30 ◐ In Progress ▮▮▯ Medium  2 Cycle 7 │"
 "└──────────────────────────────────────────────────────────────────────────────┘"
 " Move │ Down/Up move                                                            "
 " Do   │ Enter pick   │ Tab toggle │ Esc close │ C-y copy                        "

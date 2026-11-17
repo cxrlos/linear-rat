@@ -1,5 +1,6 @@
 use super::create::CreateForm;
-use super::edit::EditPicker;
+use super::edit::{DuePrompt, EditPicker};
+use super::lifecycle::Confirm;
 use super::links::Links;
 use super::picker::Picker;
 use super::{FilterField, Palette, Phase, Search};
@@ -30,6 +31,10 @@ pub enum Modal {
     Links(Links),
     /// The form that creates an issue.
     Create(CreateForm),
+    /// The prompt that sets an issue's due date.
+    DueDate(DuePrompt),
+    /// A question to answer before something hard to undo runs.
+    Confirm(Confirm),
 }
 
 impl Modal {
@@ -40,9 +45,10 @@ impl Modal {
             | Modal::Palette(_)
             | Modal::Links(_)
             | Modal::Create(_)
-            | Modal::Choice(_) => true,
+            | Modal::Choice(_)
+            | Modal::DueDate(_) => true,
             Modal::Search(search) => !matches!(search.phase, Phase::Searching { .. }),
-            Modal::Cheatsheet { .. } | Modal::WhichKey { .. } => false,
+            Modal::Cheatsheet { .. } | Modal::WhichKey { .. } | Modal::Confirm(_) => false,
         }
     }
 
@@ -60,7 +66,11 @@ impl Modal {
             }
             Modal::Search(search) => search.text_field(),
             Modal::Create(form) => form.text_field(),
-            Modal::Cheatsheet { .. } | Modal::WhichKey { .. } => None,
+            Modal::DueDate(prompt) => {
+                prompt.error = None;
+                Some(&mut prompt.text)
+            }
+            Modal::Cheatsheet { .. } | Modal::WhichKey { .. } | Modal::Confirm(_) => None,
         }
     }
 }

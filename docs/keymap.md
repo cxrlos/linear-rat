@@ -44,8 +44,16 @@ The Team Issues list also takes the Issue list keys. While an overlay has a text
 | `edit-priority` | `p` | Change the priority |
 | `edit-labels` | `L` | Add or remove labels |
 | `edit-estimate` | `e` | Change the estimate |
+| `edit-cycle` | `C` | Change the cycle |
+| `edit-project` | `P` | Change the project |
+| `edit-milestone` | `M` | Change the project milestone |
+| `edit-due-date` | `d` | Set or clear the due date |
 | `edit-text` | `E` | Edit the title and description |
 | `comment` | `c` | Comment in $EDITOR |
+| `archive` | `A` | Archive the issue |
+| `unarchive` | `U` | Unarchive the issue |
+| `trash` | `X` | Move the issue to the trash |
+| `toggle-subscription` | `S` | Subscribe to or unsubscribe from the issue |
 | `create-issue` | `n` | Create an issue |
 | `close` | `<Esc>` | Close the top overlay or step back |
 
@@ -84,8 +92,16 @@ The Team Issues list also takes the Issue list keys. While an overlay has a text
 | `edit-priority` | `p` | Change the priority |
 | `edit-labels` | `L` | Add or remove labels |
 | `edit-estimate` | `e` | Change the estimate |
+| `edit-cycle` | `C` | Change the cycle |
+| `edit-project` | `P` | Change the project |
+| `edit-milestone` | `M` | Change the project milestone |
+| `edit-due-date` | `d` | Set or clear the due date |
 | `edit-text` | `E` | Edit the title and description |
 | `comment` | `c` | Comment in $EDITOR |
+| `archive` | `A` | Archive the issue |
+| `unarchive` | `U` | Unarchive the issue |
+| `trash` | `X` | Move the issue to the trash |
+| `toggle-subscription` | `S` | Subscribe to or unsubscribe from the issue |
 | `create-issue` | `n` | Create an issue |
 | `close` | `<Esc>` | Close the top overlay or step back |
 
@@ -105,6 +121,8 @@ The Team Issues list also takes the Issue list keys. While an overlay has a text
 | `scroll-down` | `j`, `<Down>`, `<C-n>` | Scroll down |
 | `scroll-up` | `k`, `<Up>`, `<C-p>` | Scroll up |
 | `accept` | `<Enter>` | Choose the highlighted entry |
+| `confirm` | `y` | Confirm the question asked |
+| `decline` | `n` | Cancel the question asked |
 | `toggle-entry` | `<Tab>` | Mark or unmark the highlighted entry, or search comments too |
 | `toggle-search-scope` | `<C-t>` | Search within the Team Issues team and filter, or the whole workspace |
 | `close` | `<Esc>` | Close the top overlay or step back |

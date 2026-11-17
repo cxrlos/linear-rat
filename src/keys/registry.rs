@@ -350,6 +350,50 @@ pub static ACTIONS: &[ActionSpec] = &[
         available: app::focused_team_estimates,
     },
     ActionSpec {
+        action: Action::Edit(Editable::Cycle),
+        id: "edit-cycle",
+        description: "Change the cycle",
+        label: "cycle / project",
+        group: Group::Edit,
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('C')]],
+        available: has_saved_issue,
+    },
+    ActionSpec {
+        action: Action::Edit(Editable::Project),
+        id: "edit-project",
+        description: "Change the project",
+        label: "cycle / project",
+        group: Group::Edit,
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('P')]],
+        available: has_saved_issue,
+    },
+    ActionSpec {
+        action: Action::Edit(Editable::Milestone),
+        id: "edit-milestone",
+        description: "Change the project milestone",
+        label: "milestone / due date",
+        group: Group::Edit,
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('M')]],
+        available: app::focused_has_project,
+    },
+    ActionSpec {
+        action: Action::Edit(Editable::DueDate),
+        id: "edit-due-date",
+        description: "Set or clear the due date",
+        label: "milestone / due date",
+        group: Group::Edit,
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('d')]],
+        available: has_saved_issue,
+    },
+    ActionSpec {
         action: Action::Edit(Editable::Text),
         id: "edit-text",
         description: "Edit the title and description",
@@ -378,6 +422,50 @@ pub static ACTIONS: &[ActionSpec] = &[
                 .focused_issue()
                 .is_some_and(|issue| !app::is_local(&issue.id))
         },
+    },
+    ActionSpec {
+        action: Action::Archive,
+        id: "archive",
+        description: "Archive the issue",
+        label: "archive / unarchive",
+        group: Group::Edit,
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('A')]],
+        available: |state| has_saved_issue(state) && !app::focused_is_archived(state),
+    },
+    ActionSpec {
+        action: Action::Unarchive,
+        id: "unarchive",
+        description: "Unarchive the issue",
+        label: "archive / unarchive",
+        group: Group::Edit,
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('U')]],
+        available: |state| has_saved_issue(state) && app::focused_is_archived(state),
+    },
+    ActionSpec {
+        action: Action::Trash,
+        id: "trash",
+        description: "Move the issue to the trash",
+        label: "trash / subscribe",
+        group: Group::Edit,
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('X')]],
+        available: has_saved_issue,
+    },
+    ActionSpec {
+        action: Action::ToggleSubscription,
+        id: "toggle-subscription",
+        description: "Subscribe to or unsubscribe from the issue",
+        label: "trash / subscribe",
+        group: Group::Edit,
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('S')]],
+        available: has_saved_issue,
     },
     ActionSpec {
         action: Action::CreateIssue,
@@ -606,6 +694,28 @@ pub static ACTIONS: &[ActionSpec] = &[
         contexts: OVERLAY,
         default_keys: &[&[Key::named(KeyCode::Enter)]],
         available: can_accept,
+    },
+    ActionSpec {
+        action: Action::Confirm,
+        id: "confirm",
+        description: "Confirm the question asked",
+        label: "confirm / cancel",
+        group: Group::Screen,
+        hint: None,
+        contexts: OVERLAY,
+        default_keys: &[&[Key::char('y')]],
+        available: is_confirming,
+    },
+    ActionSpec {
+        action: Action::Decline,
+        id: "decline",
+        description: "Cancel the question asked",
+        label: "confirm / cancel",
+        group: Group::Screen,
+        hint: None,
+        contexts: OVERLAY,
+        default_keys: &[&[Key::char('n')]],
+        available: is_confirming,
     },
     ActionSpec {
         action: Action::ToggleEntry,
@@ -877,8 +987,13 @@ fn can_accept(state: &State) -> bool {
             Phase::Typing { .. } | Phase::NothingFound { .. } => !search.query.trim().is_empty(),
             Phase::Searching { .. } => false,
         },
+        Some(Modal::Confirm(_) | Modal::DueDate(_)) => true,
         _ => false,
     }
+}
+
+fn is_confirming(state: &State) -> bool {
+    matches!(state.modals.top(), Some(Modal::Confirm(_)))
 }
 
 fn picker(state: &State) -> Option<&EditPicker> {
@@ -908,6 +1023,13 @@ fn has_team(state: &State) -> bool {
 
 fn has_focused_issue(state: &State) -> bool {
     state.focused_issue().is_some()
+}
+
+/// Whether an issue Linear has confirmed is focused, so it can be edited.
+fn has_saved_issue(state: &State) -> bool {
+    state
+        .focused_issue()
+        .is_some_and(|issue| !app::is_local(&issue.id))
 }
 
 // In the detail, moves scroll it, so they are available while it has more

@@ -461,3 +461,63 @@ async fn an_updated_issue_carries_its_due_date_milestone_and_parent() {
     assert_eq!(issue.project_milestone_id.as_deref(), Some("milestone-2"));
     assert_eq!(issue.parent_id.as_deref(), Some("issue-9"));
 }
+
+#[tokio::test]
+async fn project_milestones_follow_every_page_of_the_project_asked_for() {
+    let server = MockServer::start().await;
+    let page = |id: &str, name: &str, next: Option<&str>| {
+        json!({ "data": { "project": { "projectMilestones": {
+            "nodes": [{ "id": id, "name": name }],
+            "pageInfo": { "hasNextPage": next.is_some(), "endCursor": next }
+        } } } })
+    };
+    Mock::given(method("POST"))
+        .and(wiremock::matchers::body_partial_json(
+            json!({ "variables": { "after": null, "projectId": "project-1" } }),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(page(
+            "milestone-1",
+            "Beta",
+            Some("c1"),
+        )))
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(wiremock::matchers::body_partial_json(
+            json!({ "variables": { "after": "c1" } }),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(page("milestone-2", "Launch", None)))
+        .mount(&server)
+        .await;
+
+    let milestones = client_for(&server)
+        .project_milestones("project-1")
+        .await
+        .unwrap();
+
+    let milestones: Vec<(&str, &str, &str)> = milestones
+        .iter()
+        .map(|milestone| {
+            (
+                milestone.id.as_str(),
+                milestone.name.as_str(),
+                milestone.project_id.as_str(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        milestones,
+        [
+            ("milestone-1", "Beta", "project-1"),
+            ("milestone-2", "Launch", "project-1")
+        ]
+    );
+    let requests = server.received_requests().await.unwrap();
+    let body: Value = requests[0].body_json().unwrap();
+    assert!(
+        body["query"]
+            .as_str()
+            .unwrap()
+            .contains("query ProjectMilestones")
+    );
+}

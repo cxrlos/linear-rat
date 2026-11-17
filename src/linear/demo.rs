@@ -5,11 +5,12 @@
 //! Everything is derived from [`NOW`] and a fixed seed, so every call returns
 //! the same data on every machine.
 
+use jiff::civil::{Date, date};
 use jiff::{SignedDuration, Timestamp};
 
 use super::model::{
-    Attachment, Comment, Cycle, Estimation, Issue, Label, Member, Priority, Project, StateSpan,
-    StateType, Team, Viewer, WorkflowState, Workspace,
+    Attachment, Comment, Cycle, Estimation, Issue, Label, Member, Priority, Project,
+    ProjectMilestone, StateSpan, StateType, Team, Viewer, WorkflowState, Workspace,
 };
 use super::{TeamOptions, TeamQuery};
 
@@ -35,6 +36,7 @@ pub struct DemoWorkspace {
     pub workflow_states: Vec<WorkflowState>,
     pub labels: Vec<Label>,
     pub projects: Vec<Project>,
+    pub milestones: Vec<ProjectMilestone>,
     pub cycles: Vec<Cycle>,
     pub issues: Vec<Issue>,
     pub comments: Vec<Comment>,
@@ -77,6 +79,20 @@ pub fn workspace() -> DemoWorkspace {
                 name: (*name).to_owned(),
             })
             .collect(),
+        milestones: PROJECTS
+            .iter()
+            .enumerate()
+            .flat_map(|(index, _)| {
+                MILESTONES
+                    .iter()
+                    .enumerate()
+                    .map(move |(n, name)| ProjectMilestone {
+                        id: format!("milestone-{}-{}", index + 1, n + 1),
+                        name: (*name).to_owned(),
+                        project_id: format!("project-{}", index + 1),
+                    })
+            })
+            .collect(),
         cycles: Vec::new(),
         issues: Vec::new(),
         comments: Vec::new(),
@@ -86,7 +102,34 @@ pub fn workspace() -> DemoWorkspace {
         add_team(&mut data, spec, &mut rng);
     }
     add_links(&mut data);
+    add_schedule(&mut data);
     data
+}
+
+/// Due dates and project milestones on some of the viewer's open issues,
+/// one of them overdue: (identifier, due date, milestone id).
+const SCHEDULE: &[(&str, Option<Date>, Option<&str>)] = &[
+    ("DES-34", Some(date(2026, 11, 6)), None),
+    ("ENG-51", Some(date(2026, 10, 30)), None),
+    ("DES-40", Some(date(2026, 11, 13)), Some("milestone-4-2")),
+    ("ENG-60", None, Some("milestone-4-1")),
+    ("ENG-65", None, Some("milestone-1-2")),
+    ("OPS-37", Some(date(2026, 11, 20)), Some("milestone-2-3")),
+];
+
+/// Gives the issues in [`SCHEDULE`] their due dates and milestones. Added
+/// after the generated data, so the seed's draws stay as they were.
+fn add_schedule(data: &mut DemoWorkspace) {
+    for &(identifier, due_date, milestone) in SCHEDULE {
+        if let Some(issue) = data
+            .issues
+            .iter_mut()
+            .find(|issue| issue.identifier == identifier)
+        {
+            issue.due_date = due_date;
+            issue.project_milestone_id = milestone.map(str::to_owned);
+        }
+    }
 }
 
 /// The issue DES-34's pull requests and other attachments.
@@ -664,6 +707,9 @@ fn finish(
         })
         .collect();
     let title = spec.titles.get(number - 1).copied().unwrap_or("Untitled");
+    // Linear subscribes an issue's creator and assignee.
+    let viewer = member_id(VIEWER);
+    let subscribed = draft.creator == viewer || draft.assignee.as_ref() == Some(&viewer);
     let issue = Issue {
         id: issue_id,
         url: format!("https://linear.app/{URL_KEY}/issue/{identifier}"),
@@ -682,6 +728,8 @@ fn finish(
         project_milestone_id: None,
         parent_id: None,
         due_date: None,
+        archived_at: None,
+        subscribed,
         label_ids: draft.label_ids,
         created_at: ts(draft.created),
         updated_at: ts(last_change.max(last_comment)),
@@ -830,6 +878,9 @@ const PROJECTS: [&str; 4] = [
     "Cellar sensors",
     "Cheese cave move",
 ];
+
+/// The milestones of every demo project, in order.
+const MILESTONES: [&str; 3] = ["Design review", "Beta", "Launch"];
 
 const COMMENTS: &[&str] = &[
     "I can reproduce this on the staging pantry.",

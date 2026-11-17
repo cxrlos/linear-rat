@@ -117,7 +117,7 @@ fn changing_only_the_title_sends_only_the_title_and_shows_at_once() {
         }
     );
     assert_eq!(text, buffer);
-    assert!(shows(&app, "Autumn release, take two"));
+    assert!(shows(&app, "Autumn release, take"));
 }
 
 #[test]
@@ -192,7 +192,7 @@ fn a_refused_save_rolls_back_and_names_the_kept_file() {
     })
     .unwrap();
 
-    assert!(!shows(&app, "Autumn release, take two"));
+    assert!(!shows(&app, "Autumn release, take"));
     assert_snapshot!(app.backend());
 }
 
@@ -212,7 +212,7 @@ fn an_accepted_save_keeps_linears_copy() {
         .unwrap();
 
     assert!(effects.is_empty());
-    assert!(shows(&app, "Autumn release, take two"));
+    assert!(shows(&app, "Autumn release, take"));
 }
 
 #[test]

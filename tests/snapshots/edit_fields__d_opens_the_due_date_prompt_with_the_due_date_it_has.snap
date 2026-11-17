@@ -1,0 +1,28 @@
+---
+source: tests/edit_fields.rs
+expression: app.backend()
+---
+" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+"┌My Issues─────────────────────────────────────────────────────────────────────┐"
+"│◐ Started (9)                                                                 │"
+"│▸ DES-34 Design QA for the autu due Nov 6 ◐ In Progress ▮▮▮ High    3 Cycle 7 │"
+"│  ENG-51 Add a dry-run mode to due Oct 30 ◐ In Progress ▮▮▯ Medium  2 Cycle 7 │"
+"│  OPS-37 Clean up unused API k due Nov 20 ◐ In Review   ▮▮▯ Medium    Cycle 7 │"
+"│  ENG-61 Add contract tests for the recip ◐ In Progress ▮▯▯ Low     2 Cycle 7 │"
+"│  OPS-36 Plan the office cheese cave move ◐ In Review   ▮▯▯ Low       Cycle 7 │"
+"│  ENG-60 Im┌ Due date of DES-34 ─────────────────────────────────┐  5 Cycle 7 │"
+"│  ENG-22 St│ Now 2026-11-06                                      │  3         │"
+"│  OPS-15 Ta│ > type a date                                       │            │"
+"│  DES-12 Mo│ YYYY-MM-DD, +3d, +2w, today, tomorrow, fri or clear │  3         │"
+"│○ Unstarted└ Enter set  Esc close ───────────────────────────────┘            │"
+"│  DES-40 Color-blind safe work due Nov 13 ○ Todo        ▮▮▮ High    1 Cycle 7 │"
+"│  ENG-57 Throttle sensor writes during bu ○ Todo        ▮▮▯ Medium  2 Cycle 7 │"
+"│  OPS-38 Add synthetic checks for login   ○ Todo        ▮▮▯ Medium    Cycle 7 │"
+"│  DES-31 Review copy for permission promp ○ Todo        ▮▯▯ Low     5 Cycle 7 │"
+"│  ENG-65 Rotate refresh tokens on every u ○ Todo        ··· None    2 Cycle 7 │"
+"│  DES-16 Accessible focus rings across wh ○ Todo        ▮▮▮ High    5         │"
+"│  ENG-56 Notification settings reset afte ○ Todo        ▮▮▮ High    2         │"
+"└──────────────────────────────────────────────────────────────────────────────┘"
+" Move │ Down/Up move                                                            "
+" Do   │ Enter pick   │ Tab toggle │ Esc close │ C-y copy                        "
+"                                                                                "

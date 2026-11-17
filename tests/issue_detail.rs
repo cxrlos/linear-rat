@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use jiff::Timestamp;
 use linear_rat::auth::ApiKey;
-use linear_rat::linear::model::{Attachment, Project, StateType};
+use linear_rat::linear::model::{Attachment, Project, ProjectMilestone, StateType};
 use linear_rat::linear::{ClientConfig, ClientError, HttpClient, LinearClient, Timer, Urgency};
 use serde_json::{Value, json};
 use wiremock::matchers::{body_partial_json, body_string_contains, method};
@@ -105,6 +105,11 @@ fn history_page_with(nodes: Vec<Value>, attachments: Vec<Value>) -> Value {
             "issue": {
                 "id": "issue-1",
                 "project": { "id": "project-rind", "name": "Rind photos" },
+                "projectMilestone": {
+                    "id": "milestone-beta",
+                    "name": "Beta",
+                    "project": { "id": "project-rind" }
+                },
                 "attachments": { "nodes": attachments },
                 "stateHistory": {
                     "nodes": nodes,
@@ -228,6 +233,14 @@ async fn loads_every_comment_page_and_the_state_history_oldest_first() {
         Some(Project {
             id: "project-rind".to_owned(),
             name: "Rind photos".to_owned()
+        })
+    );
+    assert_eq!(
+        detail.milestone,
+        Some(ProjectMilestone {
+            id: "milestone-beta".to_owned(),
+            name: "Beta".to_owned(),
+            project_id: "project-rind".to_owned()
         })
     );
     assert!(detail.problems.is_empty());

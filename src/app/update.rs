@@ -4,7 +4,8 @@ use ratatui::layout::Size;
 use super::edit::{self, Editable};
 use super::{
     Action, Copyable, Effect, Event, Load, Modal, Palette, Pane, Purpose, Screen, State,
-    analytics_screen, compose, create, detail, links, palette, results, search, sync, team_issues,
+    analytics_screen, compose, create, detail, lifecycle, links, palette, results, search, sync,
+    team_issues,
 };
 use crate::keys::{self, Key, Resolution};
 use crate::ui;
@@ -82,7 +83,10 @@ fn apply(state: &mut State, event: Event) -> Update {
             effects: team_issues::teams_loaded(state, result),
         },
         Event::TeamOptionsLoaded(result) => {
+            let team_id = result.as_ref().ok().map(|options| options.team_id.clone());
+            let failure = result.as_ref().err().cloned();
             team_issues::options_loaded(state, result);
+            edit::options_loaded(state, team_id.as_deref(), failure.as_deref());
             Update::redraw()
         }
         Event::TeamIssuesLoaded {
@@ -169,7 +173,18 @@ fn apply(state: &mut State, event: Event) -> Update {
             };
             edit::loaded(state, Editable::Labels, &team_id, failure)
         }
+        Event::ProjectMilestonesLoaded { project_id, result } => {
+            let failure = match result {
+                Ok(milestones) => {
+                    state.store.set_project_milestones(&project_id, &milestones);
+                    None
+                }
+                Err(error) => Some(error),
+            };
+            edit::milestones_loaded(state, &project_id, failure)
+        }
         Event::IssueUpdated { write, result } => edit::finished(state, &write, result),
+        Event::LifecycleChanged { write, result } => lifecycle::finished(state, &write, result),
         Event::EditorClosed { writing, result } => compose::closed(state, writing, result),
         Event::CommentCreated { comment, result } => compose::commented(state, &comment, result),
         Event::IssueCreated { issue, result } => compose::created(state, &issue, result),
@@ -275,8 +290,11 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             Some(Modal::Palette(_)) => palette::accept(state),
             Some(Modal::Search(_)) => search::accept(state),
             Some(Modal::Choice(_)) => choose(state, None),
+            Some(Modal::DueDate(_)) => edit::accept_due_date(state),
+            Some(Modal::Confirm(_)) => lifecycle::confirm(state),
             _ => Update::default(),
         },
+
         Action::Close if state.modals.pop().is_some() => Update::redraw(),
         Action::MoveDown
         | Action::MoveUp
@@ -422,6 +440,12 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             _ => edit::toggle(state, None),
         },
         Action::ToggleSearchScope => search::toggle_scope(state),
+        Action::Archive => lifecycle::archive(state),
+        Action::Unarchive => lifecycle::unarchive(state),
+        Action::Trash => lifecycle::ask_to_trash(state),
+        Action::ToggleSubscription => lifecycle::toggle_subscription(state),
+        Action::Confirm => lifecycle::confirm(state),
+        Action::Decline => lifecycle::decline(state),
         Action::Comment => compose::comment(state),
         Action::CreateIssue => create::open(state),
         _ => Update::default(),

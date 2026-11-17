@@ -8,7 +8,11 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Padding, Paragraph};
 
 use super::style;
-use crate::app::{Action, Choice, CreateForm, Edit, EditPicker, Links, Note, Picker, State, Step};
+use crate::app::{
+    Action, Choice, CreateForm, DUE_DATE_FORMS, DuePrompt, Edit, EditPicker, Links, Note, Picker,
+    State, Step,
+};
+
 use crate::keys::Context;
 
 /// The width the list asks for at least, so short entries leave room for
@@ -102,6 +106,60 @@ fn render_title(state: &State, form: &CreateForm, heading: &str, frame: &mut Fra
     );
 }
 
+/// Draws the due-date prompt centered inside `area`'s border: the due date
+/// the issue has, what has been typed, and the forms it takes or why the
+/// last try was refused.
+pub fn render_due_date(state: &State, prompt: &DuePrompt, frame: &mut Frame, area: Rect) {
+    let theme = &state.theme;
+    let area = area.inner(Margin::new(1, 1));
+    let current = Line::from(vec![
+        Span::styled("Now ", style::muted(theme)),
+        Span::raw(
+            prompt
+                .current
+                .map_or_else(|| "no due date".to_owned(), |date| date.to_string()),
+        ),
+    ]);
+    let input = if prompt.text.is_empty() {
+        Line::from(vec![
+            Span::styled("> ", style::accent(theme)),
+            Span::styled("type a date", style::muted(theme)),
+        ])
+    } else {
+        Line::from(vec![
+            Span::styled("> ", style::accent(theme)),
+            Span::raw(prompt.text.clone()),
+        ])
+    };
+    let note = match &prompt.error {
+        Some(error) => Line::styled(format!("✘ {error}"), style::error(theme)),
+        None => Line::styled(DUE_DATE_FORMS, style::muted(theme)),
+    };
+    let title = prompt.title();
+    let lines = vec![current, input, note];
+    let bottom = keys_line(
+        state,
+        &[(&[Action::Accept], "set"), (&[Action::Close], "close")],
+    );
+    let width = lines
+        .iter()
+        .map(Line::width)
+        .chain([title.chars().count() + 2, bottom.width(), MIN_WIDTH])
+        .max()
+        .unwrap_or(0)
+        + 4;
+    let width = u16::try_from(width).unwrap_or(u16::MAX);
+    let popup = super::centered(area, width, 5);
+    let block = super::popup_block(state)
+        .title(format!(" {title} "))
+        .title_bottom(bottom);
+    frame.render_widget(Clear, popup);
+    frame.render_widget(
+        Paragraph::new(lines).block(block.padding(Padding::horizontal(1))),
+        popup,
+    );
+}
+
 /// The glyph a picker shows before a state or priority.
 fn edit_glyph(state: &State) -> impl Fn(&Edit) -> Option<Span<'static>> + '_ {
     |edit: &Edit| match edit {
@@ -112,7 +170,7 @@ fn edit_glyph(state: &State) -> impl Fn(&Edit) -> Option<Span<'static>> + '_ {
         Edit::Priority(priority) => {
             Some(Span::raw(state.ui.icons.priority(*priority)).fg(state.theme.priority(*priority)))
         }
-        Edit::Assignee(_) | Edit::Labels(_) | Edit::Estimate(_) | Edit::Text { .. } => None,
+        _ => None,
     }
 }
 

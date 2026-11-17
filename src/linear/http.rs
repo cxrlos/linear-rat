@@ -9,6 +9,7 @@ mod detail;
 mod diagnostics;
 mod edit;
 mod issue_key;
+mod lifecycle;
 mod live;
 mod search;
 mod team;
@@ -25,7 +26,9 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use super::governor::{Governor, SystemTimer, Timer, Urgency};
-use super::model::{Issue, Label, Member, Team, Viewer, WorkflowState, Workspace};
+use super::model::{
+    Issue, Label, Member, ProjectMilestone, Team, Viewer, WorkflowState, Workspace,
+};
 use super::paging::{Next, RepeatedCursor, Stitch};
 use super::search_bucket::SearchBucket;
 use super::{
@@ -355,6 +358,33 @@ impl LinearClient for HttpClient {
 
     async fn team_labels(&self, team_id: &str) -> Result<Vec<Label>, ClientError> {
         edit::team_labels(self, team_id).await
+    }
+
+    async fn project_milestones(
+        &self,
+        project_id: &str,
+    ) -> Result<Vec<ProjectMilestone>, ClientError> {
+        edit::project_milestones(self, project_id).await
+    }
+
+    async fn archive_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        lifecycle::archive(self, issue_id).await
+    }
+
+    async fn unarchive_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        lifecycle::unarchive(self, issue_id).await
+    }
+
+    async fn trash_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        lifecycle::trash(self, issue_id).await
+    }
+
+    async fn subscribe_to_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        lifecycle::subscribe(self, issue_id).await
+    }
+
+    async fn unsubscribe_from_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        lifecycle::unsubscribe(self, issue_id).await
     }
 
     async fn update_issue(
