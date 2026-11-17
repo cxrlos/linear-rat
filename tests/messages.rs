@@ -227,6 +227,20 @@ fn shift_m_shows_the_log_newest_first() {
 }
 
 #[test]
+fn a_rate_limit_in_the_log_says_until_when_so_it_does_not_go_stale() {
+    let mut app = app_with_failures();
+    app.handle(at(600)).unwrap();
+
+    app.handle(key('M')).unwrap();
+
+    let screen = screen(&app);
+    assert!(
+        screen.contains("Linear's rate limit is used up until 09:02:40"),
+        "{screen}"
+    );
+}
+
+#[test]
 fn typing_messages_in_the_palette_opens_the_log() {
     let mut app = app_with_failures();
 

@@ -2,6 +2,7 @@
 //! when it happened, its kind, the action it ended, what to do about it and
 //! the full message.
 
+use jiff::{SignedDuration, Timestamp};
 use ratatui::Frame;
 use ratatui::layout::{Margin, Rect};
 use ratatui::style::Style;
@@ -10,6 +11,7 @@ use ratatui::widgets::{Clear, Paragraph};
 
 use super::{markdown, style};
 use crate::app::{LoggedFailure, State};
+use crate::linear::ErrorKind;
 
 const MAX_WIDTH: u16 = 80;
 /// Before each line of an entry after its first.
@@ -73,14 +75,29 @@ fn lines(state: &State, popup: Rect) -> Vec<Line<'static>> {
 fn entry(state: &State, logged: &LoggedFailure, width: u16) -> Vec<Line<'static>> {
     let theme = &state.theme;
     let failure = &logged.failure;
-    let time = logged.at.map_or_else(
-        || "--:--:--".to_owned(),
-        |at| {
-            at.to_zoned(state.analytics_screen.time_zone().clone())
-                .strftime("%H:%M:%S")
-                .to_string()
-        },
-    );
+    let clock = |at: Timestamp| {
+        at.to_zoned(state.analytics_screen.time_zone().clone())
+            .strftime("%H:%M:%S")
+            .to_string()
+    };
+    let time = logged.at.map_or_else(|| "--:--:--".to_owned(), clock);
+    // A wait counted from when it was logged reads stale later; the time it
+    // ends does not.
+    let lifts_at = match (&failure.kind, logged.at) {
+        (
+            ErrorKind::RateLimited {
+                retry_after: Some(wait),
+            },
+            Some(at),
+        ) => SignedDuration::try_from(*wait)
+            .ok()
+            .and_then(|wait| at.checked_add(wait).ok()),
+        _ => None,
+    };
+    let summary = match lifts_at {
+        Some(lifts_at) => format!("Linear's rate limit is used up until {}", clock(lifts_at)),
+        None => failure.kind.summary(),
+    };
     let indent = [(INDENT.to_owned(), Style::new())];
     let mut lines = markdown::wrap(
         &[
@@ -93,7 +110,7 @@ fn entry(state: &State, logged: &LoggedFailure, width: u16) -> Vec<Line<'static>
         &[(" ".to_owned(), Style::new())],
         &indent,
     );
-    let advice = format!("{}. {}", failure.kind.summary(), failure.kind.fix());
+    let advice = format!("{summary}. {}", failure.kind.fix());
     lines.extend(markdown::wrap(
         &[(advice, Style::new())],
         width,
