@@ -80,11 +80,11 @@ fn entries(app: &App<TestBackend>) -> Vec<String> {
     }
 }
 
-/// The notice rows above the two-row bottom bar, joined and trimmed.
+/// The notice rows above the three-row bottom bar, joined and trimmed.
 fn notice(app: &App<TestBackend>) -> String {
     let buffer = app.backend().buffer();
     let rows = buffer.area.height;
-    (rows.saturating_sub(5)..rows - 2)
+    (rows.saturating_sub(6)..rows - 3)
         .map(|y| {
             (0..buffer.area.width)
                 .map(|x| buffer[(x, y)].symbol())

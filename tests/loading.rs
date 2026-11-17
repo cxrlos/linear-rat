@@ -167,7 +167,8 @@ fn q_still_quits_from_an_error_screen() {
 fn with_no_list_the_bottom_bar_offers_only_what_can_run() {
     for app in [loading(None), failed(LoadError::NoKey)] {
         let screen = screen(&app);
-        let bar = screen.lines().last().unwrap();
+        let lines: Vec<&str> = screen.lines().collect();
+        let bar = lines[lines.len() - 3..].join("\n");
 
         assert!(bar.contains("q quit"), "{bar}");
         assert!(!bar.contains("down"), "{bar}");

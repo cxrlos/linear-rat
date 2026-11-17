@@ -519,7 +519,7 @@ async fn polls_every_team_after_the_load_and_then_every_active_interval() {
 async fn run_live(client: &CountingClient, live: bool) -> String {
     let mut state = State::loading(None);
     state.sync.live = live;
-    let mut app = App::new(TestBackend::new(80, 24), state).unwrap();
+    let mut app = App::new(TestBackend::new(80, 30), state).unwrap();
     let running = runtime::run(
         &mut app,
         Some(client),

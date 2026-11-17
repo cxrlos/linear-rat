@@ -22,10 +22,10 @@ expression: "format!(\"{}\\n\\n{}\", quit.join(\"\\n\"), screen(&app).join(\"\\n
 │ └ Esc close ───────────────────────────────────────────────────────────────┘ │
 │  DES-16 Accessible focus rings across wh ○ Todo        ▮▮▮ High    5         │
 │  ENG-56 Notification settings reset afte ○ Todo        ▮▮▮ High    2         │
-│  ENG-6  Migrate burrow storage to the ne ○ Todo        ▮▮▯ Medium  3         │
 └──────────────────────────────────────────────────────────────────────────────┘
  Move │ Down/Up move                                                            
- Do   │ Esc close                                                               
+ Do   │ Enter pick   │ Tab toggle │ Esc close                                   
+                                                                                
 
  [1] My Issues │ [2] Team Issues │ [3] Analytics                                
 ┌My Issues─────────────────────────────────────────────────────────────────────┐
@@ -47,7 +47,6 @@ expression: "format!(\"{}\\n\\n{}\", quit.join(\"\\n\"), screen(&app).join(\"\\n
 │ └ Esc close ───────────────────────────────────────────────────────────────┘ │
 │  DES-16 Accessible focus rings across wh ○ Todo        ▮▮▮ High    5         │
 │  ENG-56 Notification settings reset afte ○ Todo        ▮▮▮ High    2         │
-│  ENG-6  Migrate burrow storage to the ne ○ Todo        ▮▮▯ Medium  3         │
 └──────────────────────────────────────────────────────────────────────────────┘
  Move │ Down/Up move                                                            
- Do   │ Esc close
+ Do   │ Enter pick   │ Tab toggle │ Esc close

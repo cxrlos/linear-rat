@@ -33,37 +33,57 @@ pub struct Hint {
     pub word: &'static str,
 }
 
-/// The two rows of the bottom bar, top first.
+/// The rows of the bottom bar. [`HintRow::LINES`] places them on its three
+/// lines.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HintRow {
     Move,
     Do,
+    /// The issue edits.
+    Edit,
+    /// A screen's own keys, which change what it shows.
+    View,
 }
 
 impl HintRow {
-    pub const ALL: [HintRow; 2] = [HintRow::Move, HintRow::Do];
+    /// The bar's lines, top first, each with the rows it holds in order.
+    /// A screen's own keys lead the third line, so the issue edits after
+    /// them are the first to go when it runs out of room.
+    pub const LINES: [&[HintRow]; 3] = [
+        &[HintRow::Move],
+        &[HintRow::Do],
+        &[HintRow::View, HintRow::Edit],
+    ];
 
     /// The label at the start of the row.
     pub fn label(self) -> &'static str {
         match self {
             HintRow::Move => "Move",
             HintRow::Do => "Do",
+            HintRow::Edit => "Edit",
+            HintRow::View => "View",
         }
     }
 }
 
+const fn hint(row: HintRow, word: &'static str) -> Option<Hint> {
+    Some(Hint { row, word })
+}
+
 const fn moves(word: &'static str) -> Option<Hint> {
-    Some(Hint {
-        row: HintRow::Move,
-        word,
-    })
+    hint(HintRow::Move, word)
 }
 
 const fn does(word: &'static str) -> Option<Hint> {
-    Some(Hint {
-        row: HintRow::Do,
-        word,
-    })
+    hint(HintRow::Do, word)
+}
+
+const fn edits(word: &'static str) -> Option<Hint> {
+    hint(HintRow::Edit, word)
+}
+
+const fn views(word: &'static str) -> Option<Hint> {
+    hint(HintRow::View, word)
 }
 
 const LIST: &[Context] = &[Context::List];
@@ -217,7 +237,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::Edit(Editable::State),
         id: "edit-state",
         description: "Change the workflow state",
-        hint: None,
+        hint: edits("state"),
         contexts: PANES,
         default_keys: &[&[Key::char('s')]],
         available: has_focused_issue,
@@ -226,7 +246,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::Edit(Editable::Assignee),
         id: "edit-assignee",
         description: "Change the assignee",
-        hint: None,
+        hint: edits("assignee"),
         contexts: PANES,
         default_keys: &[&[Key::char('a')]],
         available: has_focused_issue,
@@ -235,7 +255,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::Edit(Editable::Priority),
         id: "edit-priority",
         description: "Change the priority",
-        hint: None,
+        hint: edits("priority"),
         contexts: PANES,
         default_keys: &[&[Key::char('p')]],
         available: has_focused_issue,
@@ -244,7 +264,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::Edit(Editable::Labels),
         id: "edit-labels",
         description: "Add or remove labels",
-        hint: None,
+        hint: edits("labels"),
         contexts: PANES,
         default_keys: &[&[Key::char('L')]],
         available: has_focused_issue,
@@ -253,7 +273,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::Edit(Editable::Estimate),
         id: "edit-estimate",
         description: "Change the estimate",
-        hint: None,
+        hint: edits("estimate"),
         contexts: PANES,
         default_keys: &[&[Key::char('e')]],
         available: app::focused_team_estimates,
@@ -262,7 +282,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::Edit(Editable::Text),
         id: "edit-text",
         description: "Edit the title and description",
-        hint: None,
+        hint: edits("text"),
         contexts: PANES,
         default_keys: &[&[Key::char('E')]],
         available: |state| {
@@ -275,7 +295,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::Comment,
         id: "comment",
         description: "Comment in $EDITOR",
-        hint: None,
+        hint: edits("comment"),
         contexts: PANES,
         default_keys: &[&[Key::char('c')]],
         available: |state| {
@@ -378,7 +398,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::SwitchTeam,
         id: "switch-team",
         description: "Switch the team of Team Issues",
-        hint: None,
+        hint: views("team"),
         contexts: TEAM_ISSUES,
         default_keys: &[&[Key::char('t')]],
         available: |state| state.store.viewer_teams().next().is_some(),
@@ -387,7 +407,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::FilterBy(FilterField::State),
         id: "filter-by-state",
         description: "Filter by workflow state",
-        hint: None,
+        hint: views("filter"),
         contexts: TEAM_ISSUES,
         default_keys: &[&[Key::char('f'), Key::char('s')]],
         available: has_team,
@@ -396,7 +416,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::FilterBy(FilterField::Assignee),
         id: "filter-by-assignee",
         description: "Filter by assignee",
-        hint: None,
+        hint: views("filter"),
         contexts: TEAM_ISSUES,
         default_keys: &[&[Key::char('f'), Key::char('a')]],
         available: has_team,
@@ -405,7 +425,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::FilterBy(FilterField::Label),
         id: "filter-by-label",
         description: "Filter by label",
-        hint: None,
+        hint: views("filter"),
         contexts: TEAM_ISSUES,
         default_keys: &[&[Key::char('f'), Key::char('l')]],
         available: has_team,
@@ -414,7 +434,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::FilterBy(FilterField::Cycle),
         id: "filter-by-cycle",
         description: "Filter by cycle",
-        hint: None,
+        hint: views("filter"),
         contexts: TEAM_ISSUES,
         default_keys: &[&[Key::char('f'), Key::char('c')]],
         available: has_team,
@@ -423,7 +443,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::FilterBy(FilterField::Project),
         id: "filter-by-project",
         description: "Filter by project",
-        hint: None,
+        hint: views("filter"),
         contexts: TEAM_ISSUES,
         default_keys: &[&[Key::char('f'), Key::char('p')]],
         available: has_team,
@@ -432,7 +452,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::LoadMore,
         id: "load-more",
         description: "Load the next page of Team Issues",
-        hint: None,
+        hint: views("more"),
         contexts: TEAM_ISSUES,
         default_keys: &[&[Key::char('m')]],
         available: can_load_more,
@@ -464,10 +484,19 @@ pub static ACTIONS: &[ActionSpec] = &[
         available: can_scroll_up,
     },
     ActionSpec {
+        action: Action::Accept,
+        id: "accept",
+        description: "Choose the highlighted entry",
+        hint: does("pick"),
+        contexts: OVERLAY,
+        default_keys: &[&[Key::named(KeyCode::Enter)]],
+        available: can_accept,
+    },
+    ActionSpec {
         action: Action::ToggleEntry,
         id: "toggle-entry",
         description: "Mark or unmark the highlighted entry",
-        hint: None,
+        hint: does("toggle"),
         contexts: OVERLAY,
         default_keys: &[&[Key::named(KeyCode::Tab)]],
         available: |state| {
@@ -476,19 +505,10 @@ pub static ACTIONS: &[ActionSpec] = &[
         },
     },
     ActionSpec {
-        action: Action::Accept,
-        id: "accept",
-        description: "Choose the highlighted entry",
-        hint: None,
-        contexts: OVERLAY,
-        default_keys: &[&[Key::named(KeyCode::Enter)]],
-        available: can_accept,
-    },
-    ActionSpec {
         action: Action::ShorterRange,
         id: "shorter-range",
         description: "Show a shorter range",
-        hint: does("range"),
+        hint: views("range"),
         contexts: ANALYTICS,
         default_keys: &[&[Key::char('[')]],
         available: |state| state.analytics_range() != WeekRange::Four,
@@ -497,7 +517,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::LongerRange,
         id: "longer-range",
         description: "Show a longer range",
-        hint: does("range"),
+        hint: views("range"),
         contexts: ANALYTICS,
         default_keys: &[&[Key::char(']')]],
         available: |state| state.analytics_range() != WeekRange::TwentySix,
@@ -506,7 +526,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::ToggleAnalyticsView,
         id: "toggle-analytics-view",
         description: "Show Personal or Team analytics",
-        hint: None,
+        hint: views("view"),
         contexts: ANALYTICS,
         default_keys: &[&[Key::char('v')]],
         available: always,
@@ -515,7 +535,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::SwitchAnalyticsTeam,
         id: "switch-analytics-team",
         description: "Pick the team for Team analytics",
-        hint: None,
+        hint: views("team"),
         contexts: ANALYTICS,
         default_keys: &[&[Key::char('t')]],
         available: |state| {
@@ -583,7 +603,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::ShowPalette,
         id: "show-palette",
         description: "Find an action or loaded issue",
-        hint: None,
+        hint: does("palette"),
         contexts: GLOBAL,
         default_keys: &[&[Key::char(':')], &[Key::ctrl('k')]],
         available: always,
@@ -592,7 +612,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         action: Action::ShowSearch,
         id: "show-search",
         description: "Search all issues in Linear",
-        hint: None,
+        hint: moves("search"),
         contexts: GLOBAL,
         default_keys: &[&[Key::char('/')]],
         available: always,

@@ -1,0 +1,7 @@
+---
+source: tests/bottom_bar.rs
+expression: "bar(&analytics((80, 24)))"
+---
+ Move │ j/k move  │ / search
+ Do   │ ? keys    │ : palette │ q quit
+ View │ [/] range │ v view    │ t team

@@ -104,8 +104,8 @@ The Team Issues list also takes the Issue list keys. While an overlay has a text
 | `pick-9` | `9` | Pick entry 9 of the list |
 | `scroll-down` | `j`, `<Down>`, `<C-n>` | Scroll down |
 | `scroll-up` | `k`, `<Up>`, `<C-p>` | Scroll up |
-| `toggle-entry` | `<Tab>` | Mark or unmark the highlighted entry |
 | `accept` | `<Enter>` | Choose the highlighted entry |
+| `toggle-entry` | `<Tab>` | Mark or unmark the highlighted entry |
 | `close` | `<Esc>` | Close the top overlay or step back |
 
 ## Analytics (`[keys.analytics]`)

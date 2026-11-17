@@ -207,9 +207,9 @@ async fn filter_options_linear_cut_short_say_so_in_the_notice() {
     app.handle(Event::TeamOptionsLoaded(Ok(options))).unwrap();
 
     assert!(
-        screen(&app)[21].contains("The filters may be missing some labels"),
+        screen(&app)[20].contains("The filters may be missing some labels"),
         "{}",
-        screen(&app)[21]
+        screen(&app)[20]
     );
 }
 
@@ -619,7 +619,7 @@ async fn a_next_page_that_fails_keeps_the_list_and_says_why_in_the_notice() {
 
     assert_eq!(n_of_m(&app), (50, 70));
     assert!(header(&app).contains("m more"), "it can be asked for again");
-    assert!(screen(&app)[21].contains("could not load the team's issues"));
+    assert!(screen(&app)[20].contains("could not load the team's issues"));
 }
 
 #[tokio::test]

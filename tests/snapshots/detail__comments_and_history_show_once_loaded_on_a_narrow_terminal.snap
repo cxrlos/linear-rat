@@ -4,7 +4,6 @@ expression: app.backend()
 ---
 " [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
 "┌OPS-37────────────────────────────────────────────────────────────────────────┐"
-"│Comments (1)                                                                  │"
 "│Omar Stilton · 4 days ago                                                     │"
 "│  Blocked on the sensor firmware update.                                      │"
 "│                                                                              │"
@@ -24,5 +23,6 @@ expression: app.backend()
 "│Created   2026-10-28 10:25 UTC (5 days ago)                                   │"
 "│Updated   2026-11-01 10:14 UTC (1 day ago)                                    │"
 "└──────────────────────────────────────────────────────────────────────────────┘"
-" Move │ j down │ k up    │ gg top    │ G bottom │ C-d/C-u page │ h/l pane       "
-" Do   │ y yank │ o links │ Esc close │ ? keys   │ q quit                        "
+" Move │ j down  k up  gg top  G bottom  C-d/C-u page  h/l pane  / search        "
+" Do   │ y yank  o links  Esc close  ? keys  : palette  q quit                   "
+" Edit │ s state  a assignee  p priority  L labels  e estimate  E text  c comment"
