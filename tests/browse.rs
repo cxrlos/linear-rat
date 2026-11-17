@@ -198,6 +198,37 @@ async fn an_edit_from_a_project_list_is_sent_like_one_from_any_list() {
 }
 
 #[tokio::test]
+async fn an_edit_from_a_cycle_list_that_linear_rejects_is_rolled_back() {
+    let mut app = sized(100, 30);
+    run(&mut app, "4").await;
+    run(&mut app, "\n").await;
+    let focused = app.state().focused_issue().unwrap().clone();
+    assert_ne!(focused.priority, Priority::Urgent);
+    let effects = press(&mut app, "p1");
+    let [Effect::UpdateIssue(write)] = effects.as_slice() else {
+        panic!("{effects:?}");
+    };
+
+    app.handle(Event::IssueUpdated {
+        write: write.clone(),
+        result: Err("Linear returned errors: Entity not found (INVALID_INPUT)".to_owned()),
+    })
+    .unwrap();
+
+    assert_eq!(app.state().screen, Screen::Results);
+    let shown = app.state().store.issue(&focused.id).unwrap();
+    assert_eq!(shown.priority, focused.priority);
+    assert!(
+        shows(
+            &app,
+            &format!("Could not change the priority of {}", focused.identifier)
+        ),
+        "{:#?}",
+        screen(&app)
+    );
+}
+
+#[tokio::test]
 async fn t_switches_the_team_of_the_cycles_screen() {
     let mut app = sized(100, 24);
     run(&mut app, "4").await;
