@@ -8,10 +8,10 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
 use std::path::Path;
 
-use linear_rat::app::{App, Effect, Event, State};
+use linear_rat::app::{App, Effect, Event, Failure, State};
 use linear_rat::config;
 use linear_rat::linear::{
-    FakeClient, LinearClient, TeamFilter, TeamIssuesPage, TeamQuery, Urgency, demo,
+    ErrorKind, FakeClient, LinearClient, TeamFilter, TeamIssuesPage, TeamQuery, Urgency, demo,
 };
 use ratatui::backend::TestBackend;
 
@@ -132,9 +132,9 @@ fn opening_team_issues_asks_once_for_the_viewers_teams() {
 fn coming_back_after_the_teams_failed_asks_for_them_again() {
     let mut app = sized(80, 24);
     press(&mut app, "2");
-    app.handle(Event::TeamsLoaded(Err(
-        "could not load your teams: Linear did not answer in time".to_owned(),
-    )))
+    app.handle(Event::TeamsLoaded(Err(failed(
+        "could not load your teams: Linear did not answer in time",
+    ))))
     .unwrap();
 
     assert_eq!(press(&mut app, "12"), vec![Effect::LoadTeams]);
@@ -168,9 +168,9 @@ async fn a_filter_opened_after_its_options_failed_asks_again_and_fills_in() {
     press(&mut app, "2");
     let teams = FakeClient.teams().await.unwrap();
     let effects = app.handle(Event::TeamsLoaded(Ok(teams))).unwrap();
-    app.handle(Event::TeamOptionsLoaded(Err(
-        "could not load the team's filters: Linear did not answer in time".to_owned(),
-    )))
+    app.handle(Event::TeamOptionsLoaded(Err(failed(
+        "could not load the team's filters: Linear did not answer in time",
+    ))))
     .unwrap();
     let rest: Vec<Effect> = effects
         .into_iter()
@@ -226,7 +226,9 @@ async fn loading_more_after_the_count_failed_counts_again() {
     settle(&mut app, rest).await;
     app.handle(Event::TeamIssuesCounted {
         query: eng(),
-        result: Err("could not count the team's issues: Linear did not answer in time".to_owned()),
+        result: Err(failed(
+            "could not count the team's issues: Linear did not answer in time",
+        )),
     })
     .unwrap();
     assert!(header(&app).contains("50 of … m more"), "{}", header(&app));
@@ -594,7 +596,9 @@ async fn a_first_page_that_fails_says_why_in_the_list() {
     app.handle(Event::TeamIssuesLoaded {
         query: eng(),
         after: None,
-        result: Err("could not load the team's issues: Linear did not answer in time".to_owned()),
+        result: Err(failed(
+            "could not load the team's issues: Linear did not answer in time",
+        )),
     })
     .unwrap();
 
@@ -613,7 +617,9 @@ async fn a_next_page_that_fails_keeps_the_list_and_says_why_in_the_notice() {
     app.handle(Event::TeamIssuesLoaded {
         query: eng(),
         after: Some("50".to_owned()),
-        result: Err("could not load the team's issues: Linear did not answer in time".to_owned()),
+        result: Err(failed(
+            "could not load the team's issues: Linear did not answer in time",
+        )),
     })
     .unwrap();
 
@@ -662,4 +668,9 @@ async fn a_later_page_asked_for_before_switching_away_and_back_is_dropped() {
         screen(&app)[3]
     );
     assert!(header(&app).contains("0 of …"), "{}", header(&app));
+}
+
+/// A failure with `message`, as the runtime sends one.
+fn failed(message: &str) -> Failure {
+    Failure::new(ErrorKind::Other, "test", message)
 }

@@ -17,8 +17,8 @@ t ENG Engineering · 50 of 70 m more · f Filters none
 ┃│ Move                                 │ Edit the issue                       │ Open & copy                          │ App                                  │ │
 ┃│  j/k      down / up                  │  s  workflow state                   │  Enter  open the issue               │  1/2/3  screens   r      refresh     │ │
 ┃│  gg/G     top / bottom               │  a  assignee                         │  yi/yu  copy key / URL               │  ?      keys      :,C-k  palette     │ │
-┃│  C-d/C-u  half page                  │  p  priority                         │  yb/ym  copy branch / link           │  /      search    q      quit        │ │
-┃│  h/l      pane left / right          │  L  labels                           │  o      Linear page or PR            │  C-z    suspend                      │ │
+┃│  C-d/C-u  half page                  │  p  priority                         │  yb/ym  copy branch / link           │  /      search    M      messages    │ │
+┃│  h/l      pane left / right          │  L  labels                           │  o      Linear page or PR            │  q      quit      C-z    suspend     │ │
 ┃│  Esc      close or step back         │  e  estimate                         │  O      other links                  │                                      │ │
 ┃│                                      │  E  title and description            │                                      │ Team Issues                          │ │
 ┃│                                      │  c  comment                          │                                      │  t   switch team                     │ │

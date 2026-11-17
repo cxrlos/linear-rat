@@ -30,6 +30,8 @@ pub enum Modal {
     Links(Links),
     /// The form that creates an issue.
     Create(CreateForm),
+    /// The error log, newest first, scrolled down by `scroll` rows.
+    Messages { scroll: u16 },
 }
 
 impl Modal {
@@ -42,7 +44,7 @@ impl Modal {
             | Modal::Create(_)
             | Modal::Choice(_) => true,
             Modal::Search(search) => !matches!(search.phase, Phase::Searching { .. }),
-            Modal::Cheatsheet { .. } | Modal::WhichKey { .. } => false,
+            Modal::Cheatsheet { .. } | Modal::WhichKey { .. } | Modal::Messages { .. } => false,
         }
     }
 
@@ -60,7 +62,7 @@ impl Modal {
             }
             Modal::Search(search) => search.text_field(),
             Modal::Create(form) => form.text_field(),
-            Modal::Cheatsheet { .. } | Modal::WhichKey { .. } => None,
+            Modal::Cheatsheet { .. } | Modal::WhichKey { .. } | Modal::Messages { .. } => None,
         }
     }
 }

@@ -133,8 +133,8 @@ fn apply(state: &mut State, event: Event) -> Update {
             clamp_analytics_scroll(state);
             Update::redraw()
         }
-        Event::EffectFailed(error) => {
-            state.notice = Some(error);
+        Event::EffectFailed(failure) => {
+            state.fail(failure);
             Update::redraw()
         }
         Event::WorkflowStatesLoaded { team_id, result } => {
@@ -145,7 +145,12 @@ fn apply(state: &mut State, event: Event) -> Update {
                 }
                 Err(error) => Some(error),
             };
-            create::loaded(state, Editable::State, &team_id, failure.as_deref());
+            create::loaded(
+                state,
+                Editable::State,
+                &team_id,
+                failure.as_ref().map(|f| f.message.as_str()),
+            );
             edit::loaded(state, Editable::State, &team_id, failure)
         }
         Event::TeamMembersLoaded { team_id, result } => {
@@ -156,7 +161,12 @@ fn apply(state: &mut State, event: Event) -> Update {
                 }
                 Err(error) => Some(error),
             };
-            create::loaded(state, Editable::Assignee, &team_id, failure.as_deref());
+            create::loaded(
+                state,
+                Editable::Assignee,
+                &team_id,
+                failure.as_ref().map(|f| f.message.as_str()),
+            );
             edit::loaded(state, Editable::Assignee, &team_id, failure)
         }
         Event::TeamLabelsLoaded { team_id, result } => {
@@ -271,6 +281,10 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             state.modals.push(Modal::Search(Search::default()));
             Update::redraw()
         }
+        Action::ShowMessages => {
+            state.modals.push(Modal::Messages { scroll: 0 });
+            Update::redraw()
+        }
         Action::Accept => match state.modals.top() {
             Some(Modal::Picker(_)) => edit::choose(state, None),
             Some(Modal::Links(_)) => links::choose(state, None),
@@ -380,6 +394,7 @@ pub fn perform(state: &mut State, action: Action) -> Update {
                 let max = ui::analytics_max_scroll(state, state.viewport);
                 analytics_screen::scroll(state, action == Action::ScrollDown, max)
             }
+            Some(Modal::Messages { .. }) => scroll_messages(state, action),
             _ => scroll_cheatsheet(state, action),
         },
         Action::ToggleAnalyticsView if state.screen == Screen::Analytics => {
@@ -493,6 +508,23 @@ fn clamp_analytics_scroll(state: &mut State) {
 fn scroll_cheatsheet(state: &mut State, action: Action) -> Update {
     let max = ui::cheatsheet_max_scroll(state, state.viewport);
     let Some(Modal::Cheatsheet { scroll }) = state.modals.top_mut() else {
+        return Update::default();
+    };
+    let before = *scroll;
+    *scroll = match action {
+        Action::ScrollDown => scroll.saturating_add(1).min(max),
+        _ => scroll.saturating_sub(1),
+    };
+    Update {
+        redraw: *scroll != before,
+        effects: Vec::new(),
+    }
+}
+
+/// Moves the open error log one row, no further than its last row.
+fn scroll_messages(state: &mut State, action: Action) -> Update {
+    let max = ui::messages_max_scroll(state, state.viewport);
+    let Some(Modal::Messages { scroll }) = state.modals.top_mut() else {
         return Update::default();
     };
     let before = *scroll;

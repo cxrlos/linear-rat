@@ -5,7 +5,7 @@
 //! one `issueUpdate`, and is rolled back if Linear rejects it.
 
 use super::picker::{Entry, Note, Picker};
-use super::{Effect, Modal, State, Store, Update};
+use super::{Effect, Failure, Modal, State, Store, Update};
 use crate::linear::model::{Estimation, Issue, Priority, WorkflowState};
 use crate::linear::{IssueUpdate, Patch};
 use crate::ui::icons;
@@ -602,7 +602,7 @@ pub(super) fn sent(state: &mut State, issue_id: &str) {
 pub(super) fn finished(
     state: &mut State,
     write: &Write,
-    result: Result<Box<Issue>, String>,
+    result: Result<Box<Issue>, Failure>,
 ) -> Update {
     if let Some(count) = state.writes_in_flight.get_mut(&write.issue_id) {
         *count = count.saturating_sub(1);
@@ -614,14 +614,17 @@ pub(super) fn finished(
         Ok(issue) => {
             state.store.upsert_issue(*issue);
         }
-        Err(error) => {
+        Err(failure) => {
             state.store.roll_back(write);
             state.notice = Some(format!(
-                "Could not change the {} of {}: {error}",
+                "Could not change the {} of {}: {failure}",
                 write.edit.field().name(),
                 write.identifier
             ));
-            state.row_errors.insert(write.issue_id.clone(), error);
+            state
+                .row_errors
+                .insert(write.issue_id.clone(), failure.message.clone());
+            state.record(failure);
         }
     }
     state.rebuild_my_issues();
@@ -634,7 +637,7 @@ pub(super) fn loaded(
     state: &mut State,
     field: Editable,
     team_id: &str,
-    failure: Option<String>,
+    failure: Option<Failure>,
 ) -> Update {
     let what = match field {
         Editable::State => "workflow states",
@@ -655,14 +658,17 @@ pub(super) fn loaded(
             continue;
         }
         match &failure {
-            Some(error) => picker.list.set_note(Some(Note::Failed(error.clone()))),
+            Some(failure) => picker
+                .list
+                .set_note(Some(Note::Failed(failure.message.clone()))),
             None => {
                 picker.fill(&state.store);
             }
         }
     }
-    if let Some(error) = failure {
-        state.notice = Some(format!("Could not load the {what} of {team}: {error}"));
+    if let Some(failure) = failure {
+        state.notice = Some(format!("Could not load the {what} of {team}: {failure}"));
+        state.record(failure);
     }
     Update::redraw()
 }

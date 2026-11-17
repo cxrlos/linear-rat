@@ -2,8 +2,11 @@
 //! workspace that matches it. The results open in the results view.
 
 use super::update::Update;
-use super::{Effect, Modal, State, results};
+use super::{Effect, Failure, Modal, State, results};
 use crate::linear::SearchResults;
+
+/// What a search is called in the error log.
+const SEARCH: &str = "search";
 
 /// The query and how far its search is.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -62,13 +65,17 @@ pub(super) fn accept(state: &mut State) -> Update {
 /// whatever happened to the search since; they open in the results view,
 /// closing the overlay, only if it is still waiting on `term`, so a slow
 /// answer to an older search cannot replace a newer one.
-pub(super) fn finish(state: &mut State, term: &str, result: Result<SearchResults, String>) {
-    if let Ok(found) = &result {
-        if state.notice.is_none() {
-            state.notice = super::state::summary(&found.problems);
+pub(super) fn finish(state: &mut State, term: &str, result: Result<SearchResults, Failure>) {
+    match &result {
+        Ok(found) => {
+            if state.notice.is_none() {
+                state.notice = super::state::summary(&found.problems);
+            }
+            state.record_problems(SEARCH, &found.problems);
+            state.store.merge_search(found);
+            state.rebuild_my_issues();
         }
-        state.store.merge_search(found);
-        state.rebuild_my_issues();
+        Err(failure) => state.record(failure.clone()),
     }
     let waiting = state.modals.iter_mut().rev().find_map(|modal| match modal {
         Modal::Search(search) if matches!(&search.phase, Phase::Searching { term: waiting } if waiting == term) => {
@@ -87,9 +94,9 @@ pub(super) fn finish(state: &mut State, term: &str, result: Result<SearchResults
             return;
         }
         Ok(found) => found.issues.into_iter().map(|issue| issue.id).collect(),
-        Err(problem) => {
+        Err(failure) => {
             search.phase = Phase::Typing {
-                problem: Some(problem),
+                problem: Some(failure.message),
             };
             return;
         }

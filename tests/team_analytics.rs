@@ -11,10 +11,10 @@ use std::path::Path;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
 use jiff::Timestamp;
-use linear_rat::app::{App, Effect, Event, State};
+use linear_rat::app::{App, Effect, Event, Failure, State};
 use linear_rat::config;
 use linear_rat::linear::model::Team;
-use linear_rat::linear::{AnalyticsIssues, AnalyticsWindow, TeamAnalyticsIssues, demo};
+use linear_rat::linear::{AnalyticsIssues, AnalyticsWindow, ErrorKind, TeamAnalyticsIssues, demo};
 use ratatui::backend::TestBackend;
 
 /// The Monday twelve weeks back from the demo's now, at midnight UTC.
@@ -179,7 +179,7 @@ fn a_failed_team_load_shows_and_is_asked_again() {
             app.handle(Event::TeamAnalyticsLoaded {
                 team_id,
                 window,
-                result: Err("Linear is down".to_owned()),
+                result: Err(failed("Linear is down")),
             })
             .unwrap();
         }
@@ -322,4 +322,9 @@ fn a_long_team_name_is_cut_so_the_range_picker_stays_in_the_header() {
     let header = text.lines().nth(2).unwrap();
     assert!(header.contains("t ENG Platform Infr…   Range"), "{header}");
     assert!(header.contains("26 weeks │"), "{header}");
+}
+
+/// A failure with `message`, as the runtime sends one.
+fn failed(message: &str) -> Failure {
+    Failure::new(ErrorKind::Other, "test", message)
 }

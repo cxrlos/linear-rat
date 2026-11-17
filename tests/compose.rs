@@ -9,9 +9,9 @@ use std::collections::VecDeque;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
-use linear_rat::app::{App, Effect, Event, NewIssue, State, Writing, is_local};
+use linear_rat::app::{App, Effect, Event, Failure, NewIssue, State, Writing, is_local};
 use linear_rat::linear::model::Priority;
-use linear_rat::linear::{FakeClient, IssueCreate, IssueDetail, LinearClient, demo};
+use linear_rat::linear::{ErrorKind, FakeClient, IssueCreate, IssueDetail, LinearClient, demo};
 use ratatui::backend::TestBackend;
 
 /// The issue My Issues focuses first in the demo.
@@ -156,7 +156,7 @@ fn a_rejected_comment_says_why_and_the_next_editor_starts_from_it() {
 
     app.handle(Event::CommentCreated {
         comment: comment.clone(),
-        result: Err("Linear could not be reached".to_owned()),
+        result: Err(failed("Linear could not be reached")),
     })
     .unwrap();
 
@@ -346,7 +346,7 @@ fn an_issue_linear_rejects_leaves_the_list_and_keeps_its_description() {
 
     app.handle(Event::IssueCreated {
         issue,
-        result: Err("Linear returned errors: title too long".to_owned()),
+        result: Err(failed("Linear returned errors: title too long")),
     })
     .unwrap();
 
@@ -519,4 +519,9 @@ fn the_demo_keeps_what_was_written_for_the_rest_of_the_session() {
     assert_ne!(created[0].identifier, created[1].identifier);
     assert!(created[0].identifier.starts_with("DES-"));
     assert_eq!(existing.len(), 2);
+}
+
+/// A failure with `message`, as the runtime sends one.
+fn failed(message: &str) -> Failure {
+    Failure::new(ErrorKind::Other, "test", message)
 }

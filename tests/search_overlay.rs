@@ -6,8 +6,8 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
-use linear_rat::app::{App, Effect, Event, State};
-use linear_rat::linear::{FakeClient, LinearClient, SearchResults, Urgency};
+use linear_rat::app::{App, Effect, Event, Failure, State};
+use linear_rat::linear::{ErrorKind, FakeClient, LinearClient, SearchResults, Urgency};
 use ratatui::backend::TestBackend;
 
 fn app() -> App<TestBackend> {
@@ -198,7 +198,7 @@ fn a_failed_search_says_why_and_the_query_can_be_sent_again() {
 
     app.handle(Event::SearchDone {
         term: "cheese".to_owned(),
-        result: Err("Search failed: timed out connecting to Linear".to_owned()),
+        result: Err(failed("Search failed: timed out connecting to Linear")),
     })
     .unwrap();
     let shown = shows(&app, "timed out connecting to Linear");
@@ -256,4 +256,9 @@ async fn the_palette_finds_an_issue_a_search_loaded_and_enter_opens_its_detail()
     let title_row = &screen(&app)[1];
     assert!(title_row.contains(&closed.identifier), "{title_row}");
     assert!(shows(&app, &closed.title), "{:#?}", screen(&app));
+}
+
+/// A failure with `message`, as the runtime sends one.
+fn failed(message: &str) -> Failure {
+    Failure::new(ErrorKind::Other, "test", message)
 }

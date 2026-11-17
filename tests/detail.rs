@@ -6,8 +6,8 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
-use linear_rat::app::{App, Effect, Event, State};
-use linear_rat::linear::{AssignedIssues, IssueDetail, Urgency};
+use linear_rat::app::{App, Effect, Event, Failure, State};
+use linear_rat::linear::{AssignedIssues, ErrorKind, IssueDetail, Urgency};
 use ratatui::backend::TestBackend;
 
 const MARKDOWN: &str = "\
@@ -278,7 +278,7 @@ fn a_failed_load_says_why_in_the_detail() {
 
     for effect in effects {
         if let Effect::LoadIssueDetail { issue_id, .. } = effect {
-            let result = Err("timed out waiting for Linear's answer".to_owned());
+            let result = Err(failed("timed out waiting for Linear's answer"));
             app.handle(Event::IssueDetailLoaded { issue_id, result })
                 .unwrap();
         }
@@ -374,4 +374,9 @@ fn the_detail_keeps_its_scroll_when_its_issue_updates() {
         .collect();
     assert!(before[3].contains("Paragraph 12"), "{scrolled:#?}");
     assert_eq!(detail_top[2..10], before[2..10], "{lines:#?}");
+}
+
+/// A failure with `message`, as the runtime sends one.
+fn failed(message: &str) -> Failure {
+    Failure::new(ErrorKind::Other, "test", message)
 }

@@ -17,7 +17,7 @@ use futures_util::Stream;
 use jiff::civil::Date;
 use jiff::{SignedDuration, Timestamp};
 
-pub use error::{ClientError, GraphQlError, Response};
+pub use error::{ClientError, ErrorKind, GraphQlError, Response};
 pub use governor::{SystemTimer, Timer, Urgency};
 pub use http::{ClientConfig, Dial, HttpClient, LIVE_ENDPOINT, LiveConfig, Pipe};
 use model::{

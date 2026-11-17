@@ -17,9 +17,9 @@ use ratatui::backend::Backend;
 use tokio::time::{Instant, MissedTickBehavior};
 
 use crate::app::{
-    App, Effect, Event, LoadError, NewComment, NewIssue, SyncFailure, TeamPoll, Write,
+    App, Effect, Event, Failure, LoadError, NewComment, NewIssue, SyncFailure, TeamPoll, Write,
 };
-use crate::linear::{AnalyticsWindow, ClientError, LinearClient, LiveEvent, Urgency};
+use crate::linear::{AnalyticsWindow, ClientError, ErrorKind, LinearClient, LiveEvent, Urgency};
 use crate::snapshot::SnapshotCache;
 use crate::terminal::JobControl;
 use crate::{browser, clipboard, terminal};
@@ -238,9 +238,11 @@ where
         JobControl::Continue => outside.resume(),
     };
     app.redraw_all().context("drawing the screen")?;
-    Ok(result
-        .err()
-        .map(|error| Event::EffectFailed(format!("{error:#}"))))
+    let action = match signal {
+        JobControl::Suspend => "suspend lrat",
+        JobControl::Continue => "resume lrat",
+    };
+    Ok(result.err().map(|error| effect_failed(action, &error)))
 }
 
 /// Hands `event` to the app and carries out the effects it returns.
@@ -278,6 +280,12 @@ where
     B::Error: Send + Sync + 'static,
     C: LinearClient,
 {
+    let action = match &effect {
+        Effect::Suspend => "suspend lrat",
+        Effect::Copy(_) => "copy",
+        Effect::OpenUrl(_) => "open in the browser",
+        _ => "carry out an effect",
+    };
     let outcome = match effect {
         Effect::Quit => return Ok(ControlFlow::Break(())),
         // Like the editor, the stop holds the loop: nothing is read or drawn
@@ -320,9 +328,13 @@ where
         Effect::LoadWorkflowStates { team_id } => {
             let client = reach.client;
             in_flight.push(Box::pin(async move {
+                let action = "load the team's workflow states";
                 let result = match client {
-                    Some(client) => client.workflow_states(&team_id).await.map_err(message),
-                    None => Err(NO_CLIENT.to_owned()),
+                    Some(client) => client
+                        .workflow_states(&team_id)
+                        .await
+                        .map_err(|error| Failure::from_client(action, &error)),
+                    None => Err(no_client(action)),
                 };
                 Event::WorkflowStatesLoaded { team_id, result }
             }));
@@ -331,9 +343,13 @@ where
         Effect::LoadTeamMembers { team_id } => {
             let client = reach.client;
             in_flight.push(Box::pin(async move {
+                let action = "load the team's members";
                 let result = match client {
-                    Some(client) => client.team_members(&team_id).await.map_err(message),
-                    None => Err(NO_CLIENT.to_owned()),
+                    Some(client) => client
+                        .team_members(&team_id)
+                        .await
+                        .map_err(|error| Failure::from_client(action, &error)),
+                    None => Err(no_client(action)),
                 };
                 Event::TeamMembersLoaded { team_id, result }
             }));
@@ -342,9 +358,13 @@ where
         Effect::LoadTeamLabels { team_id } => {
             let client = reach.client;
             in_flight.push(Box::pin(async move {
+                let action = "load the team's labels";
                 let result = match client {
-                    Some(client) => client.team_labels(&team_id).await.map_err(message),
-                    None => Err(NO_CLIENT.to_owned()),
+                    Some(client) => client
+                        .team_labels(&team_id)
+                        .await
+                        .map_err(|error| Failure::from_client(action, &error)),
+                    None => Err(no_client(action)),
                 };
                 Event::TeamLabelsLoaded { team_id, result }
             }));
@@ -365,7 +385,8 @@ where
         Effect::LoadTeams => {
             let client = reach.client;
             in_flight.push(Box::pin(async move {
-                Event::TeamsLoaded(ask(client, "could not load your teams", |c| c.teams()).await)
+                let what = "could not load your teams";
+                Event::TeamsLoaded(ask(client, "load your teams", what, |c| c.teams()).await)
             }));
             Ok(())
         }
@@ -373,7 +394,10 @@ where
             let client = reach.client;
             in_flight.push(Box::pin(async move {
                 let what = "could not load the team's filters";
-                Event::TeamOptionsLoaded(ask(client, what, |c| c.team_options(&team_id)).await)
+                let options = ask(client, "load the team's filters", what, |c| {
+                    c.team_options(&team_id)
+                });
+                Event::TeamOptionsLoaded(options.await)
             }));
             Ok(())
         }
@@ -381,7 +405,10 @@ where
             let client = reach.client;
             in_flight.push(Box::pin(async move {
                 let what = "could not load the team's issues";
-                let result = ask(client, what, |c| c.team_issues(&query, after.as_deref())).await;
+                let result = ask(client, "load the team's issues", what, |c| {
+                    c.team_issues(&query, after.as_deref())
+                })
+                .await;
                 Event::TeamIssuesLoaded {
                     query,
                     after,
@@ -394,7 +421,10 @@ where
             let client = reach.client;
             in_flight.push(Box::pin(async move {
                 let what = "could not count the team's issues";
-                let result = ask(client, what, |c| c.count_team_issues(&query)).await;
+                let result = ask(client, "count the team's issues", what, |c| {
+                    c.count_team_issues(&query)
+                })
+                .await;
                 Event::TeamIssuesCounted { query, result }
             }));
             Ok(())
@@ -407,8 +437,9 @@ where
             let client = reach.client;
             in_flight.push(Box::pin(async move {
                 let what = "could not load the teams you administer";
+                let action = "load the teams you administer";
                 Event::AdministrableTeamsLoaded(
-                    ask(client, what, |c| c.administrable_teams()).await,
+                    ask(client, action, what, |c| c.administrable_teams()).await,
                 )
             }));
             Ok(())
@@ -417,7 +448,10 @@ where
             let client = reach.client;
             in_flight.push(Box::pin(async move {
                 let what = "could not load team analytics";
-                let result = ask(client, what, |c| c.team_analytics(&team_id, window)).await;
+                let result = ask(client, "load team analytics", what, |c| {
+                    c.team_analytics(&team_id, window)
+                })
+                .await;
                 if let Ok(loaded) = &result {
                     tracing::info!(issues = loaded.issues.len(), "loaded team analytics");
                 }
@@ -454,7 +488,7 @@ where
         }
     };
     if let Err(error) = outcome {
-        let failed = Event::EffectFailed(format!("{error:#}"));
+        let failed = effect_failed(action, &error);
         return feed(app, failed, reach, in_flight, outside);
     }
     Ok(ControlFlow::Continue(()))
@@ -516,7 +550,7 @@ async fn load_my_issues<C: LinearClient>(client: Option<&C>) -> Event {
 /// stops at the first that fails.
 async fn poll<C: LinearClient>(client: Option<&C>, teams: Vec<TeamPoll>) -> Event {
     let Some(client) = client else {
-        let failure = SyncFailure::Failed("there is no API key".to_owned());
+        let failure = SyncFailure::Failed(no_key("sync"));
         return Event::Polled {
             changes: Vec::new(),
             failure: Some(failure),
@@ -530,7 +564,7 @@ async fn poll<C: LinearClient>(client: Option<&C>, teams: Vec<TeamPoll>) -> Even
                 tracing::warn!(?error, team = team.team_id, "a delta poll failed");
                 return Event::Polled {
                     changes,
-                    failure: Some(SyncFailure::from(&error)),
+                    failure: Some(SyncFailure::from_client("sync", &error)),
                 };
             }
         }
@@ -547,9 +581,9 @@ async fn reconcile<C: LinearClient>(client: Option<&C>, checked: Vec<String>) ->
     let result = match client {
         Some(client) => client.existing_issues(&checked).await.map_err(|error| {
             tracing::warn!(?error, "the reconciliation failed");
-            SyncFailure::from(&error)
+            SyncFailure::from_client("check for deleted issues", &error)
         }),
-        None => Err(SyncFailure::Failed("there is no API key".to_owned())),
+        None => Err(SyncFailure::Failed(no_key("check for deleted issues"))),
     };
     Event::Reconciled { checked, result }
 }
@@ -557,19 +591,30 @@ async fn reconcile<C: LinearClient>(client: Option<&C>, checked: Vec<String>) ->
 /// Why a request could not go out when there is no usable API key.
 const NO_CLIENT: &str = "there is no API key to reach Linear with";
 
-/// `error` with each of its causes, for the notice.
-fn message(error: ClientError) -> String {
-    format!("{:#}", anyhow::Error::new(error))
+/// `action` could not go out for lack of a usable API key.
+fn no_client(action: &str) -> Failure {
+    Failure::new(ErrorKind::KeyInvalid, action, NO_CLIENT)
+}
+
+/// `action` could not run for lack of a usable API key, said shortly.
+fn no_key(action: &str) -> Failure {
+    Failure::new(ErrorKind::KeyInvalid, action, "there is no API key")
+}
+
+/// The event for `action`, an effect outside Linear, failing with `error`.
+fn effect_failed(action: &str, error: &anyhow::Error) -> Event {
+    Event::EffectFailed(Failure::new(ErrorKind::Other, action, format!("{error:#}")))
 }
 
 async fn update_issue<C: LinearClient>(client: Option<&C>, write: Write) -> Event {
+    let action = format!("edit {}", write.identifier);
     let result = match client {
         Some(client) => client
             .update_issue(&write.issue_id, &write.update())
             .await
             .map(Box::new)
-            .map_err(message),
-        None => Err(NO_CLIENT.to_owned()),
+            .map_err(|error| Failure::from_client(&action, &error)),
+        None => Err(no_client(&action)),
     };
     match &result {
         Ok(_) => tracing::info!(issue = %write.identifier, "Linear applied an edit"),
@@ -588,18 +633,17 @@ async fn update_issue_text<C: LinearClient>(
     seen: Timestamp,
     text: String,
 ) -> Event {
+    let action = format!("edit {}", write.identifier);
     let Some(client) = client else {
-        let result = Err(NO_CLIENT.to_owned());
+        let result = Err(no_client(&action));
         return Event::IssueUpdated { write, result };
     };
     let result = match client.issue_updated_at(&write.issue_id).await {
-        Err(error) => Err(format!(
-            "could not check it is unchanged in Linear: {}",
-            message(error)
-        )),
+        Err(error) => Err(Failure::from_client(&action, &error)
+            .context("could not check it is unchanged in Linear")),
         Ok(now) if now != seen => {
             tracing::info!(issue = %write.identifier, "refused a save over a newer edit");
-            Err(match terminal::keep(&text, &write.identifier) {
+            let kept = match terminal::keep(&text, &write.identifier) {
                 Ok(path) => format!(
                     "it changed in Linear while the editor was open, so nothing was sent; \
                      your text is in {}",
@@ -609,7 +653,8 @@ async fn update_issue_text<C: LinearClient>(
                     "it changed in Linear while the editor was open, so nothing was sent, \
                      and your text could not be kept: {error:#}"
                 ),
-            })
+            };
+            Err(Failure::new(ErrorKind::Other, action, kept))
         }
         Ok(_) => {
             return update_issue(Some(client), write).await;
@@ -619,12 +664,13 @@ async fn update_issue_text<C: LinearClient>(
 }
 
 async fn create_comment<C: LinearClient>(client: Option<&C>, comment: NewComment) -> Event {
+    let action = format!("comment on {}", comment.identifier);
     let result = match client {
         Some(client) => client
             .create_comment(&comment.issue_id, &comment.body)
             .await
-            .map_err(message),
-        None => Err(NO_CLIENT.to_owned()),
+            .map_err(|error| Failure::from_client(&action, &error)),
+        None => Err(no_client(&action)),
     };
     match &result {
         Ok(_) => tracing::info!(issue = %comment.identifier, "Linear stored a comment"),
@@ -641,8 +687,8 @@ async fn create_issue<C: LinearClient>(client: Option<&C>, issue: NewIssue) -> E
             .create_issue(&issue.input)
             .await
             .map(Box::new)
-            .map_err(message),
-        None => Err(NO_CLIENT.to_owned()),
+            .map_err(|error| Failure::from_client("create an issue", &error)),
+        None => Err(no_client("create an issue")),
     };
     match &result {
         Ok(created) => tracing::info!(issue = %created.identifier, "Linear created an issue"),
@@ -650,6 +696,9 @@ async fn create_issue<C: LinearClient>(client: Option<&C>, issue: NewIssue) -> E
     }
     Event::IssueCreated { issue, result }
 }
+
+/// What loading an issue's comments and history is called in the error log.
+const LOAD_DETAIL: &str = "load the issue's comments and history";
 
 async fn load_issue_detail<C: LinearClient>(
     client: Option<&C>,
@@ -660,8 +709,12 @@ async fn load_issue_detail<C: LinearClient>(
         Some(client) => client
             .issue_detail(&issue_id, urgency)
             .await
-            .map_err(|error| format!("{:#}", anyhow::Error::new(error))),
-        None => Err("there is no API key to load it with".to_owned()),
+            .map_err(|error| Failure::from_client(LOAD_DETAIL, &error)),
+        None => Err(Failure::new(
+            ErrorKind::KeyInvalid,
+            LOAD_DETAIL,
+            "there is no API key to load it with",
+        )),
     };
     match &result {
         Ok(detail) => tracing::info!(
@@ -679,8 +732,12 @@ async fn search<C: LinearClient>(client: Option<&C>, term: String) -> Event {
         Some(client) => client
             .search_issues(&term)
             .await
-            .map_err(|error| format!("Search failed: {:#}", anyhow::Error::new(error))),
-        None => Err("Search needs an API key; run `lrat auth login`".to_owned()),
+            .map_err(|error| Failure::from_client("search", &error).context("Search failed")),
+        None => Err(Failure::new(
+            ErrorKind::KeyInvalid,
+            "search",
+            "Search needs an API key; run `lrat auth login`",
+        )),
     };
     match &result {
         Ok(found) => tracing::info!(issues = found.issues.len(), "searched Linear"),
@@ -689,13 +746,15 @@ async fn search<C: LinearClient>(client: Option<&C>, term: String) -> Event {
     Event::SearchDone { term, result }
 }
 
-/// Sends `request` through `client`. A failure, or no client for lack of an
-/// API key, becomes a message that starts with `what`.
+/// Sends `request`, which carries out `action`, through `client`. A
+/// failure, or no client for lack of an API key, has a message that starts
+/// with `what`.
 async fn ask<'a, C, T, R>(
     client: Option<&'a C>,
+    action: &str,
     what: &str,
     request: impl FnOnce(&'a C) -> R,
-) -> Result<T, String>
+) -> Result<T, Failure>
 where
     C: LinearClient,
     R: Future<Output = Result<T, ClientError>>,
@@ -703,8 +762,8 @@ where
     let result = match client {
         Some(client) => request(client)
             .await
-            .map_err(|error| format!("{:#}", anyhow::Error::new(error).context(what.to_owned()))),
-        None => Err(format!("{what}: there is no API key")),
+            .map_err(|error| Failure::from_client(action, &error).context(what)),
+        None => Err(no_key(action).context(what)),
     };
     if let Err(message) = &result {
         tracing::warn!(%message, "a request failed");
@@ -717,8 +776,12 @@ async fn load_analytics<C: LinearClient>(client: Option<&C>, window: AnalyticsWi
         Some(client) => client
             .analytics_issues(window)
             .await
-            .map_err(|error| format!("{:#}", anyhow::Error::new(error))),
-        None => Err("there is no API key to load analytics with".to_owned()),
+            .map_err(|error| Failure::from_client("load analytics", &error)),
+        None => Err(Failure::new(
+            ErrorKind::KeyInvalid,
+            "load analytics",
+            "there is no API key to load analytics with",
+        )),
     };
     match &result {
         Ok(loaded) => tracing::info!(issues = loaded.issues.len(), "loaded analytics"),
@@ -932,7 +995,7 @@ mod tests {
         let Event::SearchDone { result, .. } = event else {
             panic!("{event:?}");
         };
-        assert!(result.unwrap_err().contains("lrat auth login"));
+        assert!(result.unwrap_err().message.contains("lrat auth login"));
     }
 
     fn comment_on_first_issue(app: &App<TestBackend>) -> Effect {
@@ -1040,11 +1103,15 @@ mod tests {
             panic!("{event:?}");
         };
         let error = result.unwrap_err();
-        let path = error.rsplit("your text is in ").next().unwrap();
+        let path = error.message.rsplit("your text is in ").next().unwrap();
         let kept = std::fs::read_to_string(path).unwrap();
         let mode = std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
         std::fs::remove_file(path).unwrap();
-        assert!(error.starts_with("it changed in Linear while the editor was open"));
+        assert!(
+            error
+                .message
+                .starts_with("it changed in Linear while the editor was open")
+        );
         assert_eq!(kept, text);
         assert_eq!(mode, 0o600);
         let checked = FakeClient.issue_updated_at(&write.issue_id).await.unwrap();
@@ -1158,7 +1225,11 @@ mod tests {
 
         assert_eq!(
             next,
-            Some(Event::EffectFailed("could not suspend lrat".to_owned()))
+            Some(Event::EffectFailed(Failure::new(
+                ErrorKind::Other,
+                "suspend lrat",
+                "could not suspend lrat"
+            )))
         );
     }
 }

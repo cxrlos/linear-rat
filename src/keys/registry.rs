@@ -759,6 +759,17 @@ pub static ACTIONS: &[ActionSpec] = &[
         available: always,
     },
     ActionSpec {
+        action: Action::ShowMessages,
+        id: "messages",
+        description: "Show recent errors",
+        label: "messages",
+        group: Group::App,
+        hint: None,
+        contexts: GLOBAL,
+        default_keys: &[&[Key::char('M')]],
+        available: always,
+    },
+    ActionSpec {
         action: Action::Quit,
         id: "quit",
         description: "Quit lrat",
@@ -806,6 +817,9 @@ fn can_scroll_down(state: &State) -> bool {
         Some(Modal::Cheatsheet { scroll }) => {
             *scroll < ui::cheatsheet_max_scroll(state, state.viewport)
         }
+        Some(Modal::Messages { scroll }) => {
+            *scroll < ui::messages_max_scroll(state, state.viewport)
+        }
         Some(Modal::Palette(palette)) => {
             palette.selected + 1 < app::palette_matches(state, &palette.query).len()
         }
@@ -833,7 +847,7 @@ fn can_scroll_up(state: &State) -> bool {
         Some(Modal::Create(form)) => form
             .list()
             .is_some_and(|(_, selected)| selected.is_some_and(|position| position > 0)),
-        Some(Modal::Cheatsheet { scroll }) => *scroll > 0,
+        Some(Modal::Cheatsheet { scroll } | Modal::Messages { scroll }) => *scroll > 0,
         Some(Modal::Palette(palette)) => palette.selected > 0,
         None if in_analytics(state) => state.analytics_screen.scroll() > 0,
         _ => false,

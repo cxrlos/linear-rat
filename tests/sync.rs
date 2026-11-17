@@ -11,11 +11,11 @@ use std::time::Duration;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use jiff::{SignedDuration, Timestamp};
-use linear_rat::app::{App, Effect, Event, LoadError, State, SyncFailure, TeamPoll};
+use linear_rat::app::{App, Effect, Event, Failure, LoadError, State, SyncFailure, TeamPoll};
 use linear_rat::auth::KeySource;
 use linear_rat::config::SyncSettings;
 use linear_rat::linear::model::Issue;
-use linear_rat::linear::{AssignedIssues, TeamChanges, demo};
+use linear_rat::linear::{AssignedIssues, ErrorKind, TeamChanges, demo};
 use linear_rat::snapshot::SnapshotCache;
 use ratatui::backend::TestBackend;
 
@@ -465,7 +465,7 @@ fn the_sync_indicator_says_how_long_ago_the_last_poll_finished() {
 fn the_sync_indicator_says_when_sync_is_failing_or_throttled() {
     let mut app = synced();
     app.handle(Event::Tick(at(15))).unwrap();
-    app.handle(failed(SyncFailure::Failed("connection refused".to_owned())))
+    app.handle(failed(SyncFailure::Failed(offline("connection refused"))))
         .unwrap();
     app.handle(Event::Tick(at(20))).unwrap();
     let failing = tab_row(&app);
@@ -522,7 +522,7 @@ fn a_failed_poll_says_why_once_in_the_notice() {
     let mut app = synced();
     app.handle(Event::Tick(at(15))).unwrap();
 
-    app.handle(failed(SyncFailure::Failed("connection refused".to_owned())))
+    app.handle(failed(SyncFailure::Failed(offline("connection refused"))))
         .unwrap();
 
     assert!(
@@ -539,9 +539,9 @@ fn an_unreachable_linear_keeps_the_snapshot_on_screen_and_marks_sync_failing() {
     let before = screen(&app);
 
     app.handle(Event::Tick(START)).unwrap();
-    app.handle(Event::MyIssuesLoaded(Err(LoadError::Unreachable(
-        "timed out".to_owned(),
-    ))))
+    app.handle(Event::MyIssuesLoaded(Err(LoadError::Unreachable(offline(
+        "timed out",
+    )))))
     .unwrap();
 
     let after = screen(&app);
@@ -567,9 +567,9 @@ fn unconfirmed_snapshot() -> App<TestBackend> {
     let saved = app_with(State::demo()).state().store.clone();
     let mut app = app_with(State::loading(None).with_snapshot(saved, Some(at(-60))));
     app.handle(Event::Tick(START)).unwrap();
-    app.handle(Event::MyIssuesLoaded(Err(LoadError::Unreachable(
-        "timed out".to_owned(),
-    ))))
+    app.handle(Event::MyIssuesLoaded(Err(LoadError::Unreachable(offline(
+        "timed out",
+    )))))
     .unwrap();
     app
 }
@@ -581,9 +581,9 @@ fn after_a_failed_load_the_snapshot_is_loaded_again_each_poll_interval_and_never
     let early = app.handle(Event::Tick(at(14))).unwrap();
     let due = app.handle(Event::Tick(at(15))).unwrap();
     let in_flight = app.handle(Event::Tick(at(30))).unwrap();
-    app.handle(Event::MyIssuesLoaded(Err(LoadError::Unreachable(
-        "timed out".to_owned(),
-    ))))
+    app.handle(Event::MyIssuesLoaded(Err(LoadError::Unreachable(offline(
+        "timed out",
+    )))))
     .unwrap();
     let again = app.handle(Event::Tick(at(45))).unwrap();
 
@@ -640,7 +640,7 @@ fn no_reconciliation_starts_while_sync_is_failing() {
     app.handle(Event::Tick(START)).unwrap();
 
     let effects = app
-        .handle(failed(SyncFailure::Failed("connection refused".to_owned())))
+        .handle(failed(SyncFailure::Failed(offline("connection refused"))))
         .unwrap();
     let recovered = app
         .handle(Event::Tick(at(15)))
@@ -656,4 +656,9 @@ fn no_reconciliation_starts_while_sync_is_failing() {
             .any(|effect| matches!(effect, Effect::Reconcile(_))),
         "{recovered:?}"
     );
+}
+
+/// An offline failure with `message`, as the runtime sends one.
+fn offline(message: &str) -> Failure {
+    Failure::new(ErrorKind::Offline, "test", message)
 }

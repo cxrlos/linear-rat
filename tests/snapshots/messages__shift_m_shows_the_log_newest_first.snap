@@ -1,0 +1,28 @@
+---
+source: tests/messages.rs
+expression: app.backend()
+---
+" [1] My Issues │ [2] Team Issues │ [3] Analytics                   sync failing "
+"┌My Issues─────────────────────────────────────────────────────────────────────┐"
+"│┌ Messages ──────────────────────────────────────────────────────────────────┐│"
+"││ 09:02:00  rate limited · load the teams you administer                     ││"
+"││   Linear's rate limit is used up for 40s. Wait for it to lift; polls slow  ││"
+"││   down until then.                                                         ││"
+"││   could not load the teams you administer: Linear's rate limit is used up  ││"
+"││                                                                            ││"
+"││ 09:01:00  validation · edit DES-34                                         ││"
+"││   Linear did not accept the value of priority. Change the value and try    ││"
+"││   again.                                                                   ││"
+"││   Linear returned errors: Argument Validation Error (INVALID_INPUT)        ││"
+"││                                                                            ││"
+"││ 09:00:00  offline · sync                                                   ││"
+"││   Linear could not be reached. Check the network; lrat tries again on the  ││"
+"││   next poll.                                                               ││"
+"││   timed out connecting to Linear                                           ││"
+"││                                                                            ││"
+"││                                                                            ││"
+"│└ Esc close ─────────────────────────────────────────────────────────────────┘│"
+"└──────────────────────────────────────────────────────────────────────────────┘"
+" Move │ j/k move                                                                "
+" Do   │ Enter pick │ Tab toggle │ Esc close                                     "
+"                                                                                "

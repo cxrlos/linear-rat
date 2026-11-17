@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use super::{Action, Effect, Load, Pane, Screen, State, Update};
+use super::{Action, Effect, Failure, Load, Pane, Screen, State, Update};
 use crate::linear::{IssueDetail, Urgency};
 use crate::ui;
 
@@ -121,16 +121,21 @@ pub(super) fn reopen(state: &mut State) {
 
 /// Takes in the result of [`Effect::LoadIssueDetail`]. What Linear could not
 /// give becomes the notice, unless one is already showing.
-pub(super) fn loaded(state: &mut State, issue_id: String, result: Result<IssueDetail, String>) {
+pub(super) fn loaded(state: &mut State, issue_id: String, result: Result<IssueDetail, Failure>) {
     let load = match result {
         Ok(detail) => {
             if state.notice.is_none() {
                 state.notice = detail.problems.first().cloned();
             }
+            state.record_problems("load the issue's comments and history", &detail.problems);
             state.store.merge_detail(&issue_id, &detail);
             DetailLoad::Loaded
         }
-        Err(error) => DetailLoad::Failed(error),
+        Err(failure) => {
+            let load = DetailLoad::Failed(failure.message.clone());
+            state.record(failure);
+            load
+        }
     };
     state.detail.loads.insert(issue_id, load);
 }

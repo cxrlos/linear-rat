@@ -8,7 +8,7 @@ use ratatui::widgets::{Block, Padding, Paragraph, Wrap};
 
 use super::style;
 use super::theme::Theme;
-use crate::app::LoadError;
+use crate::app::{Failure, LoadError};
 use crate::auth::{AuthError, KeySource};
 use crate::linear::ClientError;
 
@@ -61,14 +61,14 @@ fn explain(error: &LoadError, key_source: Option<&KeySource>) -> (&'static str, 
         }
         LoadError::KeyringUnavailable(message) => ("Keyring unavailable", sentence(message)),
         LoadError::KeyUnusable(message) => ("Cannot use the API key", sentence(message)),
-        LoadError::Unreachable(message) => (
+        LoadError::Unreachable(Failure { message, .. }) => (
             "Cannot reach Linear",
             format!(
                 "{} Check the network connection and any proxy, then restart lrat.",
                 sentence(message)
             ),
         ),
-        LoadError::Failed(message) => (
+        LoadError::Failed(Failure { message, .. }) => (
             "Could not load your issues",
             format!(
                 "{} Restart lrat to try again; the log has the details.",

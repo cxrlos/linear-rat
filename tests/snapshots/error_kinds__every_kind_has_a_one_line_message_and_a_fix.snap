@@ -1,0 +1,14 @@
+---
+source: tests/error_kinds.rs
+expression: "lines.join(\"\\n\")"
+---
+offline | Linear could not be reached | Check the network; lrat tries again on the next poll.
+rate limited | Linear's rate limit is used up for 2m | Wait for it to lift; polls slow down until then.
+rate limited | Linear's rate limit is used up | Wait for it to lift; polls slow down until then.
+key invalid | The API key is missing or rejected | Run `lrat auth login` with a new key.
+forbidden | The API key is not allowed to do this | Use a key with access to this, or ask a workspace admin.
+validation | Linear did not accept the value of title | Change the value and try again.
+validation | Linear did not accept a value | Change the value and try again.
+server error | Linear failed on its side | Try again in a moment.
+schema drift | Linear's API no longer matches this lrat | Update lrat; if it is current, report the message.
+error | Something failed | The message below says what; `lrat doctor` checks the setup.

@@ -6,13 +6,14 @@ use ratatui::layout::Size;
 use jiff::Timestamp;
 
 use super::{
-    AnalyticsScreen, Detail, Drafts, Load, LoadError, ModalStack, MyIssues, Results, Store,
-    SyncStatus, TeamIssues,
+    AnalyticsScreen, Detail, Drafts, ErrorLog, Failure, Load, LoadError, ModalStack, MyIssues,
+    Results, Store, SyncStatus, TeamIssues,
 };
 use crate::auth::KeySource;
 use crate::config::{AnalyticsSettings, Loaded, SyncSettings, UiSettings};
 use crate::keys::Keymap;
 use crate::linear::AssignedIssues;
+use crate::linear::ErrorKind;
 use crate::linear::model::Issue;
 use crate::ui;
 use crate::ui::theme::Theme;
@@ -59,6 +60,8 @@ pub struct State {
     pub analytics_screen: AnalyticsScreen,
     /// Comments and descriptions Linear did not take, to write again.
     pub drafts: Drafts,
+    /// The most recent failures, for the messages overlay.
+    pub errors: ErrorLog,
 }
 
 impl State {
@@ -87,6 +90,25 @@ impl State {
         }
     }
 
+    /// Adds `failure` to the error log, stamped with the latest tick.
+    pub fn record(&mut self, failure: Failure) {
+        self.errors.record(self.sync_status.now(), failure);
+    }
+
+    /// Shows `failure` as the notice and adds it to the error log.
+    pub fn fail(&mut self, failure: Failure) {
+        self.notice = Some(failure.to_string());
+        self.record(failure);
+    }
+
+    /// Adds each of `problems`, what Linear could not give while `action`
+    /// otherwise worked, to the error log.
+    pub fn record_problems(&mut self, action: &str, problems: &[String]) {
+        for problem in problems {
+            self.record(Failure::new(ErrorKind::Other, action, problem.clone()));
+        }
+    }
+
     /// Fills My Issues with `loaded`, grouped as of when it was loaded. What
     /// Linear could not give becomes the notice, unless one is already
     /// showing.
@@ -94,6 +116,7 @@ impl State {
         if self.notice.is_none() {
             self.notice = summary(&loaded.problems);
         }
+        self.record_problems("load My Issues", &loaded.problems);
         // A store from another workspace or viewer, as a snapshot of the
         // last session can be, is thrown away rather than mixed in.
         let other_viewer = self

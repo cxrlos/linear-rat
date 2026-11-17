@@ -9,6 +9,7 @@ mod edit;
 mod edit_text;
 mod effect;
 mod event;
+mod failure;
 mod links;
 mod load;
 mod modal;
@@ -37,6 +38,7 @@ pub use edit::{Edit, EditPicker, Editable, Write, estimate_scale, focused_team_e
 pub use edit_text::TextOpened;
 pub use effect::Effect;
 pub use event::Event;
+pub use failure::{ERROR_LOG_CAP, ErrorLog, Failure, LoggedFailure};
 pub use links::{Link, LinkSet, Links};
 pub use load::{Load, LoadError};
 pub use modal::{Choice, Modal, ModalStack, Purpose};
