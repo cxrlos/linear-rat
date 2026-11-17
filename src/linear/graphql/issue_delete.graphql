@@ -1,0 +1,8 @@
+# budget: 5
+# Moves one issue and its sub-issues to the trash, where Linear keeps
+# them for 30 days. The argument that deletes for good is never sent.
+mutation IssueDelete($id: String!) {
+  issueDelete(id: $id) {
+    success
+  }
+}

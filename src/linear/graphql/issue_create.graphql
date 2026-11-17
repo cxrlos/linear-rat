@@ -1,4 +1,4 @@
-# budget: 10
+# budget: 15
 # Creates an issue from the fields in `input`. Returns the issue as Linear
 # stored it, with the same fields as the assigned issues query.
 mutation IssueCreate($input: IssueCreateInput!) {
@@ -60,6 +60,12 @@ mutation IssueCreate($input: IssueCreateInput!) {
         id
       }
       dueDate
+      archivedAt
+      subscribers(first: 1, filter: { isMe: { eq: true } }) {
+        nodes {
+          id
+        }
+      }
     }
   }
 }

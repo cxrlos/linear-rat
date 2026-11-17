@@ -1,4 +1,4 @@
-# budget: 10
+# budget: 15
 # Changes the fields in `input` and nothing else: a field left out stays as it
 # is, and a field sent as null is cleared. Returns the issue as Linear stored
 # it, with the same fields as the assigned issues query.
@@ -61,6 +61,12 @@ mutation IssueUpdate($id: String!, $input: IssueUpdateInput!) {
         id
       }
       dueDate
+      archivedAt
+      subscribers(first: 1, filter: { isMe: { eq: true } }) {
+        nodes {
+          id
+        }
+      }
     }
   }
 }

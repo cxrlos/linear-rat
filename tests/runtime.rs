@@ -117,6 +117,26 @@ impl LinearClient for RejectingClient {
         Err(ClientError::InvalidKey)
     }
 
+    async fn archive_issue(&self, _: &str) -> Result<(), ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn unarchive_issue(&self, _: &str) -> Result<(), ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn trash_issue(&self, _: &str) -> Result<(), ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn subscribe_to_issue(&self, _: &str) -> Result<(), ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn unsubscribe_from_issue(&self, _: &str) -> Result<(), ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
     async fn update_issue(
         &self,
         _issue_id: &str,
@@ -285,6 +305,26 @@ async fn q_quits_while_the_load_is_still_in_flight() {
         async fn project_milestones(&self, _: &str) -> Result<Vec<ProjectMilestone>, ClientError> {
             future::pending().await
         }
+
+        async fn archive_issue(&self, _: &str) -> Result<(), ClientError> {
+            future::pending().await
+        }
+
+        async fn unarchive_issue(&self, _: &str) -> Result<(), ClientError> {
+            future::pending().await
+        }
+
+        async fn trash_issue(&self, _: &str) -> Result<(), ClientError> {
+            future::pending().await
+        }
+
+        async fn subscribe_to_issue(&self, _: &str) -> Result<(), ClientError> {
+            future::pending().await
+        }
+
+        async fn unsubscribe_from_issue(&self, _: &str) -> Result<(), ClientError> {
+            future::pending().await
+        }
         async fn update_issue(&self, _: &str, _: &IssueUpdate) -> Result<Issue, ClientError> {
             future::pending().await
         }
@@ -424,6 +464,26 @@ impl LinearClient for CountingClient {
         project_id: &str,
     ) -> Result<Vec<ProjectMilestone>, ClientError> {
         FakeClient.project_milestones(project_id).await
+    }
+
+    async fn archive_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        FakeClient.archive_issue(issue_id).await
+    }
+
+    async fn unarchive_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        FakeClient.unarchive_issue(issue_id).await
+    }
+
+    async fn trash_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        FakeClient.trash_issue(issue_id).await
+    }
+
+    async fn subscribe_to_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        FakeClient.subscribe_to_issue(issue_id).await
+    }
+
+    async fn unsubscribe_from_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        FakeClient.unsubscribe_from_issue(issue_id).await
     }
     async fn update_issue(
         &self,

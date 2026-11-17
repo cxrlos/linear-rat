@@ -100,6 +100,24 @@ impl Results {
         changed
     }
 
+    /// Takes the issue with `id` off the list and returns where it was.
+    pub(super) fn forget_at(&mut self, id: &str) -> Option<usize> {
+        let position = self.ids.iter().position(|listed| listed == id)?;
+        self.ids.remove(position);
+        self.focus(self.focused);
+        if self.ids.is_empty() {
+            self.pane = Pane::List;
+        }
+        Some(position)
+    }
+
+    /// Lists the issue with `id` again at `position`, unless it is listed.
+    pub(super) fn put_back(&mut self, id: &str, position: usize) {
+        if !self.ids.iter().any(|listed| listed == id) {
+            self.ids.insert(position.min(self.ids.len()), id.to_owned());
+        }
+    }
+
     fn focus(&mut self, index: usize) -> bool {
         let index = index.min(self.ids.len().saturating_sub(1));
         let changed = index != self.focused;

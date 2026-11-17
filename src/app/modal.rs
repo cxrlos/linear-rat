@@ -1,5 +1,6 @@
 use super::create::CreateForm;
 use super::edit::{DuePrompt, EditPicker};
+use super::lifecycle::Confirm;
 use super::links::Links;
 use super::picker::Picker;
 use super::{FilterField, Palette, Phase, Search};
@@ -32,6 +33,8 @@ pub enum Modal {
     Create(CreateForm),
     /// The prompt that sets an issue's due date.
     DueDate(DuePrompt),
+    /// A question to answer before something hard to undo runs.
+    Confirm(Confirm),
 }
 
 impl Modal {
@@ -45,7 +48,7 @@ impl Modal {
             | Modal::Choice(_)
             | Modal::DueDate(_) => true,
             Modal::Search(search) => !matches!(search.phase, Phase::Searching { .. }),
-            Modal::Cheatsheet { .. } | Modal::WhichKey { .. } => false,
+            Modal::Cheatsheet { .. } | Modal::WhichKey { .. } | Modal::Confirm(_) => false,
         }
     }
 
@@ -67,8 +70,7 @@ impl Modal {
                 prompt.error = None;
                 Some(&mut prompt.text)
             }
-
-            Modal::Cheatsheet { .. } | Modal::WhichKey { .. } => None,
+            Modal::Cheatsheet { .. } | Modal::WhichKey { .. } | Modal::Confirm(_) => None,
         }
     }
 }

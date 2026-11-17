@@ -291,6 +291,20 @@ fn details(state: &State, issue: &Issue, now: Timestamp, width: u16) -> Vec<Line
     ] {
         lines.extend(field(theme, name, value, width));
     }
+    if let Some(archived_at) = issue.archived_at {
+        lines.extend(field(
+            theme,
+            "Archived",
+            plain(when(archived_at, now)),
+            width,
+        ));
+    }
+    let subscription = if issue.subscribed {
+        vec![("Subscribed".to_owned(), style::accent(theme))]
+    } else {
+        vec![("Not subscribed".to_owned(), muted)]
+    };
+    lines.extend(field(theme, "Updates", subscription, width));
     lines
 }
 

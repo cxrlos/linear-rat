@@ -15,12 +15,12 @@ expression: "text(&cheatsheet(80, 24))"
 ││ Open & copy                         │  M/d  milestone / due date          │ │
 ││  Enter  open the issue              │  E    title and description         │ │
 ││  yi/yu  copy key / URL              │  c    comment                       │ │
-││  yb/ym  copy branch / link          │  n    new issue                     │ │
-││  o      Linear page or PR           │                                     │ │
-││  O      other links                 │ App                                 │ │
-││                                     │  1/2/3  screens   r      refresh    │ │
-││                                     │  ?      keys      :,C-k  palette    │ │
-││                                     │  /      search    q      quit       │ │
+││  yb/ym  copy branch / link          │  A/U  archive / unarchive           │ │
+││  o      Linear page or PR           │  X/S  trash / subscribe             │ │
+││  O      other links                 │  n    new issue                     │ │
+││                                     │                                     │ │
+││ App                                 │                                     │ │
+││  1/2/3  screens   r      refresh    │                                     │ │
 │└ Esc close ────────────────────────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────────────────────────────────┘
  Move │ j/k move                                                                

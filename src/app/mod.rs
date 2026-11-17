@@ -10,6 +10,7 @@ mod edit;
 mod edit_text;
 mod effect;
 mod event;
+mod lifecycle;
 mod links;
 mod load;
 mod modal;
@@ -42,6 +43,7 @@ pub use edit::{
 pub use edit_text::TextOpened;
 pub use effect::Effect;
 pub use event::Event;
+pub use lifecycle::{Confirm, Lifecycle, LifecycleWrite, OnConfirm, focused_is_archived};
 pub use links::{Link, LinkSet, Links};
 pub use load::{Load, LoadError};
 pub use modal::{Choice, Modal, ModalStack, Purpose};
@@ -52,7 +54,7 @@ pub use picker::{Entry, Note, Picker};
 pub use results::Results;
 pub use search::{Phase, Search};
 pub use state::{Screen, State};
-pub use store::Store;
+pub use store::{Store, Trashed};
 pub use sync::{
     IDLE_AFTER, Indicator, LIVE_POLL_AFTER, OVERLAP, RECONCILE_EVERY, SyncFailure, SyncStatus,
     TeamPoll,

@@ -53,6 +53,18 @@ pub enum Action {
     FilterBy(FilterField),
     /// Load the next page of Team Issues.
     LoadMore,
+    /// Archive the focused issue.
+    Archive,
+    /// Bring the focused archived issue back.
+    Unarchive,
+    /// Ask to confirm moving the focused issue to Linear's trash.
+    Trash,
+    /// Subscribe the viewer to the focused issue, or unsubscribe them.
+    ToggleSubscription,
+    /// Run what the confirmation on top asks about.
+    Confirm,
+    /// Close the confirmation on top without running anything.
+    Decline,
     /// Write a comment on the focused issue in `$EDITOR`.
     Comment,
     /// Open the form that creates an issue.

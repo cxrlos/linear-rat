@@ -230,6 +230,49 @@ impl Store {
         self.issues.remove(id).is_some()
     }
 
+    /// Changes the stored issue with id `id` in place. The issue keeps its
+    /// `updated_at`, so Linear's next copy replaces it. Returns whether it
+    /// is stored.
+    pub fn change_issue(&mut self, id: &str, change: impl FnOnce(&mut Issue)) -> bool {
+        let issue = self.issues.get_mut(id);
+        let stored = issue.is_some();
+        if let Some(issue) = issue {
+            change(issue);
+        }
+        stored
+    }
+
+    /// Takes the issue with id `id` out with everything stored about it,
+    /// so [`Store::put_back`] can restore it.
+    pub fn take_issue(&mut self, id: &str) -> Option<Trashed> {
+        let issue = self.issues.remove(id)?;
+        Some(Trashed {
+            issue,
+            comments: self.comments.remove(id),
+            state_history: self.state_histories.remove(id),
+            attachments: self.attachments.remove(id),
+        })
+    }
+
+    /// Restores what [`Store::take_issue`] took, unless the issue has come
+    /// back meanwhile.
+    pub fn put_back(&mut self, trashed: Trashed) {
+        let id = trashed.issue.id.clone();
+        if self.issues.contains_key(&id) {
+            return;
+        }
+        if let Some(comments) = trashed.comments {
+            self.comments.insert(id.clone(), comments);
+        }
+        if let Some(history) = trashed.state_history {
+            self.state_histories.insert(id.clone(), history);
+        }
+        if let Some(attachments) = trashed.attachments {
+            self.attachments.insert(id.clone(), attachments);
+        }
+        self.issues.insert(id, trashed.issue);
+    }
+
     /// The newest `updatedAt` a poll of `team_id` has returned, if any.
     pub fn watermark(&self, team_id: &str) -> Option<Timestamp> {
         self.watermarks.get(team_id).copied()
@@ -569,6 +612,15 @@ impl Store {
             .flatten()
             .filter_map(|id| self.projects.get(id))
     }
+}
+
+/// An issue taken out of the store with what the store kept about it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Trashed {
+    pub issue: Issue,
+    comments: Option<Vec<Comment>>,
+    state_history: Option<Vec<StateSpan>>,
+    attachments: Option<Vec<Attachment>>,
 }
 
 /// How far back `windows` reach without a gap up to now.

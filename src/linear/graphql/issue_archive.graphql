@@ -1,0 +1,8 @@
+# budget: 5
+# Archives one issue. `trash` is left out: trashing goes through
+# issueDelete.
+mutation IssueArchive($id: String!) {
+  issueArchive(id: $id) {
+    success
+  }
+}

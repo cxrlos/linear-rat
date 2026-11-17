@@ -29,7 +29,7 @@ expression: app.backend()
 "│  DES-2  Redesign the empty pantry screen                                         ◌ Backlog     ▮▮▮ High              │┃Creator   Pia Brie                                                            ┃"
 "│  ENG-35 Split the auth module out of the monolith                                ◌ Backlog     ▮▮▯ Medium            │┃Created   2026-10-19 00:06 UTC (2 weeks ago)                                  ┃"
 "│  ENG-23 Dark mode text is unreadable on the cellar map                           ◌ Backlog     ▮▯▯ Low               │┃Updated   2026-10-29 01:25 UTC (4 days ago)                                   ┃"
-"│  OPS-4  Document the incident review process                                     ◌ Backlog     ··· None              │┃                                                                              ┃"
+"│  OPS-4  Document the incident review process                                     ◌ Backlog     ··· None              │┃Updates   Subscribed                                                          ┃"
 "│  ENG-47 Clean up unused GraphQL resolvers                                        ◌ Backlog     ··· None              │┃                                                                              ┃"
 "│  OPS-35 Reduce container image sizes                                             ◌ Backlog     ··· None              │┃                                                                              ┃"
 "│  ENG-66 Add keyboard shortcuts to the web cellar view                            ◌ Backlog     ··· None              │┃                                                                              ┃"

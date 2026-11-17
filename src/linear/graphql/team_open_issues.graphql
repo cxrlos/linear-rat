@@ -1,4 +1,4 @@
-# budget: 1050
+# budget: 1250
 # One page of a team's open issues that are not in progress (triage, backlog
 # and unstarted), for triage health, stale issues and the open-issue trend.
 # Pages hold 100 issues; the client follows `endCursor` for at most 10 pages.
@@ -61,6 +61,12 @@ query TeamOpenIssues($teamId: String!, $after: String) {
           id
         }
         dueDate
+        archivedAt
+        subscribers(first: 1, filter: { isMe: { eq: true } }) {
+          nodes {
+            id
+          }
+        }
       }
       pageInfo {
         hasNextPage

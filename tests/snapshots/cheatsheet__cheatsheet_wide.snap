@@ -13,7 +13,6 @@ expression: "text(&cheatsheet(160, 40))"
 ┃  ENG-60 Improve error messages on sync conflicts         ◐ In Progress ··· None    5 Cycle 7 ┃│Bring two options to the critique on Thursday.                │
 ┃  ENG-22 Store the last sync watermark per device         ◐ In Progress ▮▮▮ High    3         ┃│                                                              │
 ┃  OPS-15 Tag cloud resources by team                      ◐ In Review   ▮▮▯ Medium            ┃│Comments                                                      │
-┃  DES-12 Motion guidelines for list reordering            ◐ In Review   ··· None    3         ┃│Loading…                                                      │
 ┃┌ Keys ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐ │
 ┃│ Move                                 │ Edit the issue                       │ Open & copy                          │ App                                  │ │
 ┃│  j/k      down / up                  │  s    workflow state                 │  Enter  open the issue               │  1/2/3  screens   r      refresh     │ │
@@ -25,11 +24,12 @@ expression: "text(&cheatsheet(160, 40))"
 ┃│                                      │  M/d  milestone / due date           │                                      │                                      │ │
 ┃│                                      │  E    title and description          │                                      │                                      │ │
 ┃│                                      │  c    comment                        │                                      │                                      │ │
+┃│                                      │  A/U  archive / unarchive            │                                      │                                      │ │
+┃│                                      │  X/S  trash / subscribe              │                                      │                                      │ │
 ┃│                                      │  n    new issue                      │                                      │                                      │ │
 ┃└ Esc close ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘ │
-┃  ENG-35 Split the auth module out of the monolith        ◌ Backlog     ▮▮▯ Medium            ┃│Created   2026-10-19 00:06 UTC (2 weeks ago)                  │
 ┃  ENG-23 Dark mode text is unreadable on the cellar map   ◌ Backlog     ▮▯▯ Low               ┃│Updated   2026-10-29 01:25 UTC (4 days ago)                   │
-┃  OPS-4  Document the incident review process             ◌ Backlog     ··· None              ┃│                                                              │
+┃  OPS-4  Document the incident review process             ◌ Backlog     ··· None              ┃│Updates   Subscribed                                          │
 ┃  ENG-47 Clean up unused GraphQL resolvers                ◌ Backlog     ··· None              ┃│                                                              │
 ┃  OPS-35 Reduce container image sizes                     ◌ Backlog     ··· None              ┃│                                                              │
 ┃  ENG-66 Add keyboard shortcuts to the web cellar view    ◌ Backlog     ··· None              ┃│                                                              │

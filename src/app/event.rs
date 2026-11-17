@@ -1,7 +1,7 @@
 use crossterm::event::KeyEvent;
 use jiff::Timestamp;
 
-use super::{LoadError, NewComment, NewIssue, SyncFailure, Write, Writing};
+use super::{LifecycleWrite, LoadError, NewComment, NewIssue, SyncFailure, Write, Writing};
 use crate::linear::model::{Issue, Label, Member, ProjectMilestone, Team, WorkflowState};
 use crate::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, LiveEvent, PostedComment,
@@ -131,6 +131,13 @@ pub enum Event {
     IssueUpdated {
         write: Write,
         result: Result<Box<Issue>, String>,
+    },
+    /// Linear's answer to
+    /// [`Effect::ChangeLifecycle`](super::Effect::ChangeLifecycle): done, or
+    /// why it was rejected.
+    LifecycleChanged {
+        write: LifecycleWrite,
+        result: Result<(), String>,
     },
     /// The editor of [`Effect::OpenEditor`](super::Effect::OpenEditor)
     /// closed: what the viewer saved, or why it could not run.

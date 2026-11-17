@@ -57,6 +57,7 @@ impl MyIssues {
                 let mut issues: Vec<Issue> = issues
                     .iter()
                     .filter(|issue| issue.assignee_id.as_ref() == Some(&viewer.id))
+                    .filter(|issue| issue.archived_at.is_none())
                     .filter(|issue| issue.state.state_type == state_type)
                     .cloned()
                     .collect();

@@ -175,6 +175,26 @@ impl LinearClient for RejectingClient {
         Err(ClientError::InvalidKey)
     }
 
+    async fn archive_issue(&self, _: &str) -> Result<(), ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn unarchive_issue(&self, _: &str) -> Result<(), ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn trash_issue(&self, _: &str) -> Result<(), ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn subscribe_to_issue(&self, _: &str) -> Result<(), ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn unsubscribe_from_issue(&self, _: &str) -> Result<(), ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
     async fn update_issue(
         &self,
         _issue_id: &str,

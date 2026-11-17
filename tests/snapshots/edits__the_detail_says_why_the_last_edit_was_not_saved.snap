@@ -30,7 +30,7 @@ expression: app.backend()
 "┃  ENG-35 Split the auth module out of the monolith                                ◌ Backlog     ▮▮▯ Medium            ┃│Creator   Pia Brie                                                            │"
 "┃  ENG-23 Dark mode text is unreadable on the cellar map                           ◌ Backlog     ▮▯▯ Low               ┃│Created   2026-10-19 00:06 UTC (2 weeks ago)                                  │"
 "┃  OPS-4  Document the incident review process                                     ◌ Backlog     ··· None              ┃│Updated   2026-10-29 01:25 UTC (4 days ago)                                   │"
-"┃  ENG-47 Clean up unused GraphQL resolvers                                        ◌ Backlog     ··· None              ┃│                                                                              │"
+"┃  ENG-47 Clean up unused GraphQL resolvers                                        ◌ Backlog     ··· None              ┃│Updates   Subscribed                                                          │"
 "┃  OPS-35 Reduce container image sizes                                             ◌ Backlog     ··· None              ┃│                                                                              │"
 "┃  ENG-66 Add keyboard shortcuts to the web cellar view                            ◌ Backlog     ··· None              ┃│                                                                              │"
 "┃◇ Triage (4)                                                                                                          ┃│                                                                              │"

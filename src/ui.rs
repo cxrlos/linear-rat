@@ -2,6 +2,7 @@
 
 mod analytics;
 mod cheatsheet;
+mod confirm;
 mod detail;
 mod error;
 mod hints;
@@ -76,6 +77,7 @@ pub fn render(state: &State, frame: &mut Frame) {
             Modal::Choice(choice) => picker::render_choice(state, choice, frame, body_area),
             Modal::Create(form) => picker::render_create(state, form, frame, body_area),
             Modal::DueDate(prompt) => picker::render_due_date(state, prompt, frame, body_area),
+            Modal::Confirm(confirm) => confirm::render(state, confirm, frame, body_area),
         }
     }
 }

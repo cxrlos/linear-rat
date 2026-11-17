@@ -1,0 +1,7 @@
+# budget: 5
+# Unsubscribes the viewer from one issue's notifications.
+mutation IssueUnsubscribe($id: String!) {
+  issueUnsubscribe(id: $id) {
+    success
+  }
+}

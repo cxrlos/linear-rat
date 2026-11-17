@@ -424,6 +424,50 @@ pub static ACTIONS: &[ActionSpec] = &[
         },
     },
     ActionSpec {
+        action: Action::Archive,
+        id: "archive",
+        description: "Archive the issue",
+        label: "archive / unarchive",
+        group: Group::Edit,
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('A')]],
+        available: |state| has_saved_issue(state) && !app::focused_is_archived(state),
+    },
+    ActionSpec {
+        action: Action::Unarchive,
+        id: "unarchive",
+        description: "Unarchive the issue",
+        label: "archive / unarchive",
+        group: Group::Edit,
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('U')]],
+        available: |state| has_saved_issue(state) && app::focused_is_archived(state),
+    },
+    ActionSpec {
+        action: Action::Trash,
+        id: "trash",
+        description: "Move the issue to the trash",
+        label: "trash / subscribe",
+        group: Group::Edit,
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('X')]],
+        available: has_saved_issue,
+    },
+    ActionSpec {
+        action: Action::ToggleSubscription,
+        id: "toggle-subscription",
+        description: "Subscribe to or unsubscribe from the issue",
+        label: "trash / subscribe",
+        group: Group::Edit,
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('S')]],
+        available: has_saved_issue,
+    },
+    ActionSpec {
         action: Action::CreateIssue,
         id: "create-issue",
         description: "Create an issue",
@@ -650,6 +694,28 @@ pub static ACTIONS: &[ActionSpec] = &[
         contexts: OVERLAY,
         default_keys: &[&[Key::named(KeyCode::Enter)]],
         available: can_accept,
+    },
+    ActionSpec {
+        action: Action::Confirm,
+        id: "confirm",
+        description: "Confirm the question asked",
+        label: "confirm / cancel",
+        group: Group::Screen,
+        hint: None,
+        contexts: OVERLAY,
+        default_keys: &[&[Key::char('y')]],
+        available: is_confirming,
+    },
+    ActionSpec {
+        action: Action::Decline,
+        id: "decline",
+        description: "Cancel the question asked",
+        label: "confirm / cancel",
+        group: Group::Screen,
+        hint: None,
+        contexts: OVERLAY,
+        default_keys: &[&[Key::char('n')]],
+        available: is_confirming,
     },
     ActionSpec {
         action: Action::ToggleEntry,
@@ -897,8 +963,13 @@ fn can_accept(state: &State) -> bool {
             Phase::Typing { .. } | Phase::NothingFound { .. } => !search.query.trim().is_empty(),
             Phase::Searching { .. } => false,
         },
+        Some(Modal::Confirm(_)) => true,
         _ => false,
     }
+}
+
+fn is_confirming(state: &State) -> bool {
+    matches!(state.modals.top(), Some(Modal::Confirm(_)))
 }
 
 fn picker(state: &State) -> Option<&EditPicker> {

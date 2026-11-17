@@ -4,7 +4,8 @@ use ratatui::layout::Size;
 use super::edit::{self, Editable};
 use super::{
     Action, Copyable, Effect, Event, Load, Modal, Palette, Pane, Purpose, Screen, Search, State,
-    analytics_screen, compose, create, detail, links, palette, results, search, sync, team_issues,
+    analytics_screen, compose, create, detail, lifecycle, links, palette, results, search, sync,
+    team_issues,
 };
 use crate::keys::{self, Key, Resolution};
 use crate::ui;
@@ -183,6 +184,7 @@ fn apply(state: &mut State, event: Event) -> Update {
             edit::milestones_loaded(state, &project_id, failure)
         }
         Event::IssueUpdated { write, result } => edit::finished(state, &write, result),
+        Event::LifecycleChanged { write, result } => lifecycle::finished(state, &write, result),
         Event::EditorClosed { writing, result } => compose::closed(state, writing, result),
         Event::CommentCreated { comment, result } => compose::commented(state, &comment, result),
         Event::IssueCreated { issue, result } => compose::created(state, &issue, result),
@@ -292,6 +294,7 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             Some(Modal::Search(_)) => search::accept(state),
             Some(Modal::Choice(_)) => choose(state, None),
             Some(Modal::DueDate(_)) => edit::accept_due_date(state),
+            Some(Modal::Confirm(_)) => lifecycle::confirm(state),
             _ => Update::default(),
         },
 
@@ -435,6 +438,12 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             _ => edit::choose(state, Some(usize::from(n))),
         },
         Action::ToggleEntry => edit::toggle(state, None),
+        Action::Archive => lifecycle::archive(state),
+        Action::Unarchive => lifecycle::unarchive(state),
+        Action::Trash => lifecycle::ask_to_trash(state),
+        Action::ToggleSubscription => lifecycle::toggle_subscription(state),
+        Action::Confirm => lifecycle::confirm(state),
+        Action::Decline => lifecycle::decline(state),
         Action::Comment => compose::comment(state),
         Action::CreateIssue => create::open(state),
         _ => Update::default(),

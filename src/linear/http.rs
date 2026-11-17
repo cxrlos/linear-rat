@@ -9,6 +9,7 @@ mod detail;
 mod diagnostics;
 mod edit;
 mod issue_key;
+mod lifecycle;
 mod live;
 mod search;
 mod team;
@@ -369,6 +370,26 @@ impl LinearClient for HttpClient {
         project_id: &str,
     ) -> Result<Vec<ProjectMilestone>, ClientError> {
         edit::project_milestones(self, project_id).await
+    }
+
+    async fn archive_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        lifecycle::archive(self, issue_id).await
+    }
+
+    async fn unarchive_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        lifecycle::unarchive(self, issue_id).await
+    }
+
+    async fn trash_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        lifecycle::trash(self, issue_id).await
+    }
+
+    async fn subscribe_to_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        lifecycle::subscribe(self, issue_id).await
+    }
+
+    async fn unsubscribe_from_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        lifecycle::unsubscribe(self, issue_id).await
     }
 
     async fn update_issue(

@@ -1,0 +1,7 @@
+# budget: 5
+# Brings one archived issue back.
+mutation IssueUnarchive($id: String!) {
+  issueUnarchive(id: $id) {
+    success
+  }
+}

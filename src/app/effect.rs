@@ -1,6 +1,6 @@
 use jiff::Timestamp;
 
-use super::{NewComment, NewIssue, TeamPoll, Write, Writing};
+use super::{LifecycleWrite, NewComment, NewIssue, TeamPoll, Write, Writing};
 use crate::linear::{AnalyticsWindow, TeamQuery, Urgency};
 
 /// A request to the outside world, returned by [`update`](super::update) and
@@ -98,6 +98,10 @@ pub enum Effect {
     /// Send one `issueUpdate` making [`Write::edit`]; the result comes back
     /// as [`Event::IssueUpdated`](super::Event::IssueUpdated).
     UpdateIssue(Write),
+    /// Send the one mutation that archives, unarchives or trashes an issue,
+    /// or subscribes the viewer to it or unsubscribes them; the result comes
+    /// back as [`Event::LifecycleChanged`](super::Event::LifecycleChanged).
+    ChangeLifecycle(LifecycleWrite),
     /// Suspend the screen and open the viewer's `$EDITOR` on `text`; the
     /// buffer comes back as
     /// [`Event::EditorClosed`](super::Event::EditorClosed).

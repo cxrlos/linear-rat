@@ -161,6 +161,12 @@ pub struct Issue {
     /// The day the issue is due, with no time of day or time zone.
     #[serde(default)]
     pub due_date: Option<Date>,
+    /// When the issue was archived, or `None` while it is not.
+    #[serde(default)]
+    pub archived_at: Option<Timestamp>,
+    /// Whether the viewer is subscribed to the issue's notifications.
+    #[serde(default)]
+    pub subscribed: bool,
     pub label_ids: Vec<String>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,

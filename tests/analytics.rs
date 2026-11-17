@@ -66,6 +66,8 @@ fn issue(id: &str) -> Build {
         project_milestone_id: None,
         parent_id: None,
         due_date: None,
+        archived_at: None,
+        subscribed: false,
         label_ids: Vec::new(),
         created_at: created,
         updated_at: created,

@@ -707,6 +707,9 @@ fn finish(
         })
         .collect();
     let title = spec.titles.get(number - 1).copied().unwrap_or("Untitled");
+    // Linear subscribes an issue's creator and assignee.
+    let viewer = member_id(VIEWER);
+    let subscribed = draft.creator == viewer || draft.assignee.as_ref() == Some(&viewer);
     let issue = Issue {
         id: issue_id,
         url: format!("https://linear.app/{URL_KEY}/issue/{identifier}"),
@@ -725,6 +728,8 @@ fn finish(
         project_milestone_id: None,
         parent_id: None,
         due_date: None,
+        archived_at: None,
+        subscribed,
         label_ids: draft.label_ids,
         created_at: ts(draft.created),
         updated_at: ts(last_change.max(last_comment)),

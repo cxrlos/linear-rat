@@ -17,7 +17,8 @@ use ratatui::backend::Backend;
 use tokio::time::{Instant, MissedTickBehavior};
 
 use crate::app::{
-    App, Effect, Event, LoadError, NewComment, NewIssue, SyncFailure, TeamPoll, Write,
+    App, Effect, Event, Lifecycle, LifecycleWrite, LoadError, NewComment, NewIssue, SyncFailure,
+    TeamPoll, Write,
 };
 use crate::linear::{AnalyticsWindow, ClientError, LinearClient, LiveEvent, Urgency};
 use crate::snapshot::SnapshotCache;
@@ -455,6 +456,10 @@ where
             let closed = Event::EditorClosed { writing, result };
             return feed(app, closed, reach, in_flight, outside);
         }
+        Effect::ChangeLifecycle(write) => {
+            in_flight.push(Box::pin(change_lifecycle(reach.client, write)));
+            Ok(())
+        }
         Effect::CreateComment(comment) => {
             in_flight.push(Box::pin(create_comment(reach.client, comment)));
             Ok(())
@@ -591,6 +596,32 @@ async fn update_issue<C: LinearClient>(client: Option<&C>, write: Write) -> Even
         Err(error) => tracing::warn!(issue = %write.identifier, %error, "Linear rejected an edit"),
     }
     Event::IssueUpdated { write, result }
+}
+
+async fn change_lifecycle<C: LinearClient>(client: Option<&C>, write: LifecycleWrite) -> Event {
+    let result = match client {
+        Some(client) => {
+            let id = write.issue_id.as_str();
+            match write.change {
+                Lifecycle::Archive => client.archive_issue(id).await,
+                Lifecycle::Unarchive => client.unarchive_issue(id).await,
+                Lifecycle::Trash => client.trash_issue(id).await,
+                Lifecycle::Subscribe => client.subscribe_to_issue(id).await,
+                Lifecycle::Unsubscribe => client.unsubscribe_from_issue(id).await,
+            }
+            .map_err(message)
+        }
+        None => Err(NO_CLIENT.to_owned()),
+    };
+    match &result {
+        Ok(()) => {
+            tracing::info!(issue = %write.identifier, change = ?write.change, "Linear made a lifecycle change")
+        }
+        Err(error) => {
+            tracing::warn!(issue = %write.identifier, change = ?write.change, %error, "Linear rejected a lifecycle change")
+        }
+    }
+    Event::LifecycleChanged { write, result }
 }
 
 /// Reads the issue's `updatedAt` again and sends `write` only if it is still
