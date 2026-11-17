@@ -677,7 +677,9 @@ async fn a_sort_linear_cannot_send_says_it_covers_only_the_loaded_issues() {
     assert!(effects.is_empty(), "{effects:?}");
     let title = &screen(&app)[2];
     assert!(
-        title.contains(&format!("sort: priority, urgent first, loaded {n} of {m}")),
+        title.contains(&format!(
+            "Team Issues · sorted: loaded {n} of {m} · group: none · sort: priority, urgent first"
+        )),
         "{title}"
     );
     assert_snapshot!(screen(&app).join("\n"));
@@ -726,6 +728,21 @@ async fn moving_after_a_reloading_sort_keeps_the_focus_when_more_pages_load() {
     assert_eq!(
         app.state().team_issues.focused_id(),
         Some(moved_to.as_str())
+    );
+}
+
+#[tokio::test]
+async fn the_loaded_only_note_shows_in_the_title_at_the_default_wide_layout() {
+    let mut app = team_issues(120, 30).await;
+    let (n, m) = n_of_m(&app);
+
+    // 9 is estimate, largest first.
+    press(&mut app, "vs9");
+
+    let title = &screen(&app)[2];
+    assert!(
+        title.contains(&format!("Team Issues · sorted: loaded {n} of {m} ·")),
+        "{title}"
     );
 }
 

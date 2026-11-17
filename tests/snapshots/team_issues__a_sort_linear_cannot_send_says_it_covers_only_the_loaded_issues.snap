@@ -4,7 +4,7 @@ expression: "screen(&app).join(\"\\n\")"
 ---
  [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects                                                                                    
 t ENG Engineering · 50 of 70 m more · f Filters none                                                                                                            
-┏Team Issues · group: none · sort: priority, urgent first, loaded 50 of 70━━━━━━━━━━━━━━━━━━━━━┓┌ENG-69────────────────────────────────────────────────────────┐
+┏Team Issues · sorted: loaded 50 of 70 · group: none · sort: priority, urgent first━━━━━━━━━━━━┓┌ENG-69────────────────────────────────────────────────────────┐
 ┃  ENG-49 Support metric and imperial wheel sizes          ● Done        !!! Urgent  8 Cycle 7 ┃│Make the importer resumable                                   │
 ┃  ENG-62 Burrow returns 500 on empty uploads              ◇ Triage      !!! Urgent  5         ┃│                                                              │
 ┃  ENG-50 Retry failed rind photo uploads in the backgroun ○ Todo        !!! Urgent  5 Cycle 7 ┃│State     ● Done                                              │

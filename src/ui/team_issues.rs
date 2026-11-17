@@ -147,18 +147,22 @@ fn header(state: &State, width: u16) -> Line<'static> {
     Line::from(spans)
 }
 
-/// `Team Issues · group: none · sort: priority, urgent first`, saying when
-/// the sort orders only the loaded issues, as `…, loaded 50 of 70`.
+/// `Team Issues · group: none · sort: priority, urgent first`. When the
+/// sort orders only the loaded issues, `sorted: loaded 50 of 70` follows
+/// the name, ahead of what a narrow pane cuts off.
 fn list_title(state: &State) -> String {
     let team_issues = &state.team_issues;
-    let title = my_issues::list_title("Team Issues", team_issues.arrangement(), "");
     if team_issues.sort_covers_all() {
-        return title;
+        return my_issues::list_title("Team Issues", team_issues.arrangement(), "");
     }
     let total = team_issues
         .total()
         .map_or("…".to_owned(), |total| total.to_string());
-    format!("{title}, loaded {} of {total}", team_issues.ids().len())
+    let name = format!(
+        "Team Issues · sorted: loaded {} of {total}",
+        team_issues.ids().len()
+    );
+    my_issues::list_title(&name, team_issues.arrangement(), "")
 }
 
 fn render_list(view: &View, state: &State, frame: &mut Frame, area: Rect, focus: Focus) {
