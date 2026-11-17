@@ -1,5 +1,6 @@
 use super::create::CreateForm;
 use super::edit::EditPicker;
+use super::issue_picker::IssuePicker;
 use super::links::Links;
 use super::picker::Picker;
 use super::{FilterField, Palette, Phase, Search};
@@ -30,6 +31,8 @@ pub enum Modal {
     Links(Links),
     /// The form that creates an issue.
     Create(CreateForm),
+    /// A list to choose one or several issues from, for a purpose.
+    IssuePicker(IssuePicker),
 }
 
 impl Modal {
@@ -40,7 +43,8 @@ impl Modal {
             | Modal::Palette(_)
             | Modal::Links(_)
             | Modal::Create(_)
-            | Modal::Choice(_) => true,
+            | Modal::Choice(_)
+            | Modal::IssuePicker(_) => true,
             Modal::Search(search) => !matches!(search.phase, Phase::Searching { .. }),
             Modal::Cheatsheet { .. } | Modal::WhichKey { .. } => false,
         }
@@ -54,6 +58,7 @@ impl Modal {
             Modal::Picker(picker) => Some(picker.list.query_mut()),
             Modal::Links(links) => Some(links.list.query_mut()),
             Modal::Choice(choice) => Some(choice.list.query_mut()),
+            Modal::IssuePicker(picker) => Some(picker.list.query_mut()),
             Modal::Palette(palette) => {
                 palette.selected = 0;
                 Some(&mut palette.query)

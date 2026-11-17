@@ -33,6 +33,10 @@ pub enum Event {
         term: String,
         result: Result<SearchResults, String>,
     },
+    /// The pause asked for by
+    /// [`Effect::SearchAfterPause`](super::Effect::SearchAfterPause) for this
+    /// query has passed.
+    TypingPaused(String),
     /// The result of [`Effect::LoadTeams`](super::Effect::LoadTeams). An
     /// error is a message with its context.
     TeamsLoaded(Result<Vec<Team>, String>),

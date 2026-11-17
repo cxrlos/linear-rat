@@ -17,7 +17,7 @@ use ratatui::backend::Backend;
 use tokio::time::{Instant, MissedTickBehavior};
 
 use crate::app::{
-    App, Effect, Event, LoadError, NewComment, NewIssue, SyncFailure, TeamPoll, Write,
+    App, Effect, Event, LoadError, NewComment, NewIssue, SEARCH_PAUSE, SyncFailure, TeamPoll, Write,
 };
 use crate::linear::{AnalyticsWindow, ClientError, LinearClient, LiveEvent, Urgency};
 use crate::snapshot::SnapshotCache;
@@ -360,6 +360,13 @@ where
         }
         Effect::Search(term) => {
             in_flight.push(Box::pin(search(reach.client, term)));
+            Ok(())
+        }
+        Effect::SearchAfterPause(query) => {
+            in_flight.push(Box::pin(async move {
+                tokio::time::sleep(SEARCH_PAUSE).await;
+                Event::TypingPaused(query)
+            }));
             Ok(())
         }
         Effect::LoadTeams => {
@@ -923,6 +930,32 @@ mod tests {
             .map(|issue| issue.identifier)
             .collect();
         assert_eq!(found, ["OPS-36"]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_pause_comes_back_with_its_query_once_the_pause_has_passed() {
+        let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+        let mut in_flight = FuturesUnordered::new();
+        let reach = Reach {
+            client: Some(&FakeClient),
+            snapshots: None,
+            live: Cell::new(None),
+        };
+        let started = Instant::now();
+
+        let flow = execute(
+            &mut app,
+            Effect::SearchAfterPause("cave".to_owned()),
+            &reach,
+            &mut in_flight,
+            &mut Fake::default(),
+        )
+        .unwrap();
+        let event = in_flight.next().await.unwrap();
+
+        assert_eq!(flow, ControlFlow::Continue(()));
+        assert_eq!(event, Event::TypingPaused("cave".to_owned()));
+        assert!(started.elapsed() >= SEARCH_PAUSE);
     }
 
     #[tokio::test]

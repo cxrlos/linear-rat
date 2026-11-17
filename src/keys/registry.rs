@@ -616,9 +616,14 @@ pub static ACTIONS: &[ActionSpec] = &[
         hint: does("toggle"),
         contexts: OVERLAY,
         default_keys: &[&[Key::named(KeyCode::Tab)]],
-        available: |state| {
-            picker(state)
-                .is_some_and(|picker| picker.list.is_multi() && picker.list.selected().is_some())
+        available: |state| match state.modals.top() {
+            Some(Modal::Picker(picker)) => {
+                picker.list.is_multi() && picker.list.selected().is_some()
+            }
+            Some(Modal::IssuePicker(picker)) => {
+                picker.list.is_multi() && picker.list.selected().is_some()
+            }
+            _ => false,
         },
     },
     ActionSpec {
@@ -800,6 +805,10 @@ fn can_scroll_down(state: &State) -> bool {
             .list
             .selected_position()
             .is_some_and(|position| position + 1 < links.list.visible().len()),
+        Some(Modal::IssuePicker(picker)) => picker
+            .list
+            .selected_position()
+            .is_some_and(|position| position + 1 < picker.list.visible().len()),
         Some(Modal::Create(form)) => form
             .list()
             .is_some_and(|(len, selected)| selected.is_some_and(|position| position + 1 < len)),
@@ -830,6 +839,10 @@ fn can_scroll_up(state: &State) -> bool {
             .list
             .selected_position()
             .is_some_and(|position| position > 0),
+        Some(Modal::IssuePicker(picker)) => picker
+            .list
+            .selected_position()
+            .is_some_and(|position| position > 0),
         Some(Modal::Create(form)) => form
             .list()
             .is_some_and(|(_, selected)| selected.is_some_and(|position| position > 0)),
@@ -845,6 +858,7 @@ fn can_accept(state: &State) -> bool {
         Some(Modal::Choice(choice)) => choice.list.selected().is_some(),
         Some(Modal::Picker(picker)) => picker.list.is_multi() || picker.list.selected().is_some(),
         Some(Modal::Links(links)) => links.list.selected().is_some(),
+        Some(Modal::IssuePicker(picker)) => picker.list.selected().is_some(),
         Some(Modal::Create(form)) => form.list().is_none_or(|(_, selected)| selected.is_some()),
         Some(Modal::Palette(palette)) => {
             palette.selected < app::palette_matches(state, &palette.query).len()
@@ -874,8 +888,22 @@ fn picker_has(count: usize, state: &State) -> bool {
         Some(Modal::Links(links)) => links.list.visible().len() >= count,
         Some(Modal::Choice(choice)) => choice.list.visible().len() >= count,
         Some(Modal::Create(form)) => form.list().is_some_and(|(len, _)| len >= count),
+        // A digit that continues a word, as in `ENG-12`, types into the
+        // query instead.
+        Some(Modal::IssuePicker(picker)) => {
+            !continues_word(picker.list.query()) && picker.list.visible().len() >= count
+        }
         _ => false,
     }
+}
+
+/// Whether a character typed after `query` continues its last word: the
+/// query ends in a letter, a digit or `-`.
+fn continues_word(query: &str) -> bool {
+    query
+        .chars()
+        .last()
+        .is_some_and(|c| c.is_alphanumeric() || c == '-')
 }
 
 fn has_team(state: &State) -> bool {

@@ -4,7 +4,8 @@ use ratatui::layout::Size;
 use super::edit::{self, Editable};
 use super::{
     Action, Copyable, Effect, Event, Load, Modal, Palette, Pane, Purpose, Screen, Search, State,
-    analytics_screen, compose, create, detail, links, palette, results, search, sync, team_issues,
+    analytics_screen, compose, create, detail, issue_picker, links, palette, results, search, sync,
+    team_issues,
 };
 use crate::keys::{self, Key, Resolution};
 use crate::ui;
@@ -63,9 +64,15 @@ fn apply(state: &mut State, event: Event) -> Update {
         Event::Throttled => sync::throttled(state),
         Event::Live(event) => sync::live(state, event),
         Event::SearchDone { term, result } => {
+            let outcome = match &result {
+                Ok(found) => Ok(found.issues.iter().map(|issue| issue.id.clone()).collect()),
+                Err(error) => Err(error.clone()),
+            };
             search::finish(state, &term, result);
+            issue_picker::searched(state, &term, outcome);
             Update::redraw()
         }
+        Event::TypingPaused(query) => issue_picker::paused(state, &query),
         Event::Resize { columns, rows } => {
             state.viewport = Size::new(columns, rows);
             let rows = ui::list_rows(state, state.viewport);
@@ -196,6 +203,9 @@ fn type_text(state: &mut State, key: Key) -> Option<Update> {
             field.pop();
         }
     }
+    if let Some(Modal::IssuePicker(_)) = state.modals.top() {
+        return Some(issue_picker::typed(state));
+    }
     Some(Update::redraw())
 }
 
@@ -278,6 +288,7 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             Some(Modal::Palette(_)) => palette::accept(state),
             Some(Modal::Search(_)) => search::accept(state),
             Some(Modal::Choice(_)) => choose(state, None),
+            Some(Modal::IssuePicker(_)) => issue_picker::choose(state, None),
             _ => Update::default(),
         },
         Action::Close if state.modals.pop().is_some() => Update::redraw(),
@@ -374,6 +385,7 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             Some(Modal::Links(_)) => links::select(state, step(action)),
             Some(Modal::Create(_)) => create::select(state, step(action)),
             Some(Modal::Choice(_)) => select_choice(state, step(action)),
+            Some(Modal::IssuePicker(_)) => issue_picker::select(state, step(action)),
             Some(Modal::Palette(_)) => palette::step(state, action),
             Some(Modal::Search(_)) => Update::default(),
             None if state.screen == Screen::Analytics => {
@@ -417,9 +429,13 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             Some(Modal::Links(_)) => links::choose(state, Some(usize::from(n))),
             Some(Modal::Choice(_)) => choose(state, Some(usize::from(n))),
             Some(Modal::Create(_)) => create::accept(state, Some(usize::from(n))),
+            Some(Modal::IssuePicker(_)) => issue_picker::choose(state, Some(usize::from(n))),
             _ => edit::choose(state, Some(usize::from(n))),
         },
-        Action::ToggleEntry => edit::toggle(state, None),
+        Action::ToggleEntry => match state.modals.top() {
+            Some(Modal::IssuePicker(_)) => issue_picker::toggle(state, None),
+            _ => edit::toggle(state, None),
+        },
         Action::Comment => compose::comment(state),
         Action::CreateIssue => create::open(state),
         _ => Update::default(),

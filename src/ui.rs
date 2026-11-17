@@ -71,6 +71,7 @@ pub fn render(state: &State, frame: &mut Frame) {
             Modal::WhichKey { prefix } => which_key::render(state, prefix, frame, body_area),
             Modal::Picker(edit) => picker::render_edit(state, edit, frame, body_area),
             Modal::Links(links) => picker::render_links(state, links, frame, body_area),
+            Modal::IssuePicker(issues) => picker::render_issues(state, issues, frame, body_area),
             Modal::Palette(palette) => palette::render(state, palette, frame, body_area),
             Modal::Search(search) => search::render(state, search, frame, body_area),
             Modal::Choice(choice) => picker::render_choice(state, choice, frame, body_area),

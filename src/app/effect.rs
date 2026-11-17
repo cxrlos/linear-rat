@@ -26,6 +26,9 @@ pub enum Effect {
     /// Search the workspace for this term; the result comes back as
     /// [`Event::SearchDone`](super::Event::SearchDone).
     Search(String),
+    /// Wait [`SEARCH_PAUSE`](super::SEARCH_PAUSE), then send
+    /// [`Event::TypingPaused`](super::Event::TypingPaused) with this query.
+    SearchAfterPause(String),
     /// Load the viewer's teams; the result comes back as
     /// [`Event::TeamsLoaded`](super::Event::TeamsLoaded).
     LoadTeams,

@@ -8,7 +8,9 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Padding, Paragraph};
 
 use super::style;
-use crate::app::{Action, Choice, CreateForm, Edit, EditPicker, Links, Note, Picker, State, Step};
+use crate::app::{
+    Action, Choice, CreateForm, Edit, EditPicker, IssuePicker, Links, Note, Picker, State, Step,
+};
 use crate::keys::Context;
 
 /// The width the list asks for at least, so short entries leave room for
@@ -119,6 +121,16 @@ fn edit_glyph(state: &State) -> impl Fn(&Edit) -> Option<Span<'static>> + '_ {
 /// Draws a picker of an issue's links centered inside `area`'s border.
 pub fn render_links(state: &State, links: &Links, frame: &mut Frame, area: Rect) {
     render(state, &links.title(), &links.list, |_| None, frame, area);
+}
+
+/// Draws an issue picker centered inside `area`'s border, each issue led by
+/// its workflow state glyph.
+pub fn render_issues(state: &State, picker: &IssuePicker, frame: &mut Frame, area: Rect) {
+    let glyph = |id: &String| {
+        let state_type = state.store.issue(id)?.state.state_type;
+        Some(Span::raw(state.ui.icons.state(state_type)).fg(state.theme.state(state_type)))
+    };
+    render(state, &picker.title(), &picker.list, glyph, frame, area);
 }
 
 /// Draws a team switcher or filter centered inside `area`'s border.
