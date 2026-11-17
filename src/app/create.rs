@@ -82,9 +82,15 @@ impl CreateForm {
             Editable::State => edit::state_entries(store, &team_id),
             Editable::Assignee => edit::assignee_entries(store, &team_id),
             Editable::Priority => (edit::priority_entries(), false),
-            // The form does not set labels or an estimate, and asks for
-            // the title and description apart.
-            Editable::Labels | Editable::Estimate | Editable::Text => (Vec::new(), false),
+            // The form sets none of the other fields, and asks for the
+            // title and description apart.
+            Editable::Labels
+            | Editable::Estimate
+            | Editable::Cycle
+            | Editable::Project
+            | Editable::Milestone
+            | Editable::DueDate
+            | Editable::Text => (Vec::new(), false),
         };
         let default = entries
             .iter()
@@ -92,7 +98,7 @@ impl CreateForm {
                 Edit::State(state) => state.state_type == StateType::Unstarted,
                 Edit::Assignee(_) => true,
                 Edit::Priority(priority) => *priority == Priority::None,
-                Edit::Labels(_) | Edit::Estimate(_) | Edit::Text { .. } => false,
+                _ => false,
             })
             .unwrap_or(0);
         picker.set_entries(entries, None);
@@ -199,9 +205,7 @@ pub(super) fn accept(state: &mut State, nth: Option<usize>) -> Update {
                     form.priority = Some(priority);
                     None
                 }
-                Edit::Labels(_) | Edit::Estimate(_) | Edit::Text { .. } => {
-                    return Update::default();
-                }
+                _ => return Update::default(),
             };
             match next {
                 Some(field) => {

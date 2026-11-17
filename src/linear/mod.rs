@@ -21,8 +21,8 @@ pub use error::{ClientError, GraphQlError, Response};
 pub use governor::{SystemTimer, Timer, Urgency};
 pub use http::{ClientConfig, Dial, HttpClient, LIVE_ENDPOINT, LiveConfig, Pipe};
 use model::{
-    Attachment, Comment, Cycle, Issue, Label, Member, Priority, Project, StateSpan, StateType,
-    Team, Viewer, WorkflowState, Workspace,
+    Attachment, Comment, Cycle, Issue, Label, Member, Priority, Project, ProjectMilestone,
+    StateSpan, StateType, Team, Viewer, WorkflowState, Workspace,
 };
 
 /// Queries, mutations and live events.
@@ -76,6 +76,13 @@ pub trait LinearClient {
         &self,
         team_id: &str,
     ) -> impl Future<Output = Result<Vec<Label>, ClientError>> + Send;
+
+    /// Every milestone of the project with id `project_id`, in Linear's
+    /// order.
+    fn project_milestones(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<Vec<ProjectMilestone>, ClientError>> + Send;
 
     /// Sends one `issueUpdate` for the issue with id `issue_id` and returns
     /// the issue as Linear stored it.
@@ -628,6 +635,7 @@ pub struct IssueDetail {
     /// The comment authors.
     pub members: Vec<Member>,
     pub project: Option<Project>,
+    pub milestone: Option<ProjectMilestone>,
     /// The first 50 attachments, oldest first; any more are left out.
     pub attachments: Vec<Attachment>,
     /// What Linear could not give, as in [`AssignedIssues::problems`].
@@ -642,6 +650,7 @@ impl IssueDetail {
         let issue = data.issues.iter().find(|issue| issue.id == issue_id);
         let team_id = issue.map(|issue| issue.team_id.as_str());
         let project_id = issue.and_then(|issue| issue.project_id.as_deref());
+        let milestone_id = issue.and_then(|issue| issue.project_milestone_id.as_deref());
         Self {
             comments: data
                 .comments
@@ -661,6 +670,10 @@ impl IssueDetail {
                 .projects
                 .into_iter()
                 .find(|project| Some(project.id.as_str()) == project_id),
+            milestone: data
+                .milestones
+                .into_iter()
+                .find(|milestone| Some(milestone.id.as_str()) == milestone_id),
             attachments: data
                 .attachments
                 .into_iter()
@@ -927,6 +940,17 @@ impl LinearClient for FakeClient {
 
     async fn team_labels(&self, team_id: &str) -> Result<Vec<Label>, ClientError> {
         Ok(demo::team_options(&demo::workspace(), team_id).labels)
+    }
+
+    async fn project_milestones(
+        &self,
+        project_id: &str,
+    ) -> Result<Vec<ProjectMilestone>, ClientError> {
+        Ok(demo::workspace()
+            .milestones
+            .into_iter()
+            .filter(|milestone| milestone.project_id == project_id)
+            .collect())
     }
 
     async fn update_issue(

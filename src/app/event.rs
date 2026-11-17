@@ -2,7 +2,7 @@ use crossterm::event::KeyEvent;
 use jiff::Timestamp;
 
 use super::{LoadError, NewComment, NewIssue, SyncFailure, Write, Writing};
-use crate::linear::model::{Issue, Label, Member, Team, WorkflowState};
+use crate::linear::model::{Issue, Label, Member, ProjectMilestone, Team, WorkflowState};
 use crate::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, LiveEvent, PostedComment,
     SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
@@ -118,6 +118,14 @@ pub enum Event {
         team_id: String,
         result: Result<Vec<Label>, String>,
     },
+    /// The result of
+    /// [`Effect::LoadProjectMilestones`](super::Effect::LoadProjectMilestones),
+    /// or why it failed.
+    ProjectMilestonesLoaded {
+        project_id: String,
+        result: Result<Vec<ProjectMilestone>, String>,
+    },
+
     /// Linear's answer to [`Effect::UpdateIssue`](super::Effect::UpdateIssue):
     /// the issue as it stored it, or why it rejected the edit.
     IssueUpdated {

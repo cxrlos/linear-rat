@@ -75,6 +75,7 @@ pub fn render(state: &State, frame: &mut Frame) {
             Modal::Search(search) => search::render(state, search, frame, body_area),
             Modal::Choice(choice) => picker::render_choice(state, choice, frame, body_area),
             Modal::Create(form) => picker::render_create(state, form, frame, body_area),
+            Modal::DueDate(prompt) => picker::render_due_date(state, prompt, frame, body_area),
         }
     }
 }

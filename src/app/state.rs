@@ -4,6 +4,7 @@ use std::fmt::Display;
 use ratatui::layout::Size;
 
 use jiff::Timestamp;
+use jiff::civil::Date;
 
 use super::{
     AnalyticsScreen, Detail, Drafts, Load, LoadError, ModalStack, MyIssues, Results, Store,
@@ -154,6 +155,19 @@ impl State {
         let rows = ui::list_rows(self, self.viewport);
         rebuilt.keep_place_of(&self.my_issues, rows);
         self.my_issues = rebuilt;
+    }
+
+    /// The viewer's day now, in the time zone analytics counts days in: by
+    /// the latest tick, else when the store last loaded. Due dates are
+    /// compared with it and relative due dates count from it.
+    pub fn today(&self) -> Date {
+        let now = self
+            .sync_status
+            .now()
+            .or(self.store.as_of())
+            .unwrap_or_else(Timestamp::now);
+        now.to_zoned(self.analytics_screen.time_zone().clone())
+            .date()
     }
 
     /// The issue the current screen has focused, if it shows issues and has

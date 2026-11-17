@@ -44,6 +44,10 @@ The Team Issues list also takes the Issue list keys. While an overlay has a text
 | `edit-priority` | `p` | Change the priority |
 | `edit-labels` | `L` | Add or remove labels |
 | `edit-estimate` | `e` | Change the estimate |
+| `edit-cycle` | `C` | Change the cycle |
+| `edit-project` | `P` | Change the project |
+| `edit-milestone` | `M` | Change the project milestone |
+| `edit-due-date` | `d` | Set or clear the due date |
 | `edit-text` | `E` | Edit the title and description |
 | `comment` | `c` | Comment in $EDITOR |
 | `create-issue` | `n` | Create an issue |
@@ -84,6 +88,10 @@ The Team Issues list also takes the Issue list keys. While an overlay has a text
 | `edit-priority` | `p` | Change the priority |
 | `edit-labels` | `L` | Add or remove labels |
 | `edit-estimate` | `e` | Change the estimate |
+| `edit-cycle` | `C` | Change the cycle |
+| `edit-project` | `P` | Change the project |
+| `edit-milestone` | `M` | Change the project milestone |
+| `edit-due-date` | `d` | Set or clear the due date |
 | `edit-text` | `E` | Edit the title and description |
 | `comment` | `c` | Comment in $EDITOR |
 | `create-issue` | `n` | Create an issue |

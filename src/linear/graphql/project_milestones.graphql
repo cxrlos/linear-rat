@@ -1,0 +1,17 @@
+# budget: 210
+# One page of a project's milestones, for the milestone picker. Pages hold
+# 100 milestones. The client follows `endCursor` until `hasNextPage` is false.
+query ProjectMilestones($projectId: String!, $after: String) {
+  project(id: $projectId) {
+    projectMilestones(first: 100, after: $after) {
+      nodes {
+        id
+        name
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}

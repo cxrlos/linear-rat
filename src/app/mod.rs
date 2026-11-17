@@ -5,6 +5,7 @@ mod analytics_screen;
 mod compose;
 mod create;
 mod detail;
+mod due_date;
 mod edit;
 mod edit_text;
 mod effect;
@@ -33,7 +34,11 @@ pub use analytics_screen::{AnalyticsScreen, AnalyticsView};
 pub use compose::{Drafts, IssueDraft, NewComment, NewIssue, Writing, is_local};
 pub use create::{CreateForm, Step};
 pub use detail::{Detail, DetailLoad};
-pub use edit::{Edit, EditPicker, Editable, Write, estimate_scale, focused_team_estimates};
+pub use due_date::{FORMS as DUE_DATE_FORMS, parse_due_date};
+pub use edit::{
+    DuePrompt, Edit, EditPicker, Editable, Write, estimate_scale, focused_has_project,
+    focused_team_estimates,
+};
 pub use edit_text::TextOpened;
 pub use effect::Effect;
 pub use event::Event;

@@ -327,6 +327,43 @@ fn references_point_at_things_that_exist() {
 }
 
 #[test]
+fn milestones_belong_to_the_project_of_their_issues() {
+    let data = data();
+    let mut with_milestone = 0;
+    for issue in &data.issues {
+        let Some(id) = &issue.project_milestone_id else {
+            continue;
+        };
+        let milestone = data.milestones.iter().find(|m| &m.id == id);
+        let milestone = milestone.unwrap_or_else(|| panic!("{}", issue.identifier));
+        assert_eq!(
+            Some(&milestone.project_id),
+            issue.project_id.as_ref(),
+            "{}",
+            issue.identifier
+        );
+        with_milestone += 1;
+    }
+    assert!(with_milestone >= 2, "{with_milestone}");
+}
+
+#[test]
+fn the_viewer_has_open_issues_due_both_ahead_and_overdue() {
+    let data = data();
+    let today = demo::NOW.to_zoned(jiff::tz::TimeZone::UTC).date();
+    let due: Vec<jiff::civil::Date> = data
+        .issues
+        .iter()
+        .filter(|issue| issue.assignee_id.as_ref() == Some(&data.viewer.id))
+        .filter(|issue| issue.state.state_type.is_open())
+        .filter_map(|issue| issue.due_date)
+        .collect();
+
+    assert!(due.iter().any(|&date| date < today), "{due:?}");
+    assert!(due.iter().any(|&date| date >= today), "{due:?}");
+}
+
+#[test]
 fn the_viewer_has_open_work_in_every_open_state_type() {
     let data = data();
     let active: Vec<&str> = active_cycles(&data).iter().map(|c| c.id.as_str()).collect();

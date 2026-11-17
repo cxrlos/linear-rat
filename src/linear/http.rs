@@ -26,7 +26,9 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use super::governor::{Governor, SystemTimer, Timer, Urgency};
-use super::model::{Issue, Label, Member, Team, Viewer, WorkflowState, Workspace};
+use super::model::{
+    Issue, Label, Member, ProjectMilestone, Team, Viewer, WorkflowState, Workspace,
+};
 use super::search_bucket::SearchBucket;
 use super::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, Diagnostics, GraphQlError,
@@ -360,6 +362,13 @@ impl LinearClient for HttpClient {
 
     async fn team_labels(&self, team_id: &str) -> Result<Vec<Label>, ClientError> {
         edit::team_labels(self, team_id).await
+    }
+
+    async fn project_milestones(
+        &self,
+        project_id: &str,
+    ) -> Result<Vec<ProjectMilestone>, ClientError> {
+        edit::project_milestones(self, project_id).await
     }
 
     async fn update_issue(

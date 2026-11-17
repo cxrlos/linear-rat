@@ -350,6 +350,21 @@ where
             }));
             Ok(())
         }
+        Effect::LoadProjectMilestones { project_id } => {
+            let client = reach.client;
+            in_flight.push(Box::pin(async move {
+                let result = match client {
+                    Some(client) => client
+                        .project_milestones(&project_id)
+                        .await
+                        .map_err(message),
+                    None => Err(NO_CLIENT.to_owned()),
+                };
+                Event::ProjectMilestonesLoaded { project_id, result }
+            }));
+            Ok(())
+        }
+
         Effect::UpdateIssue(write) => {
             in_flight.push(Box::pin(update_issue(reach.client, write)));
             Ok(())

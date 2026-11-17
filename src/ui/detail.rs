@@ -3,6 +3,7 @@
 //! Built as lines already wrapped to the pane, so scrolling counts real rows.
 
 use jiff::Timestamp;
+use jiff::civil::Date;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use unicode_width::UnicodeWidthStr;
@@ -218,6 +219,22 @@ fn details(state: &State, issue: &Issue, now: Timestamp, width: u16) -> Vec<Line
             (None, Some(_)) => plain(id.clone()),
         },
     };
+    let milestone = match &issue.project_milestone_id {
+        None => plain("None"),
+        Some(id) => match (store.milestone(id), state.detail.load(&issue.id)) {
+            (Some(milestone), _) => plain(milestone.name.clone()),
+            (None, None | Some(DetailLoad::Loading)) => vec![("Loading…".to_owned(), muted)],
+            (None, Some(_)) => plain(id.clone()),
+        },
+    };
+    let due = match issue.due_date {
+        None => plain("None"),
+        Some(date) if is_overdue(issue, date, state.today()) => vec![
+            (date.to_string(), style::error(theme)),
+            (" (overdue)".to_owned(), style::error(theme)),
+        ],
+        Some(date) => plain(date.to_string()),
+    };
     let cycle = match issue.cycle_id.as_deref() {
         None => plain("None"),
         Some(id) => match store.cycle(id) {
@@ -257,7 +274,9 @@ fn details(state: &State, issue: &Issue, now: Timestamp, width: u16) -> Vec<Line
     for (name, value) in [
         ("Team", plain(team)),
         ("Project", project),
+        ("Milestone", milestone),
         ("Cycle", cycle),
+        ("Due", due),
         ("Labels", plain(labels)),
         (
             "Assignee",
@@ -273,6 +292,11 @@ fn details(state: &State, issue: &Issue, now: Timestamp, width: u16) -> Vec<Line
         lines.extend(field(theme, name, value, width));
     }
     lines
+}
+
+/// Whether `issue`, due on `date`, is still open past it on `today`.
+pub(super) fn is_overdue(issue: &Issue, date: Date, today: Date) -> bool {
+    date < today && issue.state.state_type.is_open()
 }
 
 fn state_pieces(state: &State, issue: &Issue) -> Pieces {

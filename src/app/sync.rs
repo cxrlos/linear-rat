@@ -146,6 +146,11 @@ impl SyncStatus {
         self.last_synced
     }
 
+    /// The time of the latest tick; `None` before the first.
+    pub fn now(&self) -> Option<Timestamp> {
+        self.now
+    }
+
     /// The time between polls under `settings` now, or `None` while polling
     /// is paused because the terminal lost focus.
     pub fn poll_interval(&self, settings: &SyncSettings) -> Option<Duration> {

@@ -89,6 +89,12 @@ pub enum Effect {
     LoadTeamLabels {
         team_id: String,
     },
+    /// Load a project's milestones; the result comes back as
+    /// [`Event::ProjectMilestonesLoaded`](super::Event::ProjectMilestonesLoaded).
+    LoadProjectMilestones {
+        project_id: String,
+    },
+
     /// Send one `issueUpdate` making [`Write::edit`]; the result comes back
     /// as [`Event::IssueUpdated`](super::Event::IssueUpdated).
     UpdateIssue(Write),

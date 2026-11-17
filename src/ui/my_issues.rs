@@ -2,6 +2,8 @@
 
 use std::collections::BTreeMap;
 
+use jiff::civil::Date;
+
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style, Stylize};
@@ -67,6 +69,8 @@ pub(super) struct View<'a> {
     icons: icons::IconSet,
     /// Why the last edit of an issue failed, by issue id.
     row_errors: &'a BTreeMap<String, String>,
+    /// The viewer's day, which due dates are overdue after.
+    today: Date,
 }
 
 impl<'a> View<'a> {
@@ -76,6 +80,7 @@ impl<'a> View<'a> {
             theme: &state.theme,
             icons: state.ui.icons,
             row_errors: &state.row_errors,
+            today: state.today(),
         }
     }
 }
@@ -198,6 +203,20 @@ pub(super) fn render_row(
         frame.render_widget("▸", marker);
     }
     frame.render_widget(Span::raw(&issue.identifier).fg(theme.muted), identifier);
+    let title = match issue.due_date {
+        Some(date) => {
+            let due = due_span(view, issue, date);
+            let [title, due_area] = Layout::horizontal([
+                Constraint::Fill(1),
+                Constraint::Length(u16::try_from(due.width()).unwrap_or(u16::MAX)),
+            ])
+            .spacing(1)
+            .areas(title);
+            frame.render_widget(due, due_area);
+            title
+        }
+        None => title,
+    };
     let title_line = if view.row_errors.contains_key(&issue.id) {
         Line::from(vec![
             Span::styled("✘ ", style::error(theme)),
@@ -273,6 +292,21 @@ fn priority_line(view: &View, priority: Priority) -> Line<'static> {
         Span::raw(" "),
         Span::raw(icons::priority_name(priority)),
     ])
+}
+
+/// When `issue` is due, as `due Nov 6`, in the alert style once it is
+/// overdue and still open.
+fn due_span(view: &View, issue: &Issue, date: Date) -> Span<'static> {
+    let text = if date.year() == view.today.year() {
+        date.strftime("due %b %-d").to_string()
+    } else {
+        date.strftime("due %b %-d %Y").to_string()
+    };
+    if detail::is_overdue(issue, date, view.today) {
+        Span::styled(text, style::error(view.theme))
+    } else {
+        Span::styled(text, style::muted(view.theme))
+    }
 }
 
 fn cycle_span<'a>(view: &View<'a>, issue: &'a Issue) -> Span<'a> {

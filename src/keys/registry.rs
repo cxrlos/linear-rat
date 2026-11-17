@@ -350,6 +350,50 @@ pub static ACTIONS: &[ActionSpec] = &[
         available: app::focused_team_estimates,
     },
     ActionSpec {
+        action: Action::Edit(Editable::Cycle),
+        id: "edit-cycle",
+        description: "Change the cycle",
+        label: "cycle / project",
+        group: Group::Edit,
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('C')]],
+        available: has_saved_issue,
+    },
+    ActionSpec {
+        action: Action::Edit(Editable::Project),
+        id: "edit-project",
+        description: "Change the project",
+        label: "cycle / project",
+        group: Group::Edit,
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('P')]],
+        available: has_saved_issue,
+    },
+    ActionSpec {
+        action: Action::Edit(Editable::Milestone),
+        id: "edit-milestone",
+        description: "Change the project milestone",
+        label: "milestone / due date",
+        group: Group::Edit,
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('M')]],
+        available: app::focused_has_project,
+    },
+    ActionSpec {
+        action: Action::Edit(Editable::DueDate),
+        id: "edit-due-date",
+        description: "Set or clear the due date",
+        label: "milestone / due date",
+        group: Group::Edit,
+        hint: None,
+        contexts: PANES,
+        default_keys: &[&[Key::char('d')]],
+        available: has_saved_issue,
+    },
+    ActionSpec {
         action: Action::Edit(Editable::Text),
         id: "edit-text",
         description: "Edit the title and description",
@@ -884,6 +928,13 @@ fn has_team(state: &State) -> bool {
 
 fn has_focused_issue(state: &State) -> bool {
     state.focused_issue().is_some()
+}
+
+/// Whether an issue Linear has confirmed is focused, so it can be edited.
+fn has_saved_issue(state: &State) -> bool {
+    state
+        .focused_issue()
+        .is_some_and(|issue| !app::is_local(&issue.id))
 }
 
 // In the detail, moves scroll it, so they are available while it has more

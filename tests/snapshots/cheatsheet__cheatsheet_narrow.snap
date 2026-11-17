@@ -13,14 +13,14 @@ expression: "text(&cheatsheet(50, 24))"
 │  ENG-60│  Esc      close or step back │Cycle 7 │
 │  ENG-22│                              │        │
 │  OPS-15│ Edit the issue               │        │
-│  DES-12│  s  workflow state           │        │
-│○ Unstar│  a  assignee                 │        │
-│  DES-40│  p  priority                 │Cycle 7 │
-│  ENG-57│  L  labels                   │Cycle 7 │
-│  OPS-38│  e  estimate                 │Cycle 7 │
-│  DES-31│  E  title and description    │Cycle 7 │
-│  ENG-65│  c  comment                  │Cycle 7 │
-│  DES-16│  n  new issue                │        │
+│  DES-12│  s    workflow state         │        │
+│○ Unstar│  a    assignee               │        │
+│  DES-40│  p    priority               │Cycle 7 │
+│  ENG-57│  L    labels                 │Cycle 7 │
+│  OPS-38│  e    estimate               │Cycle 7 │
+│  DES-31│  C/P  cycle / project        │Cycle 7 │
+│  ENG-65│  M/d  milestone / due date   │Cycle 7 │
+│  DES-16│  E    title and description  │        │
 │  ENG-56└ Esc close ───────────────────┘        │
 └────────────────────────────────────────────────┘
  Move │ j/k move                                  

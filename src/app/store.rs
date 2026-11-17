@@ -10,8 +10,8 @@ use serde::{Deserialize, Serialize};
 use super::edit::{Edit, Write};
 use crate::analytics::AdministrableTeams;
 use crate::linear::model::{
-    Attachment, Comment, Cycle, Issue, Label, Member, Project, StateSpan, Team, Viewer,
-    WorkflowState, Workspace,
+    Attachment, Comment, Cycle, Issue, Label, Member, Project, ProjectMilestone, StateSpan, Team,
+    Viewer, WorkflowState, Workspace,
 };
 use crate::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, PostedComment, SearchResults,
@@ -60,6 +60,13 @@ pub struct Store {
     /// Project ids by team id, for the teams whose filter options have
     /// loaded.
     team_projects: BTreeMap<String, Vec<String>>,
+    /// Project milestones by id, from the detail and the milestone picker.
+    #[serde(default)]
+    milestones: BTreeMap<String, ProjectMilestone>,
+    /// The ids of a project's milestones, in Linear's order, by project id,
+    /// once loaded for a milestone picker.
+    #[serde(default)]
+    project_milestones: BTreeMap<String, Vec<String>>,
     /// The windows analytics loads have covered in this session. Left out
     /// of the snapshot, so a new session loads analytics afresh rather than
     /// trusting cycle histories from the last one.
@@ -367,6 +374,32 @@ impl Store {
         self.team_labels.insert(team_id.to_owned(), ids);
     }
 
+    /// Replaces the milestones of project `project_id`, and stores each
+    /// milestone by id.
+    pub fn set_project_milestones(&mut self, project_id: &str, milestones: &[ProjectMilestone]) {
+        by_id(&mut self.milestones, milestones, |milestone| &milestone.id);
+        let ids = milestones
+            .iter()
+            .map(|milestone| milestone.id.clone())
+            .collect();
+        self.project_milestones.insert(project_id.to_owned(), ids);
+    }
+
+    /// The milestones of project `project_id`, in Linear's order, if they
+    /// have been loaded.
+    pub fn project_milestones(&self, project_id: &str) -> Option<Vec<&ProjectMilestone>> {
+        let ids = self.project_milestones.get(project_id)?;
+        Some(
+            ids.iter()
+                .filter_map(|id| self.milestones.get(id))
+                .collect(),
+        )
+    }
+
+    pub fn milestone(&self, id: &str) -> Option<&ProjectMilestone> {
+        self.milestones.get(id)
+    }
+
     /// The labels team `team_id`'s issues can carry, if they have been
     /// loaded.
     pub fn team_labels(&self, team_id: &str) -> Option<Vec<&Label>> {
@@ -413,6 +446,10 @@ impl Store {
         );
         if let Some(project) = &detail.project {
             self.projects.insert(project.id.clone(), project.clone());
+        }
+        if let Some(milestone) = &detail.milestone {
+            self.milestones
+                .insert(milestone.id.clone(), milestone.clone());
         }
     }
 

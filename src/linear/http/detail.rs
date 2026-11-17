@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 use super::assigned::{optional_timestamp, state_type, timestamp};
 use super::{HttpClient, PageInfo, Urgency};
 use crate::linear::model::{
-    Attachment, Comment, Member, Project, StateSpan, StateType, WorkflowState,
+    Attachment, Comment, Member, Project, ProjectMilestone, StateSpan, StateType, WorkflowState,
 };
 use crate::linear::{ClientError, IssueDetail, Response};
 
@@ -49,6 +49,7 @@ pub(super) async fn load(
         workflow_states: Vec::new(),
         members: Vec::new(),
         project: None,
+        milestone: None,
         attachments: Vec::new(),
         problems: comment_errors
             .iter()
@@ -91,6 +92,13 @@ pub(super) async fn load(
             detail.project = Some(Project {
                 id: project.id,
                 name: project.name,
+            });
+        }
+        if let Some(milestone) = page.issue.project_milestone {
+            detail.milestone = Some(ProjectMilestone {
+                id: milestone.id,
+                name: milestone.name,
+                project_id: milestone.project.id,
             });
         }
         for node in page.issue.state_history.nodes {
@@ -144,8 +152,22 @@ struct HistoryPage {
 #[serde(rename_all = "camelCase")]
 struct IssueHistory {
     project: Option<ProjectNode>,
+    #[serde(default)]
+    project_milestone: Option<MilestoneNode>,
     state_history: Connection<SpanNode>,
     attachments: Nodes<AttachmentNode>,
+}
+
+#[derive(Deserialize)]
+struct MilestoneNode {
+    id: String,
+    name: String,
+    project: IdNode,
+}
+
+#[derive(Deserialize)]
+struct IdNode {
+    id: String,
 }
 
 #[derive(Deserialize)]

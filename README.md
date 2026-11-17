@@ -65,7 +65,7 @@ Press `?` anywhere to see the keys for the screen you are on.
 ## What it does
 
 - **My Issues**: your open issues, grouped by workflow state. From 120 columns on (you can change that), the focused issue's detail sits beside the list: its description rendered from Markdown, comments, state history and fields.
-- **Edits without waiting**: change the workflow state, assignee, priority, labels or estimate from a filterable picker. The change shows at once and rolls back with a notice if Linear refuses it. Write comments in `$EDITOR`, and create issues with `n`.
+- **Edits without waiting**: change the workflow state, assignee, priority, labels, estimate, cycle, project or project milestone from a filterable picker, and type a due date as `2026-12-24`, `+3d`, `fri` or `clear`. The change shows at once and rolls back with a notice if Linear refuses it. Write comments in `$EDITOR`, and create issues with `n`.
 - **The palette** (`:` or `Ctrl-k`) finds any action or loaded issue by fuzzy match, and `/` searches every issue in the workspace.
 - **Team Issues**: a team's issues, filtered by workflow state, assignee, label, cycle or project.
 - **Analytics**: throughput, net flow, cycle time and lead time, issue age and completion by project, label and priority, for you or for a team, over 4, 12 or 26 weeks. The per-person breakdown is shown only to team owners.

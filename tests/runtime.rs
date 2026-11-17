@@ -9,7 +9,9 @@ use futures_util::stream::{self, Stream, StreamExt};
 use jiff::Timestamp;
 use linear_rat::app::{App, Event, State};
 use linear_rat::auth::KeySource;
-use linear_rat::linear::model::{Issue, Label, Member, Team, Viewer, WorkflowState, Workspace};
+use linear_rat::linear::model::{
+    Issue, Label, Member, ProjectMilestone, Team, Viewer, WorkflowState, Workspace,
+};
 use linear_rat::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, Diagnostics, FakeClient,
     IssueDetail, IssueLink, IssueUpdate, LinearClient, LiveEvent, SearchResults,
@@ -105,6 +107,13 @@ impl LinearClient for RejectingClient {
     }
 
     async fn team_labels(&self, _team_id: &str) -> Result<Vec<Label>, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn project_milestones(
+        &self,
+        _project_id: &str,
+    ) -> Result<Vec<ProjectMilestone>, ClientError> {
         Err(ClientError::InvalidKey)
     }
 
@@ -273,6 +282,9 @@ async fn q_quits_while_the_load_is_still_in_flight() {
         async fn team_labels(&self, _: &str) -> Result<Vec<Label>, ClientError> {
             future::pending().await
         }
+        async fn project_milestones(&self, _: &str) -> Result<Vec<ProjectMilestone>, ClientError> {
+            future::pending().await
+        }
         async fn update_issue(&self, _: &str, _: &IssueUpdate) -> Result<Issue, ClientError> {
             future::pending().await
         }
@@ -406,6 +418,12 @@ impl LinearClient for CountingClient {
     }
     async fn team_labels(&self, team_id: &str) -> Result<Vec<Label>, ClientError> {
         FakeClient.team_labels(team_id).await
+    }
+    async fn project_milestones(
+        &self,
+        project_id: &str,
+    ) -> Result<Vec<ProjectMilestone>, ClientError> {
+        FakeClient.project_milestones(project_id).await
     }
     async fn update_issue(
         &self,

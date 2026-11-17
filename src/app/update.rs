@@ -82,7 +82,10 @@ fn apply(state: &mut State, event: Event) -> Update {
             effects: team_issues::teams_loaded(state, result),
         },
         Event::TeamOptionsLoaded(result) => {
+            let team_id = result.as_ref().ok().map(|options| options.team_id.clone());
+            let failure = result.as_ref().err().cloned();
             team_issues::options_loaded(state, result);
+            edit::options_loaded(state, team_id.as_deref(), failure.as_deref());
             Update::redraw()
         }
         Event::TeamIssuesLoaded {
@@ -168,6 +171,16 @@ fn apply(state: &mut State, event: Event) -> Update {
                 Err(error) => Some(error),
             };
             edit::loaded(state, Editable::Labels, &team_id, failure)
+        }
+        Event::ProjectMilestonesLoaded { project_id, result } => {
+            let failure = match result {
+                Ok(milestones) => {
+                    state.store.set_project_milestones(&project_id, &milestones);
+                    None
+                }
+                Err(error) => Some(error),
+            };
+            edit::milestones_loaded(state, &project_id, failure)
         }
         Event::IssueUpdated { write, result } => edit::finished(state, &write, result),
         Event::EditorClosed { writing, result } => compose::closed(state, writing, result),
@@ -278,8 +291,10 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             Some(Modal::Palette(_)) => palette::accept(state),
             Some(Modal::Search(_)) => search::accept(state),
             Some(Modal::Choice(_)) => choose(state, None),
+            Some(Modal::DueDate(_)) => edit::accept_due_date(state),
             _ => Update::default(),
         },
+
         Action::Close if state.modals.pop().is_some() => Update::redraw(),
         Action::MoveDown
         | Action::MoveUp
