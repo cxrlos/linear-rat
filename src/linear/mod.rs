@@ -113,7 +113,7 @@ pub trait LinearClient {
         team_id: &str,
     ) -> impl Future<Output = Result<TeamOptions, ClientError>> + Send;
 
-    /// One page of the issues of `query`, most recently updated first,
+    /// One page of the issues of `query`, newest first by its order,
     /// starting after the cursor `after` (or at the top when `None`).
     fn team_issues(
         &self,
@@ -345,11 +345,31 @@ pub struct SearchResults {
     pub problems: Vec<String>,
 }
 
-/// A team's issues, narrowed by a filter.
+/// A team's issues, narrowed by a filter, in the order Linear sends them.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TeamQuery {
     pub team_id: String,
     pub filter: TeamFilter,
+    pub order: TeamOrder,
+}
+
+/// The order Linear sends a team's issues in, newest first, as its
+/// `PaginationOrderBy`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TeamOrder {
+    #[default]
+    Updated,
+    Created,
+}
+
+impl TeamOrder {
+    /// Linear's name for it.
+    pub fn as_graphql(self) -> &'static str {
+        match self {
+            TeamOrder::Updated => "updatedAt",
+            TeamOrder::Created => "createdAt",
+        }
+    }
 }
 
 /// One optional value per field; an issue matches when it matches every

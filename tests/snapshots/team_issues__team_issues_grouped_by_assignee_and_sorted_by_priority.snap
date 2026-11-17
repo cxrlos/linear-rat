@@ -1,0 +1,34 @@
+---
+source: tests/team_issues.rs
+expression: "screen(&app).join(\"\\n\")"
+---
+ [1] My Issues │ [2] Team Issues │ [3] Analytics                                                                                                                
+t ENG Engineering · 50 of 70 m more · f Filters none                                                                                                            
+┏Team Issues · group: assignee · sort: priority, urgent first, loaded 50 of 70━━━━━━━━━━━━━━━━━┓┌ENG-69────────────────────────────────────────────────────────┐
+┃Ada Roquefort (4)                                                                             ┃│Make the importer resumable                                   │
+┃▸ ENG-69 Make the importer resumable                      ● Done        ▮▮▯ Medium  8 Cycle 7 ┃│                                                              │
+┃  ENG-44 Sensor pairing hangs on the second device        ● Done        ▮▮▯ Medium  1 Cycle 5 ┃│State     ● Done                                              │
+┃  ENG-30 Background sync drains the battery on Android    ● Done        ▮▯▯ Low     5 Cycle 4 ┃│Priority  ▮▮▯ Medium                                          │
+┃  ENG-29 Recipe import fails on fractional quantities     ● Done        ▮▯▯ Low     8 Cycle 3 ┃│Estimate  8                                                   │
+┃Jun Emmental (5)                                                                              ┃│                                                              │
+┃  ENG-43 Sort the pantry list by expiry date              ● Done        ▮▮▮ High    1 Cycle 6 ┃│Part of the Nibble 3.0 push. Keep the old behaviour behind a  │
+┃  ENG-32 Validate humidity readings from sensors          ◌ Backlog     ▮▮▮ High    2         ┃│flag until the mobile apps catch up.                          │
+┃  ENG-37 Offline edits are lost after a restart           ● Done        ▮▯▯ Low     5 Cycle 5 ┃│                                                              │
+┃  ENG-20 Fix flaky integration test for pantry invites    ● Done        ▮▯▯ Low     1 Cycle 4 ┃│Comments                                                      │
+┃  ENG-53 Bump the minimum supported iOS version           ◐ In Progress ··· None    5 Cycle 7 ┃│Loading…                                                      │
+┃Mira Gouda (24)                                                                               ┃│                                                              │
+┃  ENG-49 Support metric and imperial wheel sizes          ● Done        !!! Urgent  8 Cycle 7 ┃│History                                                       │
+┃  ENG-55 Add a read replica for reporting queries         ● Done        ▮▮▮ High    5 Cycle 6 ┃│Loading…                                                      │
+┃  ENG-56 Notification settings reset after update         ○ Todo        ▮▮▮ High    2         ┃│                                                              │
+┃  ENG-24 Add an audit log for shelf edits                 ● Done        ▮▮▮ High    1 Cycle 4 ┃│Details                                                       │
+┃  ENG-70 Gouda batch labels print off-center              ◇ Triage      ▮▮▯ Medium  3         ┃│Team      Engineering                                         │
+┃  ENG-35 Split the auth module out of the monolith        ◌ Backlog     ▮▮▯ Medium            ┃│Project   Shared pantries                                     │
+┃  ENG-51 Add a dry-run mode to the importer               ◐ In Progress ▮▮▯ Medium  2 Cycle 7 ┃│Cycle     Cycle 7 (active)                                    │
+┃  ENG-40 Allow archiving an empty cellar                  ● Done        ▮▮▯ Medium  5 Cycle 6 ┃│Labels    performance, improvement                            │
+┃  ENG-57 Throttle sensor writes during bursts             ○ Todo        ▮▮▯ Medium  2 Cycle 7 ┃│Assignee  Ada Roquefort                                       │
+┃  ENG-36 Move several shelves at once                     ● Done        ▮▮▯ Medium  3 Cycle 5 ┃│Creator   Ada Roquefort                                       │
+┃  ENG-38 Expose aging stages in the public API            ● Done        ▮▮▯ Medium  3 Cycle 5 ┃│Created   2026-10-29 12:02 UTC (4 days ago)                   │
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛└──────────────────────────────────────────────────────────────┘
+ Move │ j down     │ k up     │ gg top  │ G bottom  │ C-d/C-u page │ h/l pane   │ / search                                                                      
+ Do   │ Enter open │ y yank   │ o links │ Esc close │ ? keys       │ : palette  │ q quit                                                                        
+ View │ t team     │ f filter │ m more  │ s state   │ a assignee   │ p priority │ L labels │ e estimate │ E text │ c comment

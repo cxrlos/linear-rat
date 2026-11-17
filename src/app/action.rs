@@ -53,6 +53,10 @@ pub enum Action {
     FilterBy(FilterField),
     /// Load the next page of Team Issues.
     LoadMore,
+    /// Pick how the issue list on screen is grouped.
+    GroupBy,
+    /// Pick how the issue list on screen is sorted.
+    SortBy,
     /// Write a comment on the focused issue in `$EDITOR`.
     Comment,
     /// Open the form that creates an issue.

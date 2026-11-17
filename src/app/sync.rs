@@ -426,7 +426,7 @@ pub(super) fn polled(
         }
     });
     if changed {
-        state.rebuild_my_issues();
+        state.rebuild_lists();
     }
     let mut effects = Vec::new();
     if changed || moved {
@@ -458,7 +458,7 @@ pub(super) fn live(state: &mut State, event: LiveEvent) -> Update {
                 status.live_poll_at = status
                     .now
                     .and_then(|now| now.checked_add(LIVE_POLL_AFTER).ok());
-                state.rebuild_my_issues();
+                state.rebuild_lists();
             }
             changed
         }
@@ -500,7 +500,7 @@ pub(super) fn reconciled(
     if !changed {
         return Update::default();
     }
-    state.rebuild_my_issues();
+    state.rebuild_lists();
     Update {
         redraw: true,
         effects: vec![Effect::SaveSnapshot],

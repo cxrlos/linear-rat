@@ -47,6 +47,8 @@ The Team Issues list also takes the Issue list keys. While an overlay has a text
 | `edit-text` | `E` | Edit the title and description |
 | `comment` | `c` | Comment in $EDITOR |
 | `create-issue` | `n` | Create an issue |
+| `group-by` | `vg` | Pick how the issue list is grouped |
+| `sort-by` | `vs` | Pick how the issue list is sorted |
 | `close` | `<Esc>` | Close the top overlay or step back |
 
 ## Team Issues (`[keys.team-issues]`)

@@ -3,7 +3,7 @@ source: tests/cheatsheet.rs
 expression: "text(&cheatsheet(160, 40))"
 ---
  [1] My Issues │ [2] Team Issues │ [3] Analytics                                                                                                                
-┏My Issues━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓┌DES-34────────────────────────────────────────────────────────┐
+┏My Issues · group: workflow state · sort: active cycle, then priority━━━━━━━━━━━━━━━━━━━━━━━━━┓┌DES-34────────────────────────────────────────────────────────┐
 ┃◐ Started (9)                                                                                 ┃│Design QA for the autumn release                              │
 ┃▸ DES-34 Design QA for the autumn release                 ◐ In Progress ▮▮▮ High    3 Cycle 7 ┃│                                                              │
 ┃  ENG-51 Add a dry-run mode to the importer               ◐ In Progress ▮▮▯ Medium  2 Cycle 7 ┃│State     ◐ In Progress                                       │
@@ -22,8 +22,8 @@ expression: "text(&cheatsheet(160, 40))"
 ┃│  C-d/C-u  half page                  │  p  priority                         │  yb/ym  copy branch / link           │  /      search    q      quit        │ │
 ┃│  h/l      pane left / right          │  L  labels                           │  o      Linear page or PR            │  C-z    suspend                      │ │
 ┃│  Esc      close or step back         │  e  estimate                         │  O      other links                  │                                      │ │
-┃│                                      │  E  title and description            │                                      │                                      │ │
-┃│                                      │  c  comment                          │                                      │                                      │ │
+┃│                                      │  E  title and description            │                                      │ Issue list                           │ │
+┃│                                      │  c  comment                          │                                      │  vg/vs  group / sort                 │ │
 ┃│                                      │  n  new issue                        │                                      │                                      │ │
 ┃└ Esc close ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘ │
 ┃  DES-2  Redesign the empty pantry screen                 ◌ Backlog     ▮▮▮ High              ┃│Updated   2026-10-29 01:25 UTC (4 days ago)                   │

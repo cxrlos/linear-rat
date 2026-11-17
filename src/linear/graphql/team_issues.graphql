@@ -1,11 +1,16 @@
 # budget: 550
-# One page of a team's issues that match `filter`, most recently updated
-# first, with the team, workflow state, people, cycle and project each one
-# refers to. Pages hold 50 issues; Team Issues asks for the next page only
-# when the viewer does.
-query TeamIssues($teamId: String!, $filter: IssueFilter, $after: String) {
+# One page of a team's issues that match `filter`, newest first by
+# `orderBy` (updatedAt or createdAt), with the team, workflow state, people,
+# cycle and project each one refers to. Pages hold 50 issues; Team Issues
+# asks for the next page only when the viewer does.
+query TeamIssues(
+  $teamId: String!
+  $filter: IssueFilter
+  $after: String
+  $orderBy: PaginationOrderBy
+) {
   team(id: $teamId) {
-    issues(first: 50, after: $after, filter: $filter, orderBy: updatedAt) {
+    issues(first: 50, after: $after, filter: $filter, orderBy: $orderBy) {
       nodes {
         id
         identifier

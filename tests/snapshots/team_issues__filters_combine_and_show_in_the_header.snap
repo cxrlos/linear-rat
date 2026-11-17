@@ -4,7 +4,7 @@ expression: app.backend()
 ---
 " [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
 "t ENG Engineering · 2 of 2 · f Filters State In Progress, Label backend         "
-"┌Team Issues───────────────────────────────────────────────────────────────────┐"
+"┌Team Issues · group: none · sort: updated, newest first───────────────────────┐"
 "│▸ ENG-53 Bump the minimum supported iOS v ◐ In Progress ··· None    5 Cycle 7 │"
 "│  ENG-22 Store the last sync watermark pe ◐ In Progress ▮▮▮ High    3         │"
 "│                                                                              │"

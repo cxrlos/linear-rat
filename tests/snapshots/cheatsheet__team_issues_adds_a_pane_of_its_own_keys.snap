@@ -4,7 +4,7 @@ expression: text
 ---
  [1] My Issues │ [2] Team Issues │ [3] Analytics                                                                                                                
 t ENG Engineering · 50 of 70 m more · f Filters none                                                                                                            
-┏Team Issues━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓┌ENG-69────────────────────────────────────────────────────────┐
+┏Team Issues · group: none · sort: updated, newest first━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓┌ENG-69────────────────────────────────────────────────────────┐
 ┃▸ ENG-69 Make the importer resumable                      ● Done        ▮▮▯ Medium  8 Cycle 7 ┃│Make the importer resumable                                   │
 ┃  ENG-49 Support metric and imperial wheel sizes          ● Done        !!! Urgent  8 Cycle 7 ┃│                                                              │
 ┃  ENG-41 Fix memory leak in the crumb producer            ⊘ Canceled    ▮▮▯ Medium  8         ┃│State     ● Done                                              │
@@ -21,8 +21,8 @@ t ENG Engineering · 50 of 70 m more · f Filters none
 ┃│  h/l      pane left / right          │  L  labels                           │  o      Linear page or PR            │  C-z    suspend                      │ │
 ┃│  Esc      close or step back         │  e  estimate                         │  O      other links                  │                                      │ │
 ┃│                                      │  E  title and description            │                                      │ Team Issues                          │ │
-┃│                                      │  c  comment                          │                                      │  t   switch team                     │ │
-┃│                                      │  n  new issue                        │                                      │  fs  filter by state                 │ │
+┃│ Issue list                           │  c  comment                          │                                      │  t   switch team                     │ │
+┃│  vg/vs  group / sort                 │  n  new issue                        │                                      │  fs  filter by state                 │ │
 ┃│                                      │                                      │                                      │  fa  filter by assignee              │ │
 ┃│                                      │                                      │                                      │  fl  filter by label                 │ │
 ┃│                                      │                                      │                                      │  fc  filter by cycle                 │ │

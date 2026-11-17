@@ -4,7 +4,8 @@ use ratatui::layout::Size;
 use super::edit::{self, Editable};
 use super::{
     Action, Copyable, Effect, Event, Load, Modal, Palette, Pane, Purpose, Screen, Search, State,
-    analytics_screen, compose, create, detail, links, palette, results, search, sync, team_issues,
+    analytics_screen, compose, create, detail, links, palette, rearrange, results, search, sync,
+    team_issues,
 };
 use crate::keys::{self, Key, Resolution};
 use crate::ui;
@@ -403,6 +404,8 @@ pub fn perform(state: &mut State, action: Action) -> Update {
                 ..open_choice(state, choice)
             }
         }
+        Action::GroupBy => open_choice(state, rearrange::group_choice(state)),
+        Action::SortBy => open_choice(state, rearrange::sort_choice(state)),
         Action::LoadMore if state.screen == Screen::TeamIssues => {
             let effects = team_issues::load_more(state);
             Update {
@@ -463,6 +466,11 @@ fn choose(state: &mut State, nth: Option<usize>) -> Update {
         let update = analytics_screen::pick_team(state, nth);
         clamp_analytics_scroll(state);
         update
+    } else if matches!(choice.purpose, Purpose::Group | Purpose::Sort) {
+        rearrange::pick(state, nth).map_or_else(Update::default, |effects| Update {
+            redraw: true,
+            effects,
+        })
     } else {
         team_issues::pick(state, nth).map_or_else(Update::default, |effects| Update {
             redraw: true,

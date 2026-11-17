@@ -200,7 +200,7 @@ fn show_stand_in(state: &mut State, draft: IssueDraft, description: &str) -> New
     state.notice = Some(format!("Creating {}…", input.title));
     state.team_issues.show_created(&stand_in);
     state.store.upsert_issue(stand_in);
-    state.rebuild_my_issues();
+    state.rebuild_lists();
     focus_in_my_issues(state, &local_id);
     NewIssue { local_id, input }
 }
@@ -256,7 +256,7 @@ pub(super) fn created(
                 .team_issues
                 .replace_created(&issue.local_id, &created.id);
             state.store.upsert_issue(*created);
-            state.rebuild_my_issues();
+            state.rebuild_lists();
             if focused {
                 focus_in_my_issues(state, &id);
             }
@@ -269,7 +269,7 @@ pub(super) fn created(
                 issue.input.title
             ));
             state.team_issues.forget(&issue.local_id);
-            state.rebuild_my_issues();
+            state.rebuild_lists();
         }
     }
     Update::redraw()

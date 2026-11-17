@@ -10,7 +10,7 @@ use ratatui::widgets::{Block, BorderType, Paragraph};
 
 use super::theme::Theme;
 use super::{detail, icons, style};
-use crate::app::{Group, Names, Pane, State};
+use crate::app::{Arrangement, Group, GroupKey, IssueList, Names, Pane, Sort, State};
 use crate::linear::model::{Issue, Priority, StateType, WorkflowState};
 
 /// From `ui.wide-layout-columns` columns on, the detail shows beside the
@@ -111,44 +111,109 @@ enum Row<'a> {
 
 fn render_list(view: &View, state: &State, frame: &mut Frame, area: Rect, focus: Focus) {
     let my_issues = &state.my_issues;
-    let theme = view.theme;
-    let block = pane_block("My Issues", focus, theme);
+    let title = list_title(
+        "My Issues",
+        my_issues.arrangement(),
+        "active cycle, then priority",
+    );
+    let block = pane_block(title, focus, view.theme);
     let inner = block.inner(area);
     frame.render_widget(block, area);
-    if my_issues.groups().is_empty() {
-        let empty = Paragraph::new("No open issues are assigned to you.").fg(theme.muted);
+    if my_issues.is_empty() {
+        let empty = Paragraph::new("No open issues are assigned to you.").fg(view.theme.muted);
         frame.render_widget(empty, inner);
         return;
     }
+    render_groups(view, frame, inner, my_issues, focus);
+}
 
+/// `My Issues · group: workflow state · sort: priority, urgent first`, with
+/// `own` naming the list's own order.
+pub(super) fn list_title(title: &str, arrangement: Arrangement, own: &str) -> String {
+    let sort = arrangement.sort.map_or_else(|| own.to_owned(), Sort::label);
+    format!(
+        "{title} · group: {} · sort: {sort}",
+        arrangement.group.label()
+    )
+}
+
+/// The rows of `list` in `inner`: each group's header, when it has one,
+/// over its issues, scrolled so the focused issue shows.
+pub(super) fn render_groups(
+    view: &View,
+    frame: &mut Frame,
+    inner: Rect,
+    list: &IssueList,
+    focus: Focus,
+) {
     let mut rows = Vec::new();
     let mut index = 0;
-    for group in my_issues.groups() {
-        rows.push(Row::Header(group));
+    for group in list.groups() {
+        if group.key.has_header() {
+            rows.push(Row::Header(group));
+        }
         for issue in &group.issues {
             rows.push(Row::Issue(index, issue));
             index += 1;
         }
     }
-    let offset = visible_offset(my_issues.scroll(), my_issues.focused_line(), inner);
-    let cells = row_cells(my_issues.groups().iter().flat_map(|group| &group.issues));
+    let offset = visible_offset(list.scroll(), list.focused_line(), inner);
+    let cells = row_cells(list.issues());
 
     for (line_area, row) in inner.rows().zip(rows.iter().skip(offset)) {
         match row {
             Row::Header(group) => {
-                let header = Line::from(vec![
-                    state_glyph(view, group.state_type),
-                    Span::raw(" "),
-                    Span::raw(icons::state_type_name(group.state_type)).bold(),
-                    Span::raw(format!(" ({})", group.issues.len())),
-                ]);
+                let mut header = group_name(view, &group.key);
+                header.push_span(Span::raw(format!(" ({})", group.issues.len())));
                 frame.render_widget(header, line_area);
             }
             Row::Issue(index, issue) => {
-                let is_focused = *index == my_issues.focused_index();
+                let is_focused = *index == list.focused_index();
                 render_row(view, frame, line_area, &cells, issue, is_focused, focus);
             }
         }
+    }
+}
+
+/// What a group header calls its group, with the glyph of a state type or
+/// priority.
+fn group_name(view: &View, key: &GroupKey) -> Line<'static> {
+    let names = view.names;
+    let named = |id: &Option<String>, name: Option<&str>, none: &str| {
+        let text = match (id, name) {
+            (None, _) => none.to_owned(),
+            (Some(_), Some(name)) => name.to_owned(),
+            (Some(id), None) => id.clone(),
+        };
+        Line::from(Span::raw(text).bold())
+    };
+    match key {
+        GroupKey::State(state_type) => Line::from(vec![
+            state_glyph(view, *state_type),
+            Span::raw(" "),
+            Span::raw(icons::state_type_name(*state_type)).bold(),
+        ]),
+        GroupKey::Priority(priority) => Line::from(vec![
+            Span::raw(view.icons.priority(*priority)).fg(view.theme.priority(*priority)),
+            Span::raw(" "),
+            Span::raw(icons::priority_name(*priority)).bold(),
+        ]),
+        GroupKey::Project(id) => named(
+            id,
+            id.as_deref().and_then(|id| names.project_name(id)),
+            "No project",
+        ),
+        GroupKey::Cycle(id) => named(
+            id,
+            id.as_deref().and_then(|id| names.cycle_name(id)),
+            "No cycle",
+        ),
+        GroupKey::Assignee(id) => named(
+            id,
+            id.as_deref().and_then(|id| names.member_name(id)),
+            "Unassigned",
+        ),
+        GroupKey::All => Line::default(),
     }
 }
 

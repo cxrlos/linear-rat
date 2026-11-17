@@ -1,0 +1,34 @@
+---
+source: tests/group_and_sort.rs
+expression: "screen(&app).join(\"\\n\")"
+---
+ [1] My Issues │ [2] Team Issues │ [3] Analytics                                                                        
+┏My Issues · group: priority · sort: updated, newest first━━━━━━━━━━━━━┓┌DES-34────────────────────────────────────────┐
+┃!!! Urgent (1)                                                        ┃│Design QA for the autumn release              │
+┃  OPS-33 Review the disaster reco ◇ Triage      !!! Urgent            ┃│                                              │
+┃▮▮▮ High (6)                                                          ┃│State     ◐ In Progress                       │
+┃  DES-40 Color-blind safe workflo ○ Todo        ▮▮▮ High    1 Cycle 7 ┃│Priority  ▮▮▮ High                            │
+┃▸ DES-34 Design QA for the autumn ◐ In Progress ▮▮▮ High    3 Cycle 7 ┃│Estimate  3                                   │
+┃  DES-2  Redesign the empty pantr ◌ Backlog     ▮▮▮ High              ┃│                                              │
+┃  ENG-56 Notification settings re ○ Todo        ▮▮▮ High    2         ┃│Bring two options to the critique on Thursday.│
+┃  DES-16 Accessible focus rings a ○ Todo        ▮▮▮ High    5         ┃│                                              │
+┃  ENG-22 Store the last sync wate ◐ In Progress ▮▮▮ High    3         ┃│Comments                                      │
+┃▮▮▯ Medium (9)                                                        ┃│Loading…                                      │
+┃  OPS-37 Clean up unused API keys ◐ In Review   ▮▮▯ Medium    Cycle 7 ┃│                                              │
+┃  ENG-70 Gouda batch labels print ◇ Triage      ▮▮▯ Medium  3         ┃│History                                       │
+┃  ENG-35 Split the auth module ou ◌ Backlog     ▮▮▯ Medium            ┃│Loading…                                      │
+┃  OPS-38 Add synthetic checks for ○ Todo        ▮▮▯ Medium    Cycle 7 ┃│                                              │
+┃  OPS-26 Archive the old marketin ○ Todo        ▮▮▯ Medium            ┃│Details                                       │
+┃  ENG-51 Add a dry-run mode to th ◐ In Progress ▮▮▯ Medium  2 Cycle 7 ┃│Team      Design                              │
+┃  ENG-57 Throttle sensor writes d ○ Todo        ▮▮▯ Medium  2 Cycle 7 ┃│Project   None                                │
+┃  OPS-15 Tag cloud resources by t ◐ In Review   ▮▮▯ Medium            ┃│Cycle     Cycle 7 (active)                    │
+┃  ENG-6  Migrate burrow storage t ○ Todo        ▮▮▯ Medium  3         ┃│Labels    improvement                         │
+┃▮▯▯ Low (6)                                                           ┃│Assignee  Mira Gouda                          │
+┃  OPS-36 Plan the office cheese c ◐ In Review   ▮▯▯ Low       Cycle 7 ┃│Creator   Pia Brie                            │
+┃  ENG-63 Precompute nightly cella ◇ Triage      ▮▯▯ Low     8         ┃│Created   2026-10-19 00:06 UTC (2 weeks ago)  │
+┃  ENG-61 Add contract tests for t ◐ In Progress ▮▯▯ Low     2 Cycle 7 ┃│Updated   2026-10-29 01:25 UTC (4 days ago)   │
+┃  DES-31 Review copy for permissi ○ Todo        ▮▯▯ Low     5 Cycle 7 ┃│                                              │
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛└──────────────────────────────────────────────┘
+ Move │ j down     │ k up       │ gg top     │ G bottom  │ C-d/C-u page │ h/l pane  │ / search                          
+ Do   │ Enter open │ y yank     │ o links    │ Esc close │ ? keys       │ : palette │ q quit                            
+ Edit │ s state    │ a assignee │ p priority │ L labels  │ e estimate   │ E text    │ c comment

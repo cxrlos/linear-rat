@@ -65,8 +65,9 @@ impl Modal {
     }
 }
 
-/// A picker of teams or filter values, and what choosing one does. An entry
-/// holds the id it picks, `None` for "Any", which clears a filter.
+/// A picker of teams, filter values, groupings or sorts, and what choosing
+/// one does. An entry holds the id or name it picks, `None` for "Any",
+/// which clears a filter, or for a list's own order.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Choice {
     pub purpose: Purpose,
@@ -82,6 +83,11 @@ pub enum Purpose {
     Filter(FilterField),
     /// Show this team in the Team view of Analytics.
     AnalyticsTeam,
+    /// Group the issue list on screen this way, by its config name.
+    Group,
+    /// Sort the issue list on screen this way, by its config name, or its
+    /// own order for `None`.
+    Sort,
 }
 
 impl Choice {
@@ -90,6 +96,8 @@ impl Choice {
         match self.purpose {
             Purpose::Team | Purpose::AnalyticsTeam => "Team".to_owned(),
             Purpose::Filter(field) => format!("Filter by {}", field.name().to_lowercase()),
+            Purpose::Group => "Group by".to_owned(),
+            Purpose::Sort => "Sort by".to_owned(),
         }
     }
 

@@ -576,7 +576,7 @@ fn write(state: &mut State, issue_id: &str, edit: Edit) -> Update {
     state.store.apply_edit(issue_id, &edit);
     state.row_errors.remove(issue_id);
     sent(state, issue_id);
-    state.rebuild_my_issues();
+    state.rebuild_lists();
     Update {
         redraw: true,
         effects: vec![Effect::UpdateIssue(Write {
@@ -624,7 +624,7 @@ pub(super) fn finished(
             state.row_errors.insert(write.issue_id.clone(), error);
         }
     }
-    state.rebuild_my_issues();
+    state.rebuild_lists();
     Update::redraw()
 }
 

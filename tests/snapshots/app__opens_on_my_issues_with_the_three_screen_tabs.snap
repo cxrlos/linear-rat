@@ -3,7 +3,7 @@ source: tests/app.rs
 expression: app.backend()
 ---
 " [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
-"┌My Issues─────────────────────────────────────────────────────────────────────┐"
+"┌My Issues · group: workflow state · sort: active cycle, then priority─────────┐"
 "│◐ Started (9)                                                                 │"
 "│▸ DES-34 Design QA for the autumn release ◐ In Progress ▮▮▮ High    3 Cycle 7 │"
 "│  ENG-51 Add a dry-run mode to the import ◐ In Progress ▮▮▯ Medium  2 Cycle 7 │"

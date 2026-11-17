@@ -5,6 +5,8 @@
 //! [ui]
 //! icons = "nerd"                         # or "unicode", the default
 //! wide-layout-columns = 120
+//! my-issues-group = "state"              # or priority, project, cycle, assignee, none
+//! team-issues-sort = "priority"          # or updated, created, due-date, estimate; -asc/-desc
 //!
 //! [theme]
 //! name = "nord"                          # a built-in, or themes/<name>.json
@@ -52,6 +54,7 @@ use toml::de::{DeTable, DeValue};
 use toml_parser::parser::{Event, EventKind};
 
 use crate::analytics::{StaleThreshold, WeekRange};
+use crate::app::{Arrangement, Grouping, Sort, SortKey};
 use crate::auth::KeyringStore;
 use crate::keys::{self, Change, Context, KeySequence, Override, Target};
 use crate::ui::icons::IconSet;
@@ -104,6 +107,13 @@ pub struct UiSettings {
     /// beside the list; below it the focused pane fills the body. 120 by
     /// default.
     pub wide_layout_columns: u16,
+    /// `my-issues-group` and `my-issues-sort`: how My Issues starts out
+    /// grouped and sorted; by workflow state and its own order by default.
+    pub my_issues: Arrangement,
+    /// `team-issues-group` and `team-issues-sort`: how Team Issues starts
+    /// out grouped and sorted; one list, most recently updated first, by
+    /// default.
+    pub team_issues: Arrangement,
 }
 
 impl Default for UiSettings {
@@ -111,6 +121,8 @@ impl Default for UiSettings {
         Self {
             icons: IconSet::Unicode,
             wide_layout_columns: 120,
+            my_issues: Arrangement::MY_ISSUES,
+            team_issues: Arrangement::TEAM_ISSUES,
         }
     }
 }
@@ -404,8 +416,60 @@ fn read_ui(ui: &mut UiSettings, key: &str, value: &Spanned<DeValue>) -> Setting 
         },
         "wide-layout-columns" => integer(value, "ui.wide-layout-columns", 0..=u64::from(u16::MAX))
             .map(|columns| ui.wide_layout_columns = u16::try_from(columns).unwrap_or(u16::MAX)),
+        "my-issues-group" => {
+            grouping(value, "ui.my-issues-group").map(|group| ui.my_issues.group = group)
+        }
+        "team-issues-group" => {
+            grouping(value, "ui.team-issues-group").map(|group| ui.team_issues.group = group)
+        }
+        "my-issues-sort" => match value.get_ref().as_str() {
+            Some("default") => {
+                ui.my_issues.sort = None;
+                Ok(())
+            }
+            _ => sort(
+                value,
+                "ui.my-issues-sort",
+                ", or \"default\" for active cycle, then priority",
+            )
+            .map(|sort| ui.my_issues.sort = Some(sort)),
+        },
+        "team-issues-sort" => {
+            sort(value, "ui.team-issues-sort", "").map(|sort| ui.team_issues.sort = Some(sort))
+        }
         _ => return None,
     })
+}
+
+fn grouping(value: &Spanned<DeValue>, key: &str) -> Result<Grouping, String> {
+    value
+        .get_ref()
+        .as_str()
+        .and_then(Grouping::from_name)
+        .ok_or_else(|| {
+            let names: Vec<String> = Grouping::ALL
+                .iter()
+                .map(|grouping| format!("\"{}\"", grouping.name()))
+                .collect();
+            format!("`{key}` must be one of {}", names.join(", "))
+        })
+}
+
+fn sort(value: &Spanned<DeValue>, key: &str, more: &str) -> Result<Sort, String> {
+    value
+        .get_ref()
+        .as_str()
+        .and_then(Sort::from_name)
+        .ok_or_else(|| {
+            let names: Vec<String> = SortKey::ALL
+                .iter()
+                .map(|key| format!("\"{}\"", key.name()))
+                .collect();
+            format!(
+                "`{key}` must be one of {}, each optionally ending in -asc or -desc{more}",
+                names.join(", ")
+            )
+        })
 }
 
 fn read_theme(theme: &mut ThemeSection, key: &str, value: &Spanned<DeValue>) -> Setting {

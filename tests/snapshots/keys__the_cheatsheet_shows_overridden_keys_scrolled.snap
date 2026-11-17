@@ -3,11 +3,8 @@ source: tests/keys.rs
 expression: narrow.backend()
 ---
 " [1] My Issues │ [2] Team Issues │ [3] Analytics  "
-"┌My Issues───────────────────────────────────────┐"
+"┌My Issues · group: workflow state · sort: active┐"
 "│No open ┌ Keys ────────────────────────┐        │"
-"│        │                              │        │"
-"│        │ Open & copy                  │        │"
-"│        │  Enter  open the issue       │        │"
 "│        │  yi/yu  copy key / URL       │        │"
 "│        │  yb/ym  copy branch / link   │        │"
 "│        │  o      Linear page or PR    │        │"
@@ -21,6 +18,9 @@ expression: narrow.backend()
 "│        │  /      search               │        │"
 "│        │  Q      quit                 │        │"
 "│        │  C-z    suspend              │        │"
+"│        │                              │        │"
+"│        │ Issue list                   │        │"
+"│        │  vg/vs  group / sort         │        │"
 "│        └ Esc close ───────────────────┘        │"
 "└────────────────────────────────────────────────┘"
 " Move │ j/k move                                  "

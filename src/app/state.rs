@@ -6,7 +6,7 @@ use ratatui::layout::Size;
 use jiff::Timestamp;
 
 use super::{
-    AnalyticsScreen, Detail, Drafts, Load, LoadError, ModalStack, MyIssues, Results, Store,
+    AnalyticsScreen, Detail, Drafts, Load, LoadError, ModalStack, MyIssues, Names, Results, Store,
     SyncStatus, TeamIssues,
 };
 use crate::auth::KeySource;
@@ -109,7 +109,7 @@ impl State {
             self.sync_status.forget_syncs();
         }
         self.store.merge(loaded);
-        self.rebuild_my_issues();
+        self.rebuild_lists();
         self.load = Load::Loaded;
     }
 
@@ -133,24 +133,23 @@ impl State {
             sync_status: SyncStatus::from_snapshot(synced_at),
             ..self
         };
-        state.rebuild_my_issues();
+        state.rebuild_lists();
         state
     }
 
-    /// Builds My Issues again from the store, for example after a merge,
-    /// keeping the focused issue, the pane and the scroll. When the focused
-    /// issue left, the focus stays at its place in the list.
-    pub fn rebuild_my_issues(&mut self) {
+    /// Builds the issue lists again from the store, for example after a
+    /// merge, keeping each one's focused issue, pane and scroll. When the
+    /// focused issue left My Issues, the focus stays at its place in the
+    /// list.
+    pub fn rebuild_lists(&mut self) {
+        super::team_issues::rebuild(self);
+        super::results::rebuild(self);
         let Some(viewer) = self.store.viewer() else {
             return;
         };
-        let as_of = self.store.as_of().unwrap_or_default();
         let issues: Vec<_> = self.store.issues().cloned().collect();
-        let cycles: Vec<_> = self.store.cycles().cloned().collect();
-        let labels: Vec<_> = self.store.labels().cloned().collect();
-        let members: Vec<_> = self.store.members().cloned().collect();
-        let teams: Vec<_> = self.store.teams().cloned().collect();
-        let mut rebuilt = MyIssues::new(viewer, &issues, &cycles, &labels, &members, &teams, as_of);
+        let names = Names::from_store(&self.store);
+        let mut rebuilt = MyIssues::arranged(viewer, &issues, names, self.my_issues.arrangement());
         let rows = ui::list_rows(self, self.viewport);
         rebuilt.keep_place_of(&self.my_issues, rows);
         self.my_issues = rebuilt;
@@ -176,7 +175,7 @@ impl State {
     /// This state with the keymap, theme and settings from `loaded`, and its
     /// first error, if any, as the notice.
     pub fn with_config(self, loaded: &Loaded) -> Self {
-        Self {
+        let mut state = Self {
             keymap: Keymap::new(&loaded.config.keys),
             notice: summary(&loaded.errors),
             theme: loaded.theme.clone(),
@@ -184,7 +183,13 @@ impl State {
             sync: loaded.config.sync,
             analytics: loaded.config.analytics,
             ..self
-        }
+        };
+        state.my_issues.arrangement = loaded.config.ui.my_issues;
+        state
+            .team_issues
+            .set_arrangement(loaded.config.ui.team_issues);
+        state.rebuild_lists();
+        state
     }
 }
 

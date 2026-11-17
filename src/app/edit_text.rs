@@ -108,7 +108,7 @@ pub(super) fn closed(state: &mut State, opened: TextOpened, text: String) -> Upd
     state.store.apply_edit(&opened.issue_id, &edit);
     state.row_errors.remove(&opened.issue_id);
     super::edit::sent(state, &opened.issue_id);
-    state.rebuild_my_issues();
+    state.rebuild_lists();
     Update {
         redraw: true,
         effects: vec![Effect::UpdateIssueText {

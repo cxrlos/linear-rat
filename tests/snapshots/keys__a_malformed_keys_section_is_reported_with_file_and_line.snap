@@ -3,7 +3,7 @@ source: tests/keys.rs
 expression: app.backend()
 ---
 " [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
-"┌My Issues─────────────────────────────────────────────────────────────────────┐"
+"┌My Issues · group: workflow state · sort: active cycle, then priority─────────┐"
 "│No open issues are assigned to you.                                           │"
 "│                                                                              │"
 "│                                                                              │"

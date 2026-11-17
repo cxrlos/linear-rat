@@ -3,7 +3,7 @@ source: tests/palette.rs
 expression: app.backend()
 ---
 " [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
-"┌My Issues─────────────────────────────────────────────────────────────────────┐"
+"┌My Issues · group: workflow state · sort: active cycle, then priority─────────┐"
 "│◐┌ Palette ─────────────────────────────────────────────────────────────────┐ │"
 "│▸│ : cheese cave                                                            │ │"
 "│ │──────────────────────────────────────────────────────────────────────────│ │"

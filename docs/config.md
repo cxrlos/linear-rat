@@ -16,6 +16,16 @@ A problem in the file shows as a notice above the bottom bar, naming the file an
 | --- | --- | --- | --- |
 | `icons` | `"unicode"`, `"nerd"` | `"unicode"` | The glyphs for workflow state types and priorities. `"nerd"` needs a patched [Nerd Font](https://www.nerdfonts.com/). |
 | `wide-layout-columns` | 0 to 65535 | `120` | From this terminal width on, My Issues shows the focused issue's detail beside the list. Below it, the focused pane fills the screen. |
+| `my-issues-group` | a grouping (below) | `"state"` | How My Issues starts out grouped. |
+| `my-issues-sort` | a sort (below), or `"default"` | `"default"` | How My Issues starts out sorted. `"default"` puts issues in the active cycle first, then goes by priority. |
+| `team-issues-group` | a grouping (below) | `"none"` | How Team Issues starts out grouped. |
+| `team-issues-sort` | a sort (below) | `"updated"` | How Team Issues starts out sorted. |
+
+A grouping is `"state"` (workflow state type: started, unstarted, backlog, triage, completed, canceled), `"priority"`, `"project"`, `"cycle"` (newest first), `"assignee"` or `"none"`. Groups of named things go by name, and the group of issues with no project, cycle or assignee comes last.
+
+A sort is `"updated"`, `"created"`, `"priority"`, `"due-date"` or `"estimate"`. On its own each sorts the way you usually want it: newest, most urgent, soonest due and largest estimate first. Add `-asc` or `-desc` to choose: ascending is oldest, urgent, soonest and smallest first. Issues missing the field go last either way, and issues that tie keep the list's own order.
+
+`vg` and `vs` change the grouping and sort of the list on screen for the rest of the session, and the list's title says which are in force. Team Issues sorts what it has loaded: sorted by `"updated"` or `"created"` newest first, Linear sends its pages in that order, so the sort covers every issue. Any other sort covers only the pages loaded so far, and the title says so, as `sort: priority, urgent first, loaded 50 of 70`.
 
 In both icon sets every workflow state type and every priority has its own glyph, so none is told apart by color alone:
 
@@ -140,6 +150,8 @@ Changing `store` does not move a stored key: run `lrat auth login` after the cha
 [ui]
 icons = "nerd"
 wide-layout-columns = 140
+my-issues-group = "state"
+team-issues-sort = "priority"
 
 [theme]
 name = "nord"

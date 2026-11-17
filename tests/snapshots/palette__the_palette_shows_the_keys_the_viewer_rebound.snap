@@ -3,7 +3,7 @@ source: tests/palette.rs
 expression: "format!(\"{}\\n\\n{}\", quit.join(\"\\n\"), screen(&app).join(\"\\n\"))"
 ---
  [1] My Issues │ [2] Team Issues │ [3] Analytics                                
-┌My Issues─────────────────────────────────────────────────────────────────────┐
+┌My Issues · group: workflow state · sort: active cycle, then priority─────────┐
 │◐┌ Palette ─────────────────────────────────────────────────────────────────┐ │
 │▸│ : quit                                                                   │ │
 │ │──────────────────────────────────────────────────────────────────────────│ │
@@ -28,7 +28,7 @@ expression: "format!(\"{}\\n\\n{}\", quit.join(\"\\n\"), screen(&app).join(\"\\n
                                                                                 
 
  [1] My Issues │ [2] Team Issues │ [3] Analytics                                
-┌My Issues─────────────────────────────────────────────────────────────────────┐
+┌My Issues · group: workflow state · sort: active cycle, then priority─────────┐
 │◐┌ Palette ─────────────────────────────────────────────────────────────────┐ │
 │▸│ : every key                                                              │ │
 │ │──────────────────────────────────────────────────────────────────────────│ │

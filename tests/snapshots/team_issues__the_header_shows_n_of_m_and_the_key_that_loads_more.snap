@@ -4,7 +4,7 @@ expression: app.backend()
 ---
 " [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
 "t ENG Engineering · 50 of 70 m more · f Filters none                            "
-"┌Team Issues───────────────────────────────────────────────────────────────────┐"
+"┌Team Issues · group: none · sort: updated, newest first───────────────────────┐"
 "│▸ ENG-69 Make the importer resumable      ● Done        ▮▮▯ Medium  8 Cycle 7 │"
 "│  ENG-49 Support metric and imperial whee ● Done        !!! Urgent  8 Cycle 7 │"
 "│  ENG-41 Fix memory leak in the crumb pro ⊘ Canceled    ▮▮▯ Medium  8         │"

@@ -1,0 +1,33 @@
+---
+source: tests/group_and_sort.rs
+expression: "screen(&app).join(\"\\n\")"
+---
+ [1] My Issues │ [2] Team Issues │ [3] Analytics                                                                        
+┏My Issues · group: workflow state · sort: active cycle, then priority━┓┌DES-34────────────────────────────────────────┐
+┃◐ Started (9)                                                         ┃│Design QA for the autumn release              │
+┃▸ DES-34 Design QA for the autumn ◐ In Progress ▮▮▮ High    3 Cycle 7 ┃│                                              │
+┃  ENG-51 Add a dry-run mode to th ◐ In Progress ▮▮▯ Medium  2 Cycle 7 ┃│State     ◐ In Progress                       │
+┃  OPS-37 Clean up unused API keys ◐ In Review   ▮▮▯ Medium    Cycle 7 ┃│Priority  ▮▮▮ High                            │
+┃  ENG-61 Add contract tests for t ◐ In Progress ▮▯▯ Low     2 Cycle 7 ┃│Estimate  3                                   │
+┃  OPS-36 Plan the office cheese c ◐ In Review   ▮▯▯ Low       Cycle 7 ┃│                                              │
+┃  ENG-60 Improve error messages o ◐ In Progress ··· None    5 Cycle 7 ┃│Bring two options to the critique on Thursday.│
+┃  ENG-22 Store the last sync wate ◐ ┌ Group by ─────────────────────────────────┐                                     │
+┃  OPS-15 Tag cloud resources by t ◐ │ > type to filter                          │                                     │
+┃  DES-12 Motion guidelines for li ◐ │ 1 workflow state ✓                        │                                     │
+┃○ Unstarted (10)                    │ 2 priority                                │                                     │
+┃  DES-40 Color-blind safe workflo ○ │ 3 project                                 │                                     │
+┃  ENG-57 Throttle sensor writes d ○ │ 4 cycle                                   │                                     │
+┃  OPS-38 Add synthetic checks for ○ │ 5 assignee                                │                                     │
+┃  DES-31 Review copy for permissi ○ │ 6 none                                    │                                     │
+┃  ENG-65 Rotate refresh tokens on ○ └ Down/Up select  Enter choose  Esc close ──┘ Design                              │
+┃  DES-16 Accessible focus rings a ○ Todo        ▮▮▮ High    5         ┃│Project   None                                │
+┃  ENG-56 Notification settings re ○ Todo        ▮▮▮ High    2         ┃│Cycle     Cycle 7 (active)                    │
+┃  ENG-6  Migrate burrow storage t ○ Todo        ▮▮▯ Medium  3         ┃│Labels    improvement                         │
+┃  OPS-26 Archive the old marketin ○ Todo        ▮▮▯ Medium            ┃│Assignee  Mira Gouda                          │
+┃  OPS-20 Replace the warehouse la ○ Todo        ▮▯▯ Low               ┃│Creator   Pia Brie                            │
+┃◌ Backlog (7)                                                         ┃│Created   2026-10-19 00:06 UTC (2 weeks ago)  │
+┃  DES-2  Redesign the empty pantr ◌ Backlog     ▮▮▮ High              ┃│Updated   2026-10-29 01:25 UTC (4 days ago)   │
+┃  ENG-35 Split the auth module ou ◌ Backlog     ▮▮▯ Medium            ┃│                                              │
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛└──────────────────────────────────────────────┘
+ Move │ Down/Up move                                                                                                    
+ Do   │ Enter pick   │ Tab toggle │ Esc close

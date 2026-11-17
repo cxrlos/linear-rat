@@ -68,7 +68,7 @@ pub(super) fn finish(state: &mut State, term: &str, result: Result<SearchResults
             state.notice = super::state::summary(&found.problems);
         }
         state.store.merge_search(found);
-        state.rebuild_my_issues();
+        state.rebuild_lists();
     }
     let waiting = state.modals.iter_mut().rev().find_map(|modal| match modal {
         Modal::Search(search) if matches!(&search.phase, Phase::Searching { term: waiting } if waiting == term) => {

@@ -11,7 +11,7 @@ use super::model::{
     Attachment, Comment, Cycle, Estimation, Issue, Label, Member, Priority, Project, StateSpan,
     StateType, Team, Viewer, WorkflowState, Workspace,
 };
-use super::{TeamOptions, TeamQuery};
+use super::{TeamOptions, TeamOrder, TeamQuery};
 
 /// The demo's "now": every date in the demo workspace is anchored to it.
 pub const NOW: Timestamp = Timestamp::constant(1_793_631_600, 0); // 2026-11-02T15:00:00Z
@@ -210,7 +210,7 @@ pub fn administrable_team_ids() -> Vec<String> {
     vec!["team-eng".to_owned(), "team-ops".to_owned()]
 }
 
-/// The issues of `query` in `data`, most recently updated first, as the fake
+/// The issues of `query` in `data`, newest first by its order, as the fake
 /// client pages through them.
 pub fn team_issues(data: &DemoWorkspace, query: &TeamQuery) -> Vec<Issue> {
     let mut issues: Vec<Issue> = data
@@ -220,9 +220,11 @@ pub fn team_issues(data: &DemoWorkspace, query: &TeamQuery) -> Vec<Issue> {
         .cloned()
         .collect();
     issues.sort_by(|a, b| {
-        b.updated_at
-            .cmp(&a.updated_at)
-            .then_with(|| a.id.cmp(&b.id))
+        let (a_at, b_at) = match query.order {
+            TeamOrder::Updated => (a.updated_at, b.updated_at),
+            TeamOrder::Created => (a.created_at, b.created_at),
+        };
+        b_at.cmp(&a_at).then_with(|| a.id.cmp(&b.id))
     });
     issues
 }

@@ -3,7 +3,7 @@ source: tests/keys.rs
 expression: app.backend()
 ---
 " [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
-"┌My Issues─────────────────────────────────────────────────────────────────────┐"
+"┌My Issues · group: workflow state · sort: active cycle, then priority─────────┐"
 "│┌ Keys ─────────────────────────────────────────────────────────────────────┐ │"
 "││ Move                                │ Edit the issue                      │ │"
 "││  j/k      down / up                 │  s  workflow state                  │ │"
@@ -19,9 +19,9 @@ expression: app.backend()
 "││  o      Linear page or PR           │  1/2/3  screens   r      refresh    │ │"
 "││  O      other links                 │  ?      keys      :,C-k  palette    │ │"
 "││                                     │  /      search    q      quit       │ │"
-"││                                     │  C-z    suspend                     │ │"
+"││ Issue list                          │  C-z    suspend                     │ │"
+"││  vg/vs  group / sort                │                                     │ │"
 "│└ Esc close ────────────────────────────────────────────────────────────────┘ │"
-"│                                                                              │"
 "└──────────────────────────────────────────────────────────────────────────────┘"
 " Move │ j/k move                                                                "
 " Do   │ Enter pick │ Tab toggle │ Esc close                                     "

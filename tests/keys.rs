@@ -236,7 +236,7 @@ fn a_narrow_cheatsheet_fits_inside_the_frame_and_scrolls_to_the_rest() {
 
     press(&mut app, "?");
     assert!(
-        row(&app, 1).starts_with("┌My Issues───"),
+        row(&app, 1).starts_with("┌My Issues · "),
         "{}",
         screen(&app)
     );

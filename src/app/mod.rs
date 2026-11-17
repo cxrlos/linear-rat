@@ -2,6 +2,7 @@
 
 mod action;
 mod analytics_screen;
+mod arrange;
 mod compose;
 mod create;
 mod detail;
@@ -9,6 +10,7 @@ mod edit;
 mod edit_text;
 mod effect;
 mod event;
+mod issue_list;
 mod links;
 mod load;
 mod modal;
@@ -16,6 +18,7 @@ mod my_issues;
 mod names;
 mod palette;
 mod picker;
+mod rearrange;
 mod results;
 mod search;
 mod state;
@@ -30,6 +33,7 @@ use ratatui::layout::Rect;
 
 pub use action::{Action, Copyable};
 pub use analytics_screen::{AnalyticsScreen, AnalyticsView};
+pub use arrange::{Arrangement, Group, GroupKey, Grouping, Sort, SortKey, arrange, linear_order};
 pub use compose::{Drafts, IssueDraft, NewComment, NewIssue, Writing, is_local};
 pub use create::{CreateForm, Step};
 pub use detail::{Detail, DetailLoad};
@@ -37,13 +41,15 @@ pub use edit::{Edit, EditPicker, Editable, Write, estimate_scale, focused_team_e
 pub use edit_text::TextOpened;
 pub use effect::Effect;
 pub use event::Event;
+pub use issue_list::{IssueList, Pane};
 pub use links::{Link, LinkSet, Links};
 pub use load::{Load, LoadError};
 pub use modal::{Choice, Modal, ModalStack, Purpose};
-pub use my_issues::{Group, MyIssues, Pane};
+pub use my_issues::MyIssues;
 pub use names::Names;
 pub use palette::{Palette, PaletteEntry, palette_matches};
 pub use picker::{Entry, Note, Picker};
+pub use rearrange::{can_rearrange, own_order};
 pub use results::Results;
 pub use search::{Phase, Search};
 pub use state::{Screen, State};
