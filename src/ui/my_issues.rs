@@ -186,8 +186,12 @@ pub(super) fn row_cells<'a>(issues: impl Iterator<Item = &'a Issue>) -> Layout {
     .spacing(1)
 }
 
-/// One issue row: marker, identifier, title, state, priority, estimate and
-/// cycle, highlighted when it is the focused issue.
+/// The columns a row's title keeps before its due date is shown beside it.
+const TITLE_BESIDE_DUE: u16 = 12;
+
+/// One issue row: marker, identifier, title with its due date when there is
+/// room, state, priority, estimate and cycle, highlighted when it is the
+/// focused issue.
 pub(super) fn render_row(
     view: &View,
     frame: &mut Frame,
@@ -203,15 +207,19 @@ pub(super) fn render_row(
         frame.render_widget("▸", marker);
     }
     frame.render_widget(Span::raw(&issue.identifier).fg(theme.muted), identifier);
-    let title = match issue.due_date {
-        Some(date) => {
-            let due = due_span(view, issue, date);
-            let [title, due_area] = Layout::horizontal([
-                Constraint::Fill(1),
-                Constraint::Length(u16::try_from(due.width()).unwrap_or(u16::MAX)),
-            ])
-            .spacing(1)
-            .areas(title);
+    let due = issue
+        .due_date
+        .map(|date| due_span(view, issue, date))
+        .map(|due| (u16::try_from(due.width()).unwrap_or(u16::MAX), due))
+        .filter(|(width, _)| {
+            title.width >= width.saturating_add(1).saturating_add(TITLE_BESIDE_DUE)
+        });
+    let title = match due {
+        Some((width, due)) => {
+            let [title, due_area] =
+                Layout::horizontal([Constraint::Fill(1), Constraint::Length(width)])
+                    .spacing(1)
+                    .areas(title);
             frame.render_widget(due, due_area);
             title
         }

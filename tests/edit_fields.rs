@@ -595,3 +595,18 @@ fn an_overdue_open_issue_says_so_in_its_detail() {
     assert!(shows(&app, "due Oct 30"));
     assert!(shows(&app, "Due       2026-10-30 (overdue)"));
 }
+
+#[test]
+fn on_a_narrow_list_the_title_keeps_its_room_and_the_due_date_gives_way() {
+    let app = App::new(TestBackend::new(64, 12), State::demo()).unwrap();
+    let title = issue(&app, FIRST).title;
+    let start: String = title.chars().take(12).collect();
+
+    assert!(
+        shows(&app, &format!("{FIRST} {start}")),
+        "{:#?}",
+        screen(&app)
+    );
+    assert!(!shows(&app, "due "), "{:#?}", screen(&app));
+    assert_snapshot!(app.backend());
+}
