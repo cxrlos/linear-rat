@@ -49,7 +49,7 @@ pub use my_issues::{Group, MyIssues, Pane};
 pub use names::Names;
 pub use palette::{Palette, PaletteEntry, palette_matches};
 pub use picker::{Entry, Note, Picker};
-pub use relations::RelationWrite;
+pub use relations::{RelationWrite, RelationsInFlight};
 pub use results::Results;
 pub use search::{Phase, Search};
 pub use state::{Screen, State};

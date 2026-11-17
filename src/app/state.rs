@@ -6,8 +6,8 @@ use ratatui::layout::Size;
 use jiff::Timestamp;
 
 use super::{
-    AnalyticsScreen, Detail, Drafts, Load, LoadError, ModalStack, MyIssues, Results, Store,
-    SyncStatus, TeamIssues,
+    AnalyticsScreen, Detail, Drafts, Load, LoadError, ModalStack, MyIssues, RelationsInFlight,
+    Results, Store, SyncStatus, TeamIssues,
 };
 use crate::auth::KeySource;
 use crate::config::{AnalyticsSettings, Loaded, SyncSettings, UiSettings};
@@ -33,6 +33,8 @@ pub struct State {
     pub row_errors: BTreeMap<String, String>,
     /// How many edits sent to Linear are still unanswered, by issue id.
     pub writes_in_flight: BTreeMap<String, usize>,
+    /// Relation writes Linear has not answered yet.
+    pub relations_in_flight: RelationsInFlight,
     pub my_issues: MyIssues,
     /// The focused issue's detail: its scroll and which details have loaded.
     pub detail: Detail,

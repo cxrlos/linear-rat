@@ -20,6 +20,28 @@ pub struct RelationWrite {
     pub identifier: String,
 }
 
+/// Relation writes Linear has not answered yet. A detail that loads
+/// meanwhile replaces the stored relations of its issue, so these are put
+/// back over it until Linear answers.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct RelationsInFlight {
+    /// Stand-ins of relations being created.
+    adding: Vec<IssueRelation>,
+    /// Ids of relations being deleted.
+    removing: Vec<String>,
+}
+
+/// Puts the relation writes still in flight back over the store, after a
+/// detail load replaced the relations they touch.
+pub(super) fn reapply_in_flight(state: &mut State) {
+    for relation in &state.relations_in_flight.adding {
+        state.store.add_relation(relation.clone());
+    }
+    for id in &state.relations_in_flight.removing {
+        state.store.remove_relation(id);
+    }
+}
+
 /// The kinds a new relation can have, in the order the chooser lists them.
 const ADDABLE: [RelationKind; 4] = [
     RelationKind::Blocks,
@@ -284,6 +306,7 @@ pub(super) fn add(
             related_issue_id: to.to_owned(),
         };
         state.store.add_relation(relation.clone());
+        state.relations_in_flight.adding.push(relation.clone());
         effects.push(Effect::CreateRelation(RelationWrite {
             relation,
             identifier: identifier.clone(),
@@ -315,6 +338,7 @@ pub(super) fn remove(state: &mut State, issue_id: &str, others: &[String]) -> Up
     let mut effects = Vec::new();
     for relation in doomed {
         state.store.remove_relation(&relation.id);
+        state.relations_in_flight.removing.push(relation.id.clone());
         effects.push(Effect::DeleteRelation(RelationWrite {
             relation,
             identifier: identifier.clone(),
@@ -345,6 +369,10 @@ pub(super) fn created(
     write: &RelationWrite,
     result: Result<IssueRelation, String>,
 ) -> Update {
+    state
+        .relations_in_flight
+        .adding
+        .retain(|relation| relation.id != write.relation.id);
     state.store.remove_relation(&write.relation.id);
     match result {
         Ok(relation) => state.store.add_relation(relation),
@@ -368,6 +396,10 @@ pub(super) fn deleted(
     write: &RelationWrite,
     result: Result<(), String>,
 ) -> Update {
+    state
+        .relations_in_flight
+        .removing
+        .retain(|id| *id != write.relation.id);
     if let Err(error) = result {
         state.store.add_relation(write.relation.clone());
         state.notice = Some(format!(

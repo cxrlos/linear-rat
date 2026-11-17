@@ -414,6 +414,50 @@ fn a_removal_linear_rejects_puts_the_relation_back() {
 }
 
 #[test]
+fn a_detail_reload_keeps_relation_writes_still_in_flight() {
+    let mut app = focused_with_detail("ENG-51");
+    let removal = press(&mut app, "drENG-6\n");
+    let [removal] = deletes(&removal).try_into().unwrap();
+    let addition = press(&mut app, "R1ENG-60\n");
+    let [addition] = creates(&addition).try_into().unwrap();
+
+    detail_loaded(&mut app, DRY_RUN);
+
+    let after_reload = relations(&app, DRY_RUN);
+    assert!(
+        !after_reload.contains(&(RelationKind::BlockedBy, "issue-eng-6".to_owned())),
+        "{after_reload:?}"
+    );
+    assert!(
+        after_reload.contains(&(RelationKind::Blocks, "issue-eng-60".to_owned())),
+        "{after_reload:?}"
+    );
+
+    app.handle(Event::RelationDeleted {
+        write: removal,
+        result: Ok(()),
+    })
+    .unwrap();
+    app.handle(Event::RelationCreated {
+        write: addition,
+        result: Err(REJECTION.to_owned()),
+    })
+    .unwrap();
+    detail_loaded(&mut app, DRY_RUN);
+
+    // Nothing is in flight, so the detail is taken as Linear gives it.
+    let settled = relations(&app, DRY_RUN);
+    assert!(
+        settled.contains(&(RelationKind::BlockedBy, "issue-eng-6".to_owned())),
+        "{settled:?}"
+    );
+    assert!(
+        !settled.contains(&(RelationKind::Blocks, "issue-eng-60".to_owned())),
+        "{settled:?}"
+    );
+}
+
+#[test]
 fn removing_before_the_relations_loaded_asks_for_them_first() {
     let mut app = sized(80, 24);
     focus(&mut app, "ENG-51");
