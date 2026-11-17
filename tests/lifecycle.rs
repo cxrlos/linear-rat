@@ -9,7 +9,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
 use linear_rat::app::{App, Effect, Event, Lifecycle, LifecycleWrite, Modal, Screen, State};
 use linear_rat::linear::model::Issue;
-use linear_rat::linear::{FakeClient, IssueDetail, LinearClient};
+use linear_rat::linear::{FakeClient, IssueDetail, LinearClient, LiveEvent, TeamChanges};
 use ratatui::backend::TestBackend;
 
 /// The issue My Issues focuses first in the demo, which the viewer is
@@ -343,6 +343,58 @@ async fn an_archived_issue_leaves_team_issues_and_comes_back_in_place_on_failure
     assert!(!app.state().team_issues.ids().contains(&archived));
     app.handle(answered(&write, Err(REJECTED))).unwrap();
     assert_eq!(app.state().team_issues.ids(), ids);
+}
+
+/// One team's changes holding `issue` as archived in Linear a minute after
+/// it last changed.
+fn archived_elsewhere(issue: &Issue) -> TeamChanges {
+    let mut issue = issue.clone();
+    let at = issue
+        .updated_at
+        .checked_add(jiff::SignedDuration::from_mins(1))
+        .unwrap();
+    issue.updated_at = at;
+    issue.archived_at = Some(at);
+    TeamChanges {
+        team_id: issue.team_id.clone(),
+        newest: Some(at),
+        as_of: at,
+        issues: vec![issue],
+        trashed: Vec::new(),
+        cycles: Vec::new(),
+        labels: Vec::new(),
+        members: Vec::new(),
+        teams: Vec::new(),
+    }
+}
+
+#[tokio::test]
+async fn an_issue_archived_elsewhere_leaves_team_issues_on_the_next_poll() {
+    let mut app = app();
+    let effects = press(&mut app, "2");
+    settle(&mut app, effects).await;
+    let issue = app.state().focused_issue().unwrap().clone();
+
+    app.handle(Event::Polled {
+        changes: vec![archived_elsewhere(&issue)],
+        failure: None,
+    })
+    .unwrap();
+
+    assert!(!app.state().team_issues.ids().contains(&issue.id));
+}
+
+#[tokio::test]
+async fn an_issue_archived_elsewhere_leaves_team_issues_on_a_live_event() {
+    let mut app = app();
+    let effects = press(&mut app, "2");
+    settle(&mut app, effects).await;
+    let issue = app.state().focused_issue().unwrap().clone();
+
+    app.handle(Event::Live(LiveEvent::Issue(archived_elsewhere(&issue))))
+        .unwrap();
+
+    assert!(!app.state().team_issues.ids().contains(&issue.id));
 }
 
 #[tokio::test]

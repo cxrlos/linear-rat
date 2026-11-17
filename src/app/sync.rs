@@ -417,6 +417,7 @@ pub(super) fn polled(
         let before = state.store.watermark(&team.team_id);
         changed |= state.store.apply(team);
         moved |= state.store.watermark(&team.team_id) != before;
+        forget_archived(state, team);
     }
     let indicator_changed = redraw_if_indicator_changes(state, |state| {
         let status = &mut state.sync_status;
@@ -444,6 +445,20 @@ pub(super) fn polled(
     }
 }
 
+/// Takes the issues among `changes` that the store now holds as archived
+/// off Team Issues, whose pages leave archived issues out.
+fn forget_archived(state: &mut State, changes: &TeamChanges) {
+    for issue in &changes.issues {
+        let archived = state
+            .store
+            .issue(&issue.id)
+            .is_some_and(|stored| stored.archived_at.is_some());
+        if archived {
+            state.team_issues.forget(&issue.id);
+        }
+    }
+}
+
 /// Applies a live event: an issue merges through the same newer-wins path
 /// as a poll, without moving a watermark, and a comment joins the comments
 /// already loaded. An issue event that changed the store schedules a delta
@@ -465,6 +480,7 @@ pub(super) fn live(state: &mut State, event: LiveEvent) -> Update {
                     .and_then(|now| now.checked_add(LIVE_POLL_AFTER).ok());
                 state.rebuild_my_issues();
             }
+            forget_archived(state, &changes);
             changed
         }
         LiveEvent::Comment(posted) => {
