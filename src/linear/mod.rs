@@ -6,6 +6,7 @@ mod error;
 mod governor;
 pub mod http;
 pub mod model;
+pub mod paging;
 pub(crate) mod search_bucket;
 
 use std::cell::RefCell;
@@ -94,12 +95,13 @@ pub trait LinearClient {
         urgency: Urgency,
     ) -> impl Future<Output = Result<IssueDetail, ClientError>> + Send;
 
-    /// The issues anywhere in the workspace that match `term`, best match
-    /// first, closed ones included. Search has its own budget of 30 a
-    /// minute; a search beyond it waits its turn rather than failing.
+    /// The issues that match `query`'s term, best match first, closed ones
+    /// included: anywhere in the workspace, or only those of its team and
+    /// filter. Search has its own budget of 30 a minute; a search beyond it
+    /// waits its turn rather than failing.
     fn search_issues(
         &self,
-        term: &str,
+        query: &SearchQuery,
     ) -> impl Future<Output = Result<SearchResults, ClientError>> + Send;
 
     /// The teams the viewer is a member of, in the order Linear lists them.
@@ -343,6 +345,27 @@ pub struct SearchResults {
     pub teams: Vec<Team>,
     /// What Linear could not give, as in [`AssignedIssues::problems`].
     pub problems: Vec<String>,
+}
+
+/// What a search asks Linear for: the term, whether comments count as a
+/// match, and the team and filter to keep to, if any.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SearchQuery {
+    pub term: String,
+    pub include_comments: bool,
+    /// The team and Team Issues filter the results must match; `None`
+    /// searches the whole workspace.
+    pub within: Option<TeamQuery>,
+}
+
+impl SearchQuery {
+    /// `term` across the whole workspace, comments left out.
+    pub fn new(term: impl Into<String>) -> Self {
+        Self {
+            term: term.into(),
+            ..Self::default()
+        }
+    }
 }
 
 /// A team's issues, narrowed by a filter.
@@ -962,23 +985,43 @@ impl LinearClient for FakeClient {
         Ok(detail)
     }
 
-    /// Every demo issue whose identifier, title or description holds each
-    /// word of `term`, ignoring case, in the demo's order.
-    async fn search_issues(&self, term: &str) -> Result<SearchResults, ClientError> {
-        let words: Vec<String> = term.split_whitespace().map(str::to_lowercase).collect();
+    /// Every demo issue whose identifier, title or description, or with
+    /// `include_comments` one of its comments, holds each word of the term,
+    /// ignoring case, in the demo's order; with `within`, only those of
+    /// that team that match its filter.
+    async fn search_issues(&self, query: &SearchQuery) -> Result<SearchResults, ClientError> {
+        let words: Vec<String> = query
+            .term
+            .split_whitespace()
+            .map(str::to_lowercase)
+            .collect();
         let data = demo::workspace();
+        let holds_every_word = |text: &str| {
+            let text = text.to_lowercase();
+            words.iter().all(|word| text.contains(word.as_str()))
+        };
         let issues = data
             .issues
             .into_iter()
+            .filter(|issue| {
+                query.within.as_ref().is_none_or(|within| {
+                    issue.team_id == within.team_id && within.filter.matches(issue)
+                })
+            })
             .filter(|issue| {
                 let text = format!(
                     "{} {} {}",
                     issue.identifier,
                     issue.title,
                     issue.description.as_deref().unwrap_or_default()
-                )
-                .to_lowercase();
-                words.iter().all(|word| text.contains(word.as_str()))
+                );
+                holds_every_word(&text)
+                    || query.include_comments
+                        && data
+                            .comments
+                            .iter()
+                            .filter(|comment| comment.issue_id == issue.id)
+                            .any(|comment| holds_every_word(&comment.body))
             })
             .collect();
         Ok(SearchResults {

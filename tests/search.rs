@@ -12,7 +12,9 @@ use std::time::Duration;
 use jiff::Timestamp;
 use linear_rat::auth::ApiKey;
 use linear_rat::linear::model::StateType;
-use linear_rat::linear::{ClientConfig, FakeClient, HttpClient, LinearClient, Timer};
+use linear_rat::linear::{
+    ClientConfig, FakeClient, HttpClient, LinearClient, SearchQuery, TeamFilter, TeamQuery, Timer,
+};
 use serde_json::{Value, json};
 use wiremock::matchers::{body_partial_json, body_string_contains, method};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -112,7 +114,7 @@ async fn sends_the_term_and_keeps_the_results_in_linears_order() {
         .await;
 
     let found = client_for(&server, FakeTimer::new())
-        .search_issues("vault keys")
+        .search_issues(&SearchQuery::new("vault keys"))
         .await
         .unwrap();
 
@@ -136,7 +138,10 @@ async fn a_burst_beyond_thirty_searches_a_minute_is_queued_not_failed() {
     let client = client_for(&server, timer.clone());
 
     for n in 0..32 {
-        let found = client.search_issues(&format!("cheese {n}")).await.unwrap();
+        let found = client
+            .search_issues(&SearchQuery::new(format!("cheese {n}")))
+            .await
+            .unwrap();
         assert_eq!(found.issues.len(), 1);
     }
 
@@ -151,7 +156,10 @@ async fn a_burst_beyond_thirty_searches_a_minute_is_queued_not_failed() {
 
 #[tokio::test]
 async fn the_fake_client_searches_the_whole_demo_workspace() {
-    let found = FakeClient.search_issues("cheese").await.unwrap();
+    let found = FakeClient
+        .search_issues(&SearchQuery::new("cheese"))
+        .await
+        .unwrap();
 
     assert!(!found.issues.is_empty());
     assert!(found.issues.iter().all(|issue| {
@@ -169,4 +177,148 @@ async fn the_fake_client_searches_the_whole_demo_workspace() {
             .any(|issue| !issue.state.state_type.is_open()),
         "closed issues are found too"
     );
+}
+
+/// The variables of the one search request `server` received.
+async fn sent_variables(server: &MockServer) -> Value {
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(requests.len(), 1);
+    let body: Value = serde_json::from_slice(&requests[0].body).unwrap();
+    body["variables"].clone()
+}
+
+async fn search_with(query: &SearchQuery) -> Value {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(results(vec![result(1, "started")]))
+        .mount(&server)
+        .await;
+    client_for(&server, FakeTimer::new())
+        .search_issues(query)
+        .await
+        .unwrap();
+    sent_variables(&server).await
+}
+
+#[tokio::test]
+async fn a_plain_search_sends_neither_include_comments_nor_a_filter() {
+    let variables = search_with(&SearchQuery::new("vault keys")).await;
+
+    assert_eq!(variables, json!({ "term": "vault keys" }));
+}
+
+#[tokio::test]
+async fn a_search_with_comments_sends_include_comments() {
+    let query = SearchQuery {
+        include_comments: true,
+        ..SearchQuery::new("vault keys")
+    };
+
+    let variables = search_with(&query).await;
+
+    assert_eq!(
+        variables,
+        json!({ "term": "vault keys", "includeComments": true })
+    );
+}
+
+#[tokio::test]
+async fn a_search_within_a_team_sends_the_team_and_its_filter() {
+    let query = SearchQuery {
+        within: Some(TeamQuery {
+            team_id: "team-ops".to_owned(),
+            filter: TeamFilter {
+                state: Some("state-todo".to_owned()),
+                label: Some("label-chore".to_owned()),
+                ..TeamFilter::default()
+            },
+        }),
+        ..SearchQuery::new("vault keys")
+    };
+
+    let variables = search_with(&query).await;
+
+    assert_eq!(
+        variables,
+        json!({
+            "term": "vault keys",
+            "filter": {
+                "team": { "id": { "eq": "team-ops" } },
+                "state": { "id": { "eq": "state-todo" } },
+                "labels": { "some": { "id": { "eq": "label-chore" } } },
+            },
+        })
+    );
+}
+
+#[tokio::test]
+async fn a_search_in_comments_within_a_team_sends_both() {
+    let query = SearchQuery {
+        include_comments: true,
+        within: Some(TeamQuery {
+            team_id: "team-ops".to_owned(),
+            filter: TeamFilter::default(),
+        }),
+        ..SearchQuery::new("vault keys")
+    };
+
+    let variables = search_with(&query).await;
+
+    assert_eq!(
+        variables,
+        json!({
+            "term": "vault keys",
+            "includeComments": true,
+            "filter": { "team": { "id": { "eq": "team-ops" } } },
+        })
+    );
+}
+
+#[tokio::test]
+async fn the_fake_client_finds_a_term_in_comments_only_when_asked() {
+    let without = FakeClient
+        .search_issues(&SearchQuery::new("standup"))
+        .await
+        .unwrap();
+    let with = FakeClient
+        .search_issues(&SearchQuery {
+            include_comments: true,
+            ..SearchQuery::new("standup")
+        })
+        .await
+        .unwrap();
+
+    assert!(without.issues.is_empty(), "{:?}", without.issues);
+    assert!(!with.issues.is_empty());
+}
+
+#[tokio::test]
+async fn the_fake_client_keeps_to_the_team_and_filter() {
+    let everywhere = FakeClient
+        .search_issues(&SearchQuery::new("cheese"))
+        .await
+        .unwrap();
+    let team_id = everywhere.issues[0].team_id.clone();
+    let state = everywhere.issues[0].state.id.clone();
+    let query = SearchQuery {
+        within: Some(TeamQuery {
+            team_id: team_id.clone(),
+            filter: TeamFilter {
+                state: Some(state.clone()),
+                ..TeamFilter::default()
+            },
+        }),
+        ..SearchQuery::new("cheese")
+    };
+
+    let within = FakeClient.search_issues(&query).await.unwrap();
+
+    assert!(!within.issues.is_empty());
+    assert!(
+        within
+            .issues
+            .iter()
+            .all(|issue| issue.team_id == team_id && issue.state.id == state)
+    );
+    assert!(within.issues.len() <= everywhere.issues.len());
 }

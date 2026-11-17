@@ -10,7 +10,7 @@ use unicode_width::UnicodeWidthStr;
 use super::theme::Theme;
 use super::{icons, markdown, style};
 use crate::app::{DetailLoad, State};
-use crate::linear::model::{Estimation, Issue, StateSpan};
+use crate::linear::model::{Attachment, Estimation, Issue, StateSpan};
 
 const FIELD_WIDTH: usize = 10;
 
@@ -124,6 +124,8 @@ pub(super) fn lines(state: &State, issue: &Issue, width: u16) -> Vec<Line<'stati
         None => {}
     }
 
+    lines.extend(attachment_lines(state, issue, width));
+
     lines.push(Line::default());
     lines.push(Line::styled("Details", bold));
     lines.extend(details(state, issue, now, width));
@@ -147,6 +149,73 @@ fn load_note(
         ),
         _ if has_data => Vec::new(),
         _ => vec![Line::styled("Loading…", style::muted(theme))],
+    }
+}
+
+/// The Attachments section: pull requests first, each attachment's title,
+/// source and status, then its URL. A loading line until the detail brings
+/// them, and nothing at all when there are none or the load failed, since
+/// the comments already say why.
+fn attachment_lines(state: &State, issue: &Issue, width: u16) -> Vec<Line<'static>> {
+    let theme = &state.theme;
+    let muted = style::muted(theme);
+    let heading = |text: String| {
+        vec![
+            Line::default(),
+            Line::styled(text, Style::new().add_modifier(Modifier::BOLD)),
+        ]
+    };
+    let attachments = match state.store.attachments(&issue.id) {
+        Some([]) => return Vec::new(),
+        Some(attachments) => attachments,
+        None => {
+            return match state.detail.load(&issue.id) {
+                None | Some(DetailLoad::Loading) => {
+                    let mut lines = heading("Attachments".to_owned());
+                    lines.push(Line::styled("Loading…", muted));
+                    lines
+                }
+                Some(DetailLoad::Loaded | DetailLoad::Failed(_)) => Vec::new(),
+            };
+        }
+    };
+    let mut ordered: Vec<&Attachment> = attachments.iter().collect();
+    ordered.sort_by_key(|attachment| !attachment.is_pull_request());
+
+    let mut lines = heading(format!("Attachments ({})", attachments.len()));
+    for attachment in ordered {
+        let mut about = vec![(attachment.title.clone(), Style::new())];
+        about.push((format!(" · {}", attachment_source(attachment)), muted));
+        if let Some(status) = &attachment.status {
+            about.push((format!(" · {status}"), muted));
+        }
+        let indent = [("  ".to_owned(), Style::new())];
+        lines.extend(markdown::wrap(&about, width, &[], &indent));
+        lines.extend(markdown::wrap(
+            &[(attachment.url.clone(), muted)],
+            width,
+            &indent,
+            &indent,
+        ));
+    }
+    lines
+}
+
+/// Where an attachment came from, as `GitHub pull request`, `Slack` or
+/// `attachment` when Linear does not say.
+fn attachment_source(attachment: &Attachment) -> String {
+    if attachment.is_pull_request() {
+        return "GitHub pull request".to_owned();
+    }
+    match attachment.source_type.as_deref() {
+        None | Some("" | "unknown") => "attachment".to_owned(),
+        Some(source) if source.eq_ignore_ascii_case("github") => "GitHub".to_owned(),
+        Some(source) => {
+            let mut chars = source.chars();
+            chars.next().map_or_else(String::new, |first| {
+                first.to_uppercase().chain(chars).collect()
+            })
+        }
     }
 }
 

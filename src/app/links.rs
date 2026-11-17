@@ -243,6 +243,26 @@ pub(super) fn choose(state: &mut State, nth: Option<usize>) -> Update {
     }
 }
 
+/// Closes the open picker and asks to copy the selected entry's URL.
+pub(super) fn copy(state: &mut State) -> Update {
+    let Some(Modal::Links(links)) = state.modals.top() else {
+        return Update::default();
+    };
+    let Some(Link { url, name }) = links.list.selected().cloned() else {
+        return Update::default();
+    };
+    state.modals.pop();
+    state.notice = Some(if name == url {
+        format!("Copied {url}")
+    } else {
+        format!("Copied the URL of {name}")
+    });
+    Update {
+        redraw: true,
+        effects: vec![Effect::Copy(url)],
+    }
+}
+
 /// Refills the open pickers of `issue_id` once its detail has loaded or
 /// failed to.
 pub(super) fn loaded(state: &mut State, issue_id: &str) {

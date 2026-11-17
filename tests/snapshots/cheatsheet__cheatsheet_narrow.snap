@@ -24,4 +24,4 @@ expression: "text(&cheatsheet(50, 24))"
 │  ENG-56└ Esc close ───────────────────┘        │
 └────────────────────────────────────────────────┘
  Move │ j/k move                                  
- Do   │ Enter pick │ Tab toggle │ Esc close
+ Do   │ Enter pick  Tab toggle  Esc close

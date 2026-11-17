@@ -5,7 +5,8 @@ use super::{LoadError, NewComment, NewIssue, SyncFailure, Write, Writing};
 use crate::linear::model::{Issue, Label, Member, Team, WorkflowState};
 use crate::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, LiveEvent, PostedComment,
-    SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
+    SearchQuery, SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions,
+    TeamQuery,
 };
 
 /// Something that happened, fed to [`update`](super::update).
@@ -27,10 +28,10 @@ pub enum Event {
         issue_id: String,
         result: Result<IssueDetail, String>,
     },
-    /// The result of [`Effect::Search`](super::Effect::Search) for `term`,
+    /// The result of [`Effect::Search`](super::Effect::Search) for `query`,
     /// or why it failed.
     SearchDone {
-        term: String,
+        query: SearchQuery,
         result: Result<SearchResults, String>,
     },
     /// The result of [`Effect::LoadTeams`](super::Effect::LoadTeams). An

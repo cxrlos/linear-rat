@@ -7,7 +7,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
 use linear_rat::app::{App, Effect, Event, State};
-use linear_rat::linear::{FakeClient, LinearClient, SearchResults, Urgency};
+use linear_rat::linear::{FakeClient, LinearClient, SearchQuery, SearchResults, Urgency};
 use ratatui::backend::TestBackend;
 
 fn app() -> App<TestBackend> {
@@ -43,7 +43,10 @@ fn shows(app: &App<TestBackend>, text: &str) -> bool {
 }
 
 async fn found(term: &str) -> SearchResults {
-    FakeClient.search_issues(term).await.unwrap()
+    FakeClient
+        .search_issues(&SearchQuery::new(term))
+        .await
+        .unwrap()
 }
 
 /// Opens the search, types `term` and sends it.
@@ -58,7 +61,7 @@ async fn searched(app: &mut App<TestBackend>, term: &str) {
     search_for(app, term);
     let result = Ok(found(term).await);
     app.handle(Event::SearchDone {
-        term: term.to_owned(),
+        query: SearchQuery::new(term),
         result,
     })
     .unwrap();
@@ -70,7 +73,7 @@ fn slash_opens_the_search_and_enter_asks_linear() {
 
     let effects = search_for(&mut app, "cheese");
 
-    assert_eq!(effects, vec![Effect::Search("cheese".to_owned())]);
+    assert_eq!(effects, vec![Effect::Search(SearchQuery::new("cheese"))]);
     assert!(
         shows(&app, "Searching for \"cheese\""),
         "{:#?}",
@@ -179,7 +182,7 @@ async fn an_answer_to_an_older_search_does_not_replace_the_newer_one() {
 
     let result = Ok(found("cheese").await);
     app.handle(Event::SearchDone {
-        term: "cheese".to_owned(),
+        query: SearchQuery::new("cheese"),
         result,
     })
     .unwrap();
@@ -197,7 +200,7 @@ fn a_failed_search_says_why_and_the_query_can_be_sent_again() {
     search_for(&mut app, "cheese");
 
     app.handle(Event::SearchDone {
-        term: "cheese".to_owned(),
+        query: SearchQuery::new("cheese"),
         result: Err("Search failed: timed out connecting to Linear".to_owned()),
     })
     .unwrap();
@@ -205,7 +208,7 @@ fn a_failed_search_says_why_and_the_query_can_be_sent_again() {
     let effects = app.handle(press(KeyCode::Enter)).unwrap();
 
     assert!(shown, "{:#?}", screen(&app));
-    assert_eq!(effects, vec![Effect::Search("cheese".to_owned())]);
+    assert_eq!(effects, vec![Effect::Search(SearchQuery::new("cheese"))]);
 }
 
 #[tokio::test]
@@ -256,4 +259,209 @@ async fn the_palette_finds_an_issue_a_search_loaded_and_enter_opens_its_detail()
     let title_row = &screen(&app)[1];
     assert!(title_row.contains(&closed.identifier), "{title_row}");
     assert!(shows(&app, &closed.title), "{:#?}", screen(&app));
+}
+
+fn ctrl(c: char) -> Event {
+    Event::Key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::CONTROL))
+}
+
+/// Carries out the Team Issues loads in `effects` with the fake client
+/// until nothing is left to load.
+async fn settle(app: &mut App<TestBackend>, effects: Vec<Effect>) {
+    let mut queue = std::collections::VecDeque::from(effects);
+    while let Some(effect) = queue.pop_front() {
+        let event = match effect {
+            Effect::LoadTeams => Event::TeamsLoaded(Ok(FakeClient.teams().await.unwrap())),
+            Effect::LoadTeamOptions(team_id) => {
+                Event::TeamOptionsLoaded(Ok(FakeClient.team_options(&team_id).await.unwrap()))
+            }
+            Effect::LoadTeamIssues { query, after } => Event::TeamIssuesLoaded {
+                result: Ok(FakeClient
+                    .team_issues(&query, after.as_deref())
+                    .await
+                    .unwrap()),
+                query,
+                after,
+            },
+            Effect::CountTeamIssues(query) => Event::TeamIssuesCounted {
+                result: Ok(FakeClient.count_team_issues(&query).await.unwrap()),
+                query,
+            },
+            _ => continue,
+        };
+        queue.extend(app.handle(event).unwrap());
+    }
+}
+
+/// Team Issues on its first team, filtered to the fifth state filter entry
+/// (In Progress) and then the label `backend`.
+async fn filtered_team_issues() -> App<TestBackend> {
+    let mut app = app();
+    let effects = type_text(&mut app, "2");
+    settle(&mut app, effects).await;
+    for keys in ["fs5", "flbackend\n"] {
+        let effects = keys
+            .chars()
+            .flat_map(|c| {
+                let event = if c == '\n' {
+                    press(KeyCode::Enter)
+                } else {
+                    key(c)
+                };
+                app.handle(event).unwrap()
+            })
+            .collect();
+        settle(&mut app, effects).await;
+    }
+    app
+}
+
+/// The team and filter Team Issues shows.
+fn shown_query(app: &App<TestBackend>) -> linear_rat::linear::TeamQuery {
+    app.state().team_issues.query().unwrap().clone()
+}
+
+#[test]
+fn tab_looks_in_comments_too_and_enter_says_so() {
+    let mut app = app();
+    app.handle(key('/')).unwrap();
+    type_text(&mut app, "standup");
+
+    app.handle(press(KeyCode::Tab)).unwrap();
+    let effects = app.handle(press(KeyCode::Enter)).unwrap();
+
+    assert_eq!(
+        effects,
+        vec![Effect::Search(SearchQuery {
+            include_comments: true,
+            ..SearchQuery::new("standup")
+        })]
+    );
+}
+
+#[test]
+fn from_my_issues_the_prompt_offers_comments_but_no_team() {
+    let mut app = app();
+
+    app.handle(key('/')).unwrap();
+    let ctrl_t = app.handle(ctrl('t')).unwrap();
+
+    assert!(shows(&app, "[ ] Include comments"), "{:#?}", screen(&app));
+    assert!(!shows(&app, "In ENG"), "{:#?}", screen(&app));
+    assert!(ctrl_t.is_empty(), "{ctrl_t:?}");
+    assert_eq!(
+        search_for_typed(&mut app, "cheese"),
+        vec![Effect::Search(SearchQuery::new("cheese"))]
+    );
+}
+
+#[tokio::test]
+async fn back_on_my_issues_the_prompt_forgets_the_team_issues_filter() {
+    let mut app = filtered_team_issues().await;
+    type_text(&mut app, "1");
+
+    app.handle(key('/')).unwrap();
+    let ctrl_t = app.handle(ctrl('t')).unwrap();
+
+    assert!(!shows(&app, "In ENG"), "{:#?}", screen(&app));
+    assert!(ctrl_t.is_empty(), "{ctrl_t:?}");
+    assert_eq!(
+        search_for_typed(&mut app, "cheese"),
+        vec![Effect::Search(SearchQuery::new("cheese"))]
+    );
+}
+
+/// Types `term` into the open prompt and sends it.
+fn search_for_typed(app: &mut App<TestBackend>, term: &str) -> Vec<Effect> {
+    type_text(app, term);
+    app.handle(press(KeyCode::Enter)).unwrap()
+}
+
+#[tokio::test]
+async fn from_team_issues_the_search_keeps_to_its_team_and_filter() {
+    let mut app = filtered_team_issues().await;
+    let within = shown_query(&app);
+
+    app.handle(key('/')).unwrap();
+    let prompt = app.backend().to_string();
+    let effects = search_for_typed(&mut app, "cheese");
+
+    assert_snapshot!(prompt);
+    assert_eq!(
+        effects,
+        vec![Effect::Search(SearchQuery {
+            within: Some(within),
+            ..SearchQuery::new("cheese")
+        })]
+    );
+}
+
+#[tokio::test]
+async fn ctrl_t_searches_the_whole_workspace_again() {
+    let mut app = filtered_team_issues().await;
+    app.handle(key('/')).unwrap();
+
+    app.handle(ctrl('t')).unwrap();
+    app.handle(press(KeyCode::Tab)).unwrap();
+    let prompt = app.backend().to_string();
+    let effects = search_for_typed(&mut app, "cheese");
+
+    assert_snapshot!(prompt);
+    assert_eq!(
+        effects,
+        vec![Effect::Search(SearchQuery {
+            include_comments: true,
+            ..SearchQuery::new("cheese")
+        })]
+    );
+}
+
+#[tokio::test]
+async fn both_options_reset_each_time_the_prompt_opens() {
+    let mut app = filtered_team_issues().await;
+    let within = shown_query(&app);
+    app.handle(key('/')).unwrap();
+    app.handle(ctrl('t')).unwrap();
+    app.handle(press(KeyCode::Tab)).unwrap();
+    app.handle(press(KeyCode::Esc)).unwrap();
+
+    app.handle(key('/')).unwrap();
+    let effects = search_for_typed(&mut app, "cheese");
+
+    assert_eq!(
+        effects,
+        vec![Effect::Search(SearchQuery {
+            within: Some(within),
+            ..SearchQuery::new("cheese")
+        })]
+    );
+}
+
+#[tokio::test]
+async fn the_results_title_says_what_was_searched() {
+    let mut app = filtered_team_issues().await;
+    let within = shown_query(&app);
+    let title = app.state().focused_issue().unwrap().title.clone();
+    let term = title.split_whitespace().last().unwrap().to_lowercase();
+    app.handle(key('/')).unwrap();
+    app.handle(press(KeyCode::Tab)).unwrap();
+    type_text(&mut app, &term);
+    let effects = app.handle(press(KeyCode::Enter)).unwrap();
+    let [Effect::Search(query)] = &effects[..] else {
+        panic!("{effects:?}");
+    };
+    assert_eq!(query.within.as_ref(), Some(&within));
+
+    let result = FakeClient.search_issues(query).await;
+    app.handle(Event::SearchDone {
+        query: query.clone(),
+        result: result.map_err(|error| error.to_string()),
+    })
+    .unwrap();
+
+    assert!(
+        shows(&app, &format!("Search \"{term}\" in ENG (with comments)")),
+        "{:#?}",
+        screen(&app)
+    );
 }

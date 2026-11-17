@@ -610,16 +610,28 @@ pub static ACTIONS: &[ActionSpec] = &[
     ActionSpec {
         action: Action::ToggleEntry,
         id: "toggle-entry",
-        description: "Mark or unmark the highlighted entry",
+        description: "Mark or unmark the highlighted entry, or search comments too",
         label: "mark or unmark",
         group: Group::Screen,
         hint: does("toggle"),
         contexts: OVERLAY,
         default_keys: &[&[Key::named(KeyCode::Tab)]],
-        available: |state| {
-            picker(state)
-                .is_some_and(|picker| picker.list.is_multi() && picker.list.selected().is_some())
+        available: |state| match state.modals.top() {
+            Some(Modal::Search(search)) => search.editable(),
+            _ => picker(state)
+                .is_some_and(|picker| picker.list.is_multi() && picker.list.selected().is_some()),
         },
+    },
+    ActionSpec {
+        action: Action::ToggleSearchScope,
+        id: "toggle-search-scope",
+        description: "Search within the Team Issues team and filter, or the whole workspace",
+        label: "team or workspace",
+        group: Group::Screen,
+        hint: None,
+        contexts: OVERLAY,
+        default_keys: &[&[Key::ctrl('t')]],
+        available: |state| matches!(state.modals.top(), Some(Modal::Search(search)) if search.scope.is_some() && search.editable()),
     },
     ActionSpec {
         action: Action::ShorterRange,
@@ -680,6 +692,18 @@ pub static ACTIONS: &[ActionSpec] = &[
         available: |state| {
             state.modals.top().is_some() || in_detail(state) || state.screen == Screen::Results
         },
+    },
+    // After `close`, so a narrow bottom bar drops this before Esc.
+    ActionSpec {
+        action: Action::CopyLink,
+        id: "copy-link",
+        description: "Copy the highlighted link's URL",
+        label: "copy the link",
+        group: Group::Screen,
+        hint: does("copy"),
+        contexts: OVERLAY,
+        default_keys: &[&[Key::ctrl('y')]],
+        available: |state| matches!(state.modals.top(), Some(Modal::Links(links)) if links.list.selected().is_some()),
     },
     ActionSpec {
         action: Action::ShowScreen(Screen::MyIssues),

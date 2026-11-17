@@ -24,4 +24,4 @@ expression: text
 │Sat  · · · · · · · · · · ·                                                    │
 └──────────────────────────────────────────────────────────────────────────────┘
  Move │ j/k move                                                                
- Do   │ Enter pick │ Tab toggle │ Esc close
+ Do   │ Enter pick │ Tab toggle │ Esc close │ C-y copy

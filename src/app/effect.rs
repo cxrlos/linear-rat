@@ -1,7 +1,7 @@
 use jiff::Timestamp;
 
 use super::{NewComment, NewIssue, TeamPoll, Write, Writing};
-use crate::linear::{AnalyticsWindow, TeamQuery, Urgency};
+use crate::linear::{AnalyticsWindow, SearchQuery, TeamQuery, Urgency};
 
 /// A request to the outside world, returned by [`update`](super::update) and
 /// carried out by the runtime.
@@ -23,9 +23,9 @@ pub enum Effect {
         issue_id: String,
         urgency: Urgency,
     },
-    /// Search the workspace for this term; the result comes back as
+    /// Search Linear for this query; the result comes back as
     /// [`Event::SearchDone`](super::Event::SearchDone).
-    Search(String),
+    Search(SearchQuery),
     /// Load the viewer's teams; the result comes back as
     /// [`Event::TeamsLoaded`](super::Event::TeamsLoaded).
     LoadTeams,

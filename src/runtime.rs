@@ -19,7 +19,7 @@ use tokio::time::{Instant, MissedTickBehavior};
 use crate::app::{
     App, Effect, Event, LoadError, NewComment, NewIssue, SyncFailure, TeamPoll, Write,
 };
-use crate::linear::{AnalyticsWindow, ClientError, LinearClient, LiveEvent, Urgency};
+use crate::linear::{AnalyticsWindow, ClientError, LinearClient, LiveEvent, SearchQuery, Urgency};
 use crate::snapshot::SnapshotCache;
 use crate::terminal::JobControl;
 use crate::{browser, clipboard, terminal};
@@ -358,8 +358,8 @@ where
             in_flight.push(Box::pin(load_issue_detail(reach.client, issue_id, urgency)));
             Ok(())
         }
-        Effect::Search(term) => {
-            in_flight.push(Box::pin(search(reach.client, term)));
+        Effect::Search(query) => {
+            in_flight.push(Box::pin(search(reach.client, query)));
             Ok(())
         }
         Effect::LoadTeams => {
@@ -674,10 +674,10 @@ async fn load_issue_detail<C: LinearClient>(
     Event::IssueDetailLoaded { issue_id, result }
 }
 
-async fn search<C: LinearClient>(client: Option<&C>, term: String) -> Event {
+async fn search<C: LinearClient>(client: Option<&C>, query: SearchQuery) -> Event {
     let result = match client {
         Some(client) => client
-            .search_issues(&term)
+            .search_issues(&query)
             .await
             .map_err(|error| format!("Search failed: {:#}", anyhow::Error::new(error))),
         None => Err("Search needs an API key; run `lrat auth login`".to_owned()),
@@ -686,7 +686,7 @@ async fn search<C: LinearClient>(client: Option<&C>, term: String) -> Event {
         Ok(found) => tracing::info!(issues = found.issues.len(), "searched Linear"),
         Err(error) => tracing::warn!(%error, "searching Linear failed"),
     }
-    Event::SearchDone { term, result }
+    Event::SearchDone { query, result }
 }
 
 /// Sends `request` through `client`. A failure, or no client for lack of an
@@ -903,7 +903,7 @@ mod tests {
         };
         let flow = execute(
             &mut app,
-            Effect::Search("cheese cave".to_owned()),
+            Effect::Search(SearchQuery::new("cheese cave")),
             &reach,
             &mut in_flight,
             &mut Fake::default(),
@@ -912,10 +912,10 @@ mod tests {
         let event = in_flight.next().await.unwrap();
 
         assert_eq!(flow, ControlFlow::Continue(()));
-        let Event::SearchDone { term, result } = event else {
+        let Event::SearchDone { query, result } = event else {
             panic!("{event:?}");
         };
-        assert_eq!(term, "cheese cave");
+        assert_eq!(query.term, "cheese cave");
         let found: Vec<String> = result
             .unwrap()
             .issues
@@ -927,7 +927,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_search_without_a_key_says_how_to_add_one() {
-        let event = search(None::<&FakeClient>, "cheese".to_owned()).await;
+        let event = search(None::<&FakeClient>, SearchQuery::new("cheese")).await;
 
         let Event::SearchDone { result, .. } = event else {
             panic!("{event:?}");

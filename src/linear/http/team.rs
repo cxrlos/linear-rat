@@ -204,7 +204,7 @@ pub(super) async fn count(client: &HttpClient, query: &TeamQuery) -> Result<usiz
 
 /// Linear's `IssueFilter` for `filter`, with only the fields that are set.
 /// `null` when none is, which leaves the issues unfiltered.
-fn issue_filter(filter: &TeamFilter) -> Value {
+pub(super) fn issue_filter(filter: &TeamFilter) -> Value {
     let by_id = |id: &String| json!({ "id": { "eq": id } });
     let mut fields = Map::new();
     let set = [
