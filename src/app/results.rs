@@ -1,5 +1,6 @@
 //! Results: what a search found, the one issue a palette jump went to, or
-//! the issues of a cycle or project, shown in the normal panes so every issue action works on the focused one.
+//! the issues of a cycle or project, shown in the normal panes so every
+//! issue action works on the focused one.
 //! Esc from the list goes back to the screen they were opened from.
 
 use super::{Action, Arrangement, IssueList, Names, Pane, Screen, State, arrange};

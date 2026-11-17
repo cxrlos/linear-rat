@@ -308,7 +308,8 @@ const STATE_ORDER: [StateType; 6] = [
 /// `issues`, given in the list's own order, grouped and sorted as
 /// `arrangement` says. Empty groups are left out. Groups of named things
 /// come in name order (cycles newest first, milestones in their project's
-/// order), with the group of issues that have none last. Issues that tie on the sort keep their own order.
+/// order), with the group of issues that have none last. Issues that tie
+/// on the sort keep their own order.
 pub fn arrange(mut issues: Vec<Issue>, arrangement: Arrangement, names: &Names) -> Vec<Group> {
     if let Some(sort) = arrangement.sort {
         issues.sort_by(|a, b| sort.compare(a, b));
