@@ -45,7 +45,7 @@ pub use names::Names;
 pub use palette::{Palette, PaletteEntry, palette_matches};
 pub use picker::{Entry, Note, Picker};
 pub use results::Results;
-pub use search::{Phase, Search};
+pub use search::{Phase, Scope, Search};
 pub use state::{Screen, State};
 pub use store::Store;
 pub use sync::{

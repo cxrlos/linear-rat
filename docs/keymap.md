@@ -105,7 +105,8 @@ The Team Issues list also takes the Issue list keys. While an overlay has a text
 | `scroll-down` | `j`, `<Down>`, `<C-n>` | Scroll down |
 | `scroll-up` | `k`, `<Up>`, `<C-p>` | Scroll up |
 | `accept` | `<Enter>` | Choose the highlighted entry |
-| `toggle-entry` | `<Tab>` | Mark or unmark the highlighted entry |
+| `toggle-entry` | `<Tab>` | Mark or unmark the highlighted entry, or search comments too |
+| `toggle-search-scope` | `<C-t>` | Search within the Team Issues team and filter, or the whole workspace |
 | `close` | `<Esc>` | Close the top overlay or step back |
 | `copy-link` | `<C-y>` | Copy the highlighted link's URL |
 

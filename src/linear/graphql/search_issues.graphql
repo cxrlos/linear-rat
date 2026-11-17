@@ -3,9 +3,16 @@
 # included, with what the detail shows about each and the names of their
 # labels. Linear rate-limits this query to 30 a minute on top of the hourly
 # budgets; the client keeps to that with its own bucket. Only the first page
-# is asked for.
-query SearchIssues($term: String!) {
-  searchIssues(term: $term, first: 25) {
+# is asked for. `includeComments` also matches the term in comments, and
+# `filter` keeps the results to a team and its Team Issues filter; both are
+# left out unless the viewer asks for them.
+query SearchIssues($term: String!, $includeComments: Boolean, $filter: IssueFilter) {
+  searchIssues(
+    term: $term
+    first: 25
+    includeComments: $includeComments
+    filter: $filter
+  ) {
     nodes {
       id
       identifier

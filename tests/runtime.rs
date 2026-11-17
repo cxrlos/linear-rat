@@ -12,7 +12,7 @@ use linear_rat::auth::KeySource;
 use linear_rat::linear::model::{Issue, Label, Member, Team, Viewer, WorkflowState, Workspace};
 use linear_rat::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, Diagnostics, FakeClient,
-    IssueDetail, IssueLink, IssueUpdate, LinearClient, LiveEvent, SearchResults,
+    IssueDetail, IssueLink, IssueUpdate, LinearClient, LiveEvent, SearchQuery, SearchResults,
     TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery, Urgency, demo,
 };
 use linear_rat::runtime;
@@ -120,7 +120,7 @@ impl LinearClient for RejectingClient {
         Err(ClientError::InvalidKey)
     }
 
-    async fn search_issues(&self, _: &str) -> Result<SearchResults, ClientError> {
+    async fn search_issues(&self, _: &SearchQuery) -> Result<SearchResults, ClientError> {
         Err(ClientError::InvalidKey)
     }
 
@@ -279,7 +279,7 @@ async fn q_quits_while_the_load_is_still_in_flight() {
         async fn issue_detail(&self, _: &str, _: Urgency) -> Result<IssueDetail, ClientError> {
             future::pending().await
         }
-        async fn search_issues(&self, _: &str) -> Result<SearchResults, ClientError> {
+        async fn search_issues(&self, _: &SearchQuery) -> Result<SearchResults, ClientError> {
             future::pending().await
         }
         async fn teams(&self) -> Result<Vec<Team>, ClientError> {
@@ -424,8 +424,8 @@ impl LinearClient for CountingClient {
     ) -> Result<IssueDetail, ClientError> {
         FakeClient.issue_detail(issue_id, urgency).await
     }
-    async fn search_issues(&self, term: &str) -> Result<SearchResults, ClientError> {
-        FakeClient.search_issues(term).await
+    async fn search_issues(&self, query: &SearchQuery) -> Result<SearchResults, ClientError> {
+        FakeClient.search_issues(query).await
     }
     async fn teams(&self) -> Result<Vec<Team>, ClientError> {
         FakeClient.teams().await

@@ -31,8 +31,8 @@ use super::search_bucket::SearchBucket;
 use super::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, Diagnostics, GraphQlError,
     IssueCreate, IssueDetail, IssueLink, IssueUpdate, LinearClient, LiveEvent, PostedComment,
-    Response, SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions,
-    TeamQuery,
+    Response, SearchQuery, SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage,
+    TeamOptions, TeamQuery,
 };
 use crate::auth::ApiKey;
 
@@ -373,8 +373,8 @@ impl LinearClient for HttpClient {
         detail::load(self, issue_id, urgency).await
     }
 
-    async fn search_issues(&self, term: &str) -> Result<SearchResults, ClientError> {
-        search::search(self, term).await
+    async fn search_issues(&self, query: &SearchQuery) -> Result<SearchResults, ClientError> {
+        search::search(self, query).await
     }
 
     async fn teams(&self) -> Result<Vec<Team>, ClientError> {

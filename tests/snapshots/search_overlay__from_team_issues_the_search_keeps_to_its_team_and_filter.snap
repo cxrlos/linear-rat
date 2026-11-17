@@ -1,0 +1,28 @@
+---
+source: tests/search_overlay.rs
+expression: prompt
+---
+" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+"t ENG Engineering · 2 of 2 · f Filters State In Progress, Label backend         "
+"┌T┌ Search Linear ───────────────────────────────────────────────────────────┐─┐"
+"│▸│ /                                                                        │ │"
+"│ │──────────────────────────────────────────────────────────────────────────│ │"
+"│ │ [ ] Include comments  Tab                                                │ │"
+"│ │ [x] In ENG · State In Progress, Label backend  C-t                       │ │"
+"│ │                                                                          │ │"
+"│ │ Enter searches the ENG issues these filters match.                       │ │"
+"│ │                                                                          │ │"
+"│ │                                                                          │ │"
+"│ │                                                                          │ │"
+"│ │                                                                          │ │"
+"│ │                                                                          │ │"
+"│ │                                                                          │ │"
+"│ │                                                                          │ │"
+"│ │                                                                          │ │"
+"│ └ Esc close ───────────────────────────────────────────────────────────────┘ │"
+"│                                                                              │"
+"│                                                                              │"
+"└──────────────────────────────────────────────────────────────────────────────┘"
+" Move │ Down/Up move                                                            "
+" Do   │ Enter pick   │ Tab toggle │ Esc close │ C-y copy                        "
+"                                                                                "

@@ -3,7 +3,7 @@ use ratatui::layout::Size;
 
 use super::edit::{self, Editable};
 use super::{
-    Action, Copyable, Effect, Event, Load, Modal, Palette, Pane, Purpose, Screen, Search, State,
+    Action, Copyable, Effect, Event, Load, Modal, Palette, Pane, Purpose, Screen, State,
     analytics_screen, compose, create, detail, links, palette, results, search, sync, team_issues,
 };
 use crate::keys::{self, Key, Resolution};
@@ -62,8 +62,8 @@ fn apply(state: &mut State, event: Event) -> Update {
         Event::Reconciled { checked, result } => sync::reconciled(state, &checked, result),
         Event::Throttled => sync::throttled(state),
         Event::Live(event) => sync::live(state, event),
-        Event::SearchDone { term, result } => {
-            search::finish(state, &term, result);
+        Event::SearchDone { query, result } => {
+            search::finish(state, &query, result);
             Update::redraw()
         }
         Event::Resize { columns, rows } => {
@@ -267,10 +267,7 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             state.modals.push(Modal::Palette(Palette::default()));
             Update::redraw()
         }
-        Action::ShowSearch => {
-            state.modals.push(Modal::Search(Search::default()));
-            Update::redraw()
-        }
+        Action::ShowSearch => search::open(state),
         Action::Accept => match state.modals.top() {
             Some(Modal::Picker(_)) => edit::choose(state, None),
             Some(Modal::Links(_)) => links::choose(state, None),
@@ -420,7 +417,11 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             Some(Modal::Create(_)) => create::accept(state, Some(usize::from(n))),
             _ => edit::choose(state, Some(usize::from(n))),
         },
-        Action::ToggleEntry => edit::toggle(state, None),
+        Action::ToggleEntry => match state.modals.top() {
+            Some(Modal::Search(_)) => search::toggle_comments(state),
+            _ => edit::toggle(state, None),
+        },
+        Action::ToggleSearchScope => search::toggle_scope(state),
         Action::Comment => compose::comment(state),
         Action::CreateIssue => create::open(state),
         _ => Update::default(),
