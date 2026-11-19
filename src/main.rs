@@ -277,12 +277,14 @@ async fn run_doctor() -> anyhow::Result<bool> {
         &config.loaded.config.updates,
         std::env::var_os(release::OFF_VAR).as_deref(),
     );
-    let version = doctor::VersionFacts::check(
-        &ReleaseSource::github().context("building the HTTP client")?,
-        off,
-        Channel::of_running(),
-    )
-    .await;
+    let version = match ReleaseSource::github() {
+        Ok(source) => doctor::VersionFacts::check(&source, off, Channel::of_running()).await,
+        Err(error) => doctor::VersionFacts::unchecked(
+            off,
+            Channel::of_running(),
+            format!("building the HTTP client: {error:#}"),
+        ),
+    };
     let facts = doctor::gather(
         &credentials,
         HttpClient::new,

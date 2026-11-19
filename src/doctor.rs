@@ -230,6 +230,16 @@ impl VersionFacts {
             latest,
         }
     }
+
+    /// The facts when no request could be made at all, for `why`, unless
+    /// `off` turned the check off anyway.
+    pub fn unchecked(off: Option<Off>, channel: Channel, why: String) -> Self {
+        Self {
+            running: release::running(),
+            channel,
+            latest: Err(off.map_or(NotChecked::Failed(why), NotChecked::Off)),
+        }
+    }
 }
 
 /// Collects the facts: the key from `credentials`, Linear through the client

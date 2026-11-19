@@ -16,7 +16,6 @@ pub struct Release {
     channel: Channel,
     running: Version,
     record: Record,
-    in_flight: bool,
 }
 
 impl Default for Release {
@@ -35,7 +34,6 @@ impl Release {
             channel,
             running: release::running(),
             record,
-            in_flight: false,
         }
     }
 
@@ -57,15 +55,14 @@ impl Release {
     }
 }
 
-/// At each tick, a check when one is due and none is in flight. It counts
-/// as the day's check from when it starts, so a failed one is tried again
-/// only a day later.
+/// At each tick, a check when one is due. It counts as the day's check from
+/// when it starts, so no second one starts while it runs, and a failed one
+/// is tried again only a day later.
 pub(super) fn tick(state: &mut State, now: Timestamp) -> Option<Effect> {
     let release = &mut state.release;
-    if !release.check || release.in_flight || !release.record.due(now) {
+    if !release.check || !release.record.due(now) {
         return None;
     }
-    release.in_flight = true;
     release.record.checked_at = Some(now);
     Some(Effect::CheckRelease)
 }
@@ -74,7 +71,6 @@ pub(super) fn tick(state: &mut State, now: Timestamp) -> Option<Effect> {
 /// failed, which the runtime has logged and which shows nothing.
 pub(super) fn checked(state: &mut State, latest: Option<Version>) -> Update {
     let release = &mut state.release;
-    release.in_flight = false;
     let before = release.notice().cloned();
     if latest.is_some() {
         release.record.latest = latest;

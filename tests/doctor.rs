@@ -785,3 +785,15 @@ async fn offline_the_version_is_not_checked() {
     );
     assert!(!report.failed());
 }
+
+#[test]
+fn without_an_http_client_the_version_is_not_checked_and_says_why() {
+    let failed = VersionFacts::unchecked(None, Channel::CargoBin, "no TLS roots".to_owned());
+    let off = VersionFacts::unchecked(Some(Off::Env), Channel::CargoBin, "no TLS roots".to_owned());
+
+    assert_eq!(
+        failed.latest,
+        Err(NotChecked::Failed("no TLS roots".to_owned()))
+    );
+    assert_eq!(off.latest, Err(NotChecked::Off(Off::Env)));
+}

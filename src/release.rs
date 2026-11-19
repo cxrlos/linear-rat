@@ -103,9 +103,12 @@ pub fn running() -> Version {
     Version::parse(env!("CARGO_PKG_VERSION")).unwrap_or_else(|_| Version::new(0, 0, 0))
 }
 
-/// The version a release tag names, as `v0.3.1`.
+/// The stable version a release tag names, as `v0.3.1`. A pre-release tag
+/// names none, so it never counts as newer.
 pub fn tag_version(tag: &str) -> Option<Version> {
-    Version::parse(tag.strip_prefix('v').unwrap_or(tag)).ok()
+    Version::parse(tag.strip_prefix('v').unwrap_or(tag))
+        .ok()
+        .filter(|version| version.pre.is_empty())
 }
 
 /// The GitHub page of `version`'s release.
@@ -375,6 +378,7 @@ mod tests {
         assert_eq!(tag_version("v0.3.1"), Some(version("0.3.1")));
         assert_eq!(tag_version("0.3.1"), Some(version("0.3.1")));
         assert_eq!(tag_version("nightly"), None);
+        assert_eq!(tag_version("v0.4.0-rc.1"), None);
     }
 
     #[test]
