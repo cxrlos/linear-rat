@@ -183,24 +183,35 @@ const SCROLLS: &[Context] = &[Context::Overlay, Context::Analytics];
 pub enum OverlayKind {
     /// The cheatsheet, which scrolls.
     Cheatsheet,
-    /// A list to choose one entry from: a single-select edit picker, a link
-    /// picker, a team switcher or filter, the create form, an issue picker
-    /// for one issue.
+    /// A list to choose one entry from: a single-select edit picker, a team
+    /// switcher or filter, the create form, an issue picker for one issue.
     List,
     /// A list to mark entries in: the label picker, an issue picker for
     /// several issues.
     MultiList,
+    /// A picker of an issue's links, whose URLs can also be copied.
+    Links,
     Palette,
     Search,
+    /// The prompt a due date is typed into.
+    Prompt,
+    /// A question answered with yes or no.
+    Confirm,
+    /// The error log, which scrolls.
+    Messages,
 }
 
 impl OverlayKind {
-    pub const ALL: [OverlayKind; 5] = [
+    pub const ALL: [OverlayKind; 9] = [
         OverlayKind::Cheatsheet,
         OverlayKind::List,
         OverlayKind::MultiList,
+        OverlayKind::Links,
         OverlayKind::Palette,
         OverlayKind::Search,
+        OverlayKind::Prompt,
+        OverlayKind::Confirm,
+        OverlayKind::Messages,
     ];
 
     /// The kind of `modal`, or `None` for the which-key popup, which only
@@ -211,34 +222,43 @@ impl OverlayKind {
             Modal::WhichKey { .. } => return None,
             Modal::Picker(picker) if picker.list.is_multi() => OverlayKind::MultiList,
             Modal::IssuePicker(picker) if picker.list.is_multi() => OverlayKind::MultiList,
-            Modal::Picker(_)
-            | Modal::IssuePicker(_)
-            | Modal::Links(_)
-            | Modal::Choice(_)
-            | Modal::Create(_) => OverlayKind::List,
-            Modal::Confirm(_) => OverlayKind::List,
+            Modal::Picker(_) | Modal::IssuePicker(_) | Modal::Choice(_) | Modal::Create(_) => {
+                OverlayKind::List
+            }
+            Modal::Links(_) => OverlayKind::Links,
             Modal::Palette(_) => OverlayKind::Palette,
-            Modal::Search(_) | Modal::DueDate(_) => OverlayKind::Search,
-            Modal::Messages { .. } => OverlayKind::Cheatsheet,
+            Modal::Search(_) => OverlayKind::Search,
+            Modal::DueDate(_) => OverlayKind::Prompt,
+            Modal::Confirm(_) => OverlayKind::Confirm,
+            Modal::Messages { .. } => OverlayKind::Messages,
         })
     }
 }
 
 /// The lists, which numbers pick from.
-const LISTS: &[OverlayKind] = &[OverlayKind::List, OverlayKind::MultiList];
+const LISTS: &[OverlayKind] = &[
+    OverlayKind::List,
+    OverlayKind::MultiList,
+    OverlayKind::Links,
+];
 /// The overlays with something to move through.
 const SCROLLING: &[OverlayKind] = &[
     OverlayKind::Cheatsheet,
     OverlayKind::List,
     OverlayKind::MultiList,
+    OverlayKind::Links,
     OverlayKind::Palette,
+    OverlayKind::Messages,
 ];
 /// The overlays Enter chooses or sends in.
 const ACCEPTING: &[OverlayKind] = &[
     OverlayKind::List,
     OverlayKind::MultiList,
+    OverlayKind::Links,
     OverlayKind::Palette,
     OverlayKind::Search,
+    OverlayKind::Prompt,
+    OverlayKind::Confirm,
 ];
 
 /// Every action lrat has, in the order hints and the cheatsheet list them.
@@ -1058,7 +1078,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: OVERLAY,
-        overlays: &[],
+        overlays: &[OverlayKind::Confirm],
         default_keys: &[&[Key::char('y')]],
         available: is_confirming,
     },
@@ -1071,7 +1091,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: OVERLAY,
-        overlays: &[],
+        overlays: &[OverlayKind::Confirm],
         default_keys: &[&[Key::char('n')]],
         available: is_confirming,
     },
@@ -1106,7 +1126,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: OVERLAY,
-        overlays: &[],
+        overlays: &[OverlayKind::Search],
         default_keys: &[&[Key::ctrl('t')]],
         available: |state| matches!(state.modals.top(), Some(Modal::Search(search)) if search.scope.is_some() && search.editable()),
     },
@@ -1190,7 +1210,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: does("copy"),
         contexts: OVERLAY,
-        overlays: &[],
+        overlays: &[OverlayKind::Links],
         default_keys: &[&[Key::ctrl('y')]],
         available: |state| matches!(state.modals.top(), Some(Modal::Links(links)) if links.list.selected().is_some()),
     },

@@ -23,6 +23,6 @@ expression: app.backend()
 "│  DES-16 Accessible focus rings across wh ○ Todo        ▮▮▮ High    5         │"
 "│  ENG-56 Notification settings reset afte ○ Todo        ▮▮▮ High    2         │"
 "└──────────────────────────────────────────────────────────────────────────────┘"
-" Move │ j/k move                                                                "
+"                                                                                "
 " Do   │ Enter choose │ Esc close                                                "
 "                                                                                "
