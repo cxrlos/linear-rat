@@ -236,11 +236,7 @@ fn a_narrow_cheatsheet_fits_inside_the_frame_and_scrolls_to_the_rest() {
     let mut app = sized_app(50);
 
     press(&mut app, "?");
-    assert!(
-        row(&app, 1).starts_with("┌My Issues · "),
-        "{}",
-        screen(&app)
-    );
+    assert!(row(&app, 1).starts_with("┌My Issues─"), "{}", screen(&app));
     assert!(row(&app, 3).contains("Move"), "{}", screen(&app));
     assert!(!screen(&app).contains("suspend"));
 

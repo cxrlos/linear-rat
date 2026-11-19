@@ -17,6 +17,7 @@ mod results;
 mod search;
 pub mod style;
 mod team_issues;
+mod text;
 pub mod theme;
 mod which_key;
 
@@ -93,9 +94,10 @@ pub fn render(state: &State, frame: &mut Frame) {
 /// only their key, as `[2]`.
 fn tab_titles(state: &State, width: u16) -> [String; Screen::ALL.len()] {
     let full = Screen::ALL.map(|screen| tab_title(state, screen, false));
-    let indicator = state.sync_status.indicator().map_or(0, |indicator| {
-        Span::raw(format!("{} ", indicator.text)).width() + 1
-    });
+    let indicator = state
+        .sync_status
+        .indicator()
+        .map_or(0, |indicator| text::width(&indicator.text) + 2);
     let room = usize::from(width).saturating_sub(indicator);
     if usize::from(titles_width(&full)) <= room {
         return full;
@@ -122,10 +124,7 @@ fn tab_title(state: &State, screen: Screen, short: bool) -> String {
 /// How wide [`Tabs`] draws `titles`: each padded by a space on both sides,
 /// with a one-column divider between them.
 fn titles_width(titles: &[String]) -> u16 {
-    let padded: usize = titles
-        .iter()
-        .map(|title| Span::raw(title.as_str()).width() + 2)
-        .sum();
+    let padded: usize = titles.iter().map(|title| text::width(title) + 2).sum();
     let dividers = titles.len().saturating_sub(1);
     u16::try_from(padded + dividers).unwrap_or(u16::MAX)
 }

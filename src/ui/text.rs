@@ -1,0 +1,129 @@
+//! Measuring and cutting text for the terminal. Every width here is in
+//! terminal cells, so wide characters (CJK, most emoji) count as two. Text
+//! cut to fit ends in `…`, which counts toward the width it fits.
+
+use ratatui::Frame;
+use ratatui::layout::Rect;
+use ratatui::text::{Line, Span};
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+
+/// What marks text that was cut short.
+pub const ELLIPSIS: char = '…';
+
+/// How many terminal cells `text` takes.
+pub fn width(text: &str) -> usize {
+    UnicodeWidthStr::width(text)
+}
+
+/// `text` as it fits in `room` cells: whole when it fits, otherwise cut
+/// and ending in `…`, never wider than `room`.
+pub fn fit(text: &str, room: usize) -> String {
+    if width(text) <= room {
+        return text.to_owned();
+    }
+    if room == 0 {
+        return String::new();
+    }
+    let mut cut = take(text, room - 1);
+    cut.push(ELLIPSIS);
+    cut
+}
+
+/// `line` as it fits in `room` cells: whole when it fits, otherwise its
+/// spans up to the cut, the last one ending in `…` in that span's style.
+pub fn fit_line(line: Line<'_>, room: usize) -> Line<'_> {
+    if line.width() <= room {
+        return line;
+    }
+    let Line {
+        spans,
+        style,
+        alignment,
+    } = line;
+    let mut kept: Vec<Span<'_>> = Vec::new();
+    let mut used = 0;
+    for span in spans {
+        // One cell stays free for the ellipsis.
+        let left = room.saturating_sub(used + 1);
+        let span_width = span.width();
+        if span_width <= left {
+            used += span_width;
+            kept.push(span);
+            continue;
+        }
+        let cut = take(&span.content, left);
+        if !cut.is_empty() {
+            kept.push(Span::styled(cut, span.style));
+        }
+        if room > 0 {
+            kept.push(Span::styled(ELLIPSIS.to_string(), span.style));
+        }
+        break;
+    }
+    Line {
+        spans: kept,
+        style,
+        alignment,
+    }
+}
+
+/// Draws `line` on the first row of `area`, cut to its width with `…`.
+pub fn draw<'a>(frame: &mut Frame, line: impl Into<Line<'a>>, area: Rect) {
+    frame.render_widget(fit_line(line.into(), usize::from(area.width)), area);
+}
+
+/// The longest start of `text` that takes at most `room` cells.
+fn take(text: &str, room: usize) -> String {
+    let mut used = 0;
+    text.chars()
+        .take_while(|c| {
+            used += c.width().unwrap_or(0);
+            used <= room
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::style::Stylize;
+
+    #[test]
+    fn text_that_fits_stays_whole() {
+        assert_eq!(fit("cheddar", 7), "cheddar");
+    }
+
+    #[test]
+    fn cut_text_ends_in_an_ellipsis_within_the_room() {
+        assert_eq!(fit("cheddar", 5), "ched…");
+        assert_eq!(width(&fit("cheddar", 5)), 5);
+        assert_eq!(fit("cheddar", 1), "…");
+        assert_eq!(fit("cheddar", 0), "");
+    }
+
+    #[test]
+    fn wide_characters_count_as_two_cells() {
+        assert_eq!(width("チーズ"), 6);
+        assert_eq!(fit("チーズ", 4), "チ…");
+        assert_eq!(fit("チーズ", 5), "チー…");
+    }
+
+    #[test]
+    fn a_cut_line_keeps_whole_spans_and_ends_the_cut_one_in_its_style() {
+        let line = Line::from(vec!["ENG-1 ".into(), "Grate the cheddar".red()]);
+
+        let fitted = fit_line(line, 12);
+
+        assert_eq!(fitted.width(), 12);
+        assert_eq!(fitted.spans[0].content, "ENG-1 ");
+        assert_eq!(fitted.spans[1].content, "Grate");
+        assert_eq!(fitted.spans[2], "…".red());
+    }
+
+    #[test]
+    fn a_line_cut_at_a_span_boundary_still_ends_in_an_ellipsis() {
+        let line = Line::from(vec!["abc".into(), "def".into()]);
+
+        assert_eq!(fit_line(line, 4).to_string(), "abc…");
+    }
+}

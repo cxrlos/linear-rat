@@ -3,7 +3,7 @@ source: tests/browse.rs
 expression: app.backend()
 ---
 " [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects                        "
-"┌Nibble 3.0 (20) · group: project milestone · sort: Linear's order─────────────────────────────────┐"
+"┌Nibble 3.0 (20)───────────────────────────────────────────────────────────────────────────────────┐"
 "│Design review (7)                                                                                 │"
 "│▸ OPS-36 Plan the office cheese cave move                     ◐ In Review   ▮▯▯ Low       Cycle 7 │"
 "│  ENG-64 Support multiple cellars per household               ● Done        ▮▯▯ Low     5 Cycle 7 │"

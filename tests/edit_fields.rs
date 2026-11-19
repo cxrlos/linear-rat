@@ -615,6 +615,27 @@ fn on_a_narrow_list_the_title_keeps_its_room_and_the_due_date_gives_way() {
     assert_snapshot!(app.backend());
 }
 
+#[test]
+fn at_80_columns_the_title_keeps_thirty_cells_and_the_due_date_gives_way() {
+    let app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+    let title = issue(&app, FIRST).title;
+    let start: String = title.chars().take(30).collect();
+
+    assert!(
+        shows(&app, &format!("{FIRST} {start}")),
+        "{:#?}",
+        screen(&app)
+    );
+    assert!(!shows(&app, "due "), "{:#?}", screen(&app));
+}
+
+#[test]
+fn a_wide_list_shows_the_due_date_beside_the_title() {
+    let app = App::new(TestBackend::new(200, 30), State::demo()).unwrap();
+
+    assert!(shows(&app, "due "), "{:#?}", screen(&app));
+}
+
 /// A failure with `message`, as the runtime sends one.
 fn failed(message: &str) -> Failure {
     Failure::new(ErrorKind::Other, "test", message)

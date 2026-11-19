@@ -15,6 +15,7 @@ pub struct Results {
     ids: Vec<String>,
     list: IssueList,
     arrangement: Arrangement,
+    opened_as: Arrangement,
     names: Names,
     back: Screen,
 }
@@ -26,6 +27,7 @@ impl Default for Results {
             ids: Vec::new(),
             list: IssueList::default(),
             arrangement: Arrangement::LINEAR_ORDER,
+            opened_as: Arrangement::LINEAR_ORDER,
             names: Names::default(),
             back: Screen::default(),
         }
@@ -60,6 +62,11 @@ impl Results {
     /// The names its rows and detail look up.
     pub fn names(&self) -> &Names {
         &self.names
+    }
+
+    /// How the list was grouped and sorted when it opened.
+    pub fn opened_as(&self) -> Arrangement {
+        self.opened_as
     }
 
     /// How the list is grouped and sorted.
@@ -138,6 +145,7 @@ pub(super) fn show_arranged(
         names: Names::from_store(&state.store),
         back,
         arrangement,
+        opened_as: arrangement,
         list: IssueList::default(),
     };
     state.screen = Screen::Results;

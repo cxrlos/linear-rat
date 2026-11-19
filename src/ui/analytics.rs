@@ -3,6 +3,7 @@
 //! is doing. Every section is plain lines, so the view scrolls as one and
 //! nothing depends on a widget's own layout.
 
+use super::text;
 use jiff::SignedDuration;
 use jiff::civil::Date;
 use ratatui::Frame;
@@ -180,11 +181,11 @@ fn header(state: &State, width: usize) -> Line<'static> {
         spans.extend(key(state, Action::SwitchAnalyticsTeam));
         let used: usize = spans.iter().chain(&range_spans).map(Span::width).sum();
         // The team key stays whole; the name takes what is left.
-        let name_width = width.saturating_sub(used + team.key.chars().count() + 1);
+        let name_width = width.saturating_sub(used + text::width(&team.key) + 1);
         let label = if name_width == 0 {
             team.key.clone()
         } else {
-            format!("{} {}", team.key, fit(&team.name, name_width))
+            format!("{} {}", team.key, text::fit(&team.name, name_width))
         };
         spans.push(Span::styled(
             label,
@@ -628,7 +629,7 @@ impl<'a> View<'a> {
             .collect();
         let id_width = rows
             .iter()
-            .map(|(identifier, _, _)| identifier.chars().count())
+            .map(|(identifier, _, _)| text::width(identifier))
             .max()
             .unwrap_or(0);
         let age_width = 6;
@@ -641,7 +642,7 @@ impl<'a> View<'a> {
                         format!("{identifier:<id_width$} "),
                         style::muted(self.theme),
                     ),
-                    Span::raw(format!("{:<title_width$}", fit(&title, title_width))),
+                    Span::raw(format!("{:<title_width$}", text::fit(&title, title_width))),
                     Span::raw(format!(" {:>age_width$}", duration(age))),
                 ])
             })
@@ -675,7 +676,7 @@ impl<'a> View<'a> {
         for share in shares.iter().take(SHARES_SHOWN) {
             let mut text = format!(
                 "{:<SHARE_NAME_WIDTH$} {:>3} {:<6}",
-                fit(&name(&share.key), SHARE_NAME_WIDTH),
+                text::fit(&name(&share.key), SHARE_NAME_WIDTH),
                 share.issues,
                 issues(share.issues as usize),
             );
@@ -932,7 +933,7 @@ impl View<'_> {
         };
         let name_width = width.saturating_sub(4 * PERSON_COLUMN_WIDTH).max(8);
         let row = |name: &str, cells: [String; 4]| {
-            let mut text = format!("{:<name_width$}", fit(name, name_width));
+            let mut text = format!("{:<name_width$}", text::fit(name, name_width));
             for cell in cells {
                 text.push_str(&format!("{cell:>PERSON_COLUMN_WIDTH$}"));
             }
@@ -1076,14 +1077,4 @@ fn duration(duration: SignedDuration) -> String {
     } else {
         format!("{days:.0}d")
     }
-}
-
-/// `text` cut to `width` characters, ending in `…` when it was longer.
-fn fit(text: &str, width: usize) -> String {
-    if text.chars().count() <= width {
-        return text.to_owned();
-    }
-    let mut cut: String = text.chars().take(width.saturating_sub(1)).collect();
-    cut.push('…');
-    cut
 }

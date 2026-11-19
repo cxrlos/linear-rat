@@ -3,7 +3,7 @@ source: tests/cheatsheet.rs
 expression: "text(&cheatsheet(50, 24))"
 ---
  [1] My Issues │ [2] │ [3] │ [4] │ [5]            
-┌My Issues · group: workflow state · sort: active┐
+┌My Issues───────────────────────────────────────┐
 │◐ Sta┌ Keys ─────────────────────────────┐      │
 │▸ DES│ Move                              │cle 7 │
 │  ENG│  j/k      down / up               │cle 7 │

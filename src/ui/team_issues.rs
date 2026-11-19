@@ -2,6 +2,7 @@
 //! many match, and the filters, over the list and the focused issue's
 //! detail.
 
+use super::text;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Stylize;
@@ -148,7 +149,7 @@ fn header(state: &State, width: u16) -> Line<'static> {
         .join(", ");
     let text = [named, fields]
         .into_iter()
-        .find(|text| Span::raw(text.as_str()).width() <= room)
+        .find(|candidate| text::width(candidate) <= room)
         .unwrap_or_else(|| filters.len().to_string());
     spans.push(Span::raw(text));
     Line::from(spans)
@@ -160,7 +161,12 @@ fn header(state: &State, width: u16) -> Line<'static> {
 fn list_title(state: &State) -> String {
     let team_issues = &state.team_issues;
     if team_issues.sort_covers_all() {
-        return my_issues::list_title("Team Issues", team_issues.arrangement(), "");
+        return my_issues::list_title(
+            "Team Issues",
+            team_issues.arrangement(),
+            state.ui.team_issues,
+            "",
+        );
     }
     let total = team_issues
         .total()
@@ -169,13 +175,13 @@ fn list_title(state: &State) -> String {
         "Team Issues · sorted: loaded {} of {total}",
         team_issues.ids().len()
     );
-    my_issues::list_title(&name, team_issues.arrangement(), "")
+    my_issues::list_title(&name, team_issues.arrangement(), state.ui.team_issues, "")
 }
 
 fn render_list(view: &View, state: &State, frame: &mut Frame, area: Rect, focus: Focus) {
     let theme = &state.theme;
     let team_issues = &state.team_issues;
-    let block = my_issues::pane_block(list_title(state), focus, theme);
+    let block = my_issues::pane_block(list_title(state), area, focus, theme);
     let inner = block.inner(area);
     frame.render_widget(block, area);
 

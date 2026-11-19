@@ -23,8 +23,13 @@ pub fn render(state: &State, frame: &mut Frame, area: Rect) {
 fn render_list(view: &View, state: &State, frame: &mut Frame, area: Rect, focus: Focus) {
     let results = &state.results;
     let name = format!("{} ({})", results.title(), results.list().len());
-    let title = my_issues::list_title(&name, results.arrangement(), "Linear's order");
-    let block = my_issues::pane_block(title, focus, &state.theme);
+    let title = my_issues::list_title(
+        &name,
+        results.arrangement(),
+        results.opened_as(),
+        "Linear's order",
+    );
+    let block = my_issues::pane_block(title, area, focus, &state.theme);
     let inner = block.inner(area);
     frame.render_widget(block, area);
     my_issues::render_groups(view, frame, inner, results.list(), focus);

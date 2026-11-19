@@ -1,6 +1,7 @@
 //! The Cycles and Projects screens: one row per cycle or project, the
 //! focused one highlighted, Enter listing its issues.
 
+use super::text;
 use jiff::Timestamp;
 use jiff::civil::Date;
 use jiff::tz::TimeZone;
@@ -39,7 +40,7 @@ pub fn render_cycles(state: &State, frame: &mut Frame, area: Rect) {
                 .map(cycle_title)
         }),
     );
-    let block = my_issues::pane_block(title, Focus::Alone, &state.theme);
+    let block = my_issues::pane_block(title, list_area, Focus::Alone, &state.theme);
     let inner = block.inner(list_area);
     frame.render_widget(block, list_area);
 
@@ -92,14 +93,15 @@ pub fn render_cycles(state: &State, frame: &mut Frame, area: Rect) {
         if is_focused {
             frame.render_widget("▸", marker);
         }
-        frame.render_widget(Span::raw(cycle_title(cycle)), name);
-        frame.render_widget(
+        text::draw(frame, Span::raw(cycle_title(cycle)), name);
+        text::draw(
+            frame,
             Span::raw(format!("{} – {}", day(cycle.starts_at), day(cycle.ends_at)))
                 .fg(state.theme.muted),
             dates,
         );
-        frame.render_widget(cycle_tag(state, cycle, now), tag);
-        frame.render_widget(Line::from(done).alignment(Alignment::Right), count);
+        text::draw(frame, cycle_tag(state, cycle, now), tag);
+        text::draw(frame, Line::from(done).alignment(Alignment::Right), count);
         if is_focused {
             frame
                 .buffer_mut()
@@ -120,7 +122,7 @@ pub fn render_projects(state: &State, frame: &mut Frame, area: Rect) {
                 .map(|overview| overview.project.name.clone())
         }),
     );
-    let block = my_issues::pane_block(title, Focus::Alone, &state.theme);
+    let block = my_issues::pane_block(title, area, Focus::Alone, &state.theme);
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
@@ -157,9 +159,10 @@ pub fn render_projects(state: &State, frame: &mut Frame, area: Rect) {
         if is_focused {
             frame.render_widget("▸", marker);
         }
-        frame.render_widget(Span::raw(overview.project.name.as_str()), name);
-        frame.render_widget(status_line(state, overview), status);
-        frame.render_widget(
+        text::draw(frame, Span::raw(overview.project.name.as_str()), name);
+        text::draw(frame, status_line(state, overview), status);
+        text::draw(
+            frame,
             Span::raw(
                 overview
                     .target_date
@@ -169,7 +172,8 @@ pub fn render_projects(state: &State, frame: &mut Frame, area: Rect) {
             .fg(state.theme.muted),
             target,
         );
-        frame.render_widget(
+        text::draw(
+            frame,
             Span::raw(
                 overview
                     .lead
@@ -179,7 +183,8 @@ pub fn render_projects(state: &State, frame: &mut Frame, area: Rect) {
             ),
             lead,
         );
-        frame.render_widget(
+        text::draw(
+            frame,
             Line::from(percent(overview.progress)).alignment(Alignment::Right),
             progress,
         );

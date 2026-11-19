@@ -1,5 +1,6 @@
 //! The which-key popup: after a chord's first keys, what can follow.
 
+use super::text;
 use ratatui::Frame;
 use ratatui::layout::{Margin, Rect};
 use ratatui::style::Style;
@@ -37,7 +38,7 @@ pub fn render(state: &State, prefix: &[Key], frame: &mut Frame, area: Rect) {
     let width = lines
         .iter()
         .map(Line::width)
-        .chain([title.chars().count(), close.width()])
+        .chain([text::width(&title), close.width()])
         .max()
         .unwrap_or(0)
         + 2;
@@ -51,7 +52,14 @@ pub fn render(state: &State, prefix: &[Key], frame: &mut Frame, area: Rect) {
         width,
         height,
     };
-    let block = super::popup_block(state).title(title).title_bottom(close);
+    let edge = usize::from(popup.width.saturating_sub(2));
+    let block = super::popup_block(state)
+        .title(text::fit(&title, edge))
+        .title_bottom(text::fit_line(close, edge));
+    let lines: Vec<Line> = lines
+        .into_iter()
+        .map(|line| text::fit_line(line, edge))
+        .collect();
     frame.render_widget(Clear, popup);
     frame.render_widget(Paragraph::new(lines).block(block), popup);
 }

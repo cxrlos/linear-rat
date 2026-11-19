@@ -420,3 +420,22 @@ fn an_empty_list_says_no_open_issues_are_assigned() {
 
     assert_snapshot!(app.backend());
 }
+
+#[test]
+fn a_title_too_long_for_its_column_ends_in_an_ellipsis() {
+    let app = sized(80, 24);
+    let lines = screen(&app);
+
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.contains("ENG-61 Add contract tests for the reci… ◐")),
+        "{lines:#?}"
+    );
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.contains("OPS-37 Clean up unused API keys         ◐")),
+        "{lines:#?}"
+    );
+}

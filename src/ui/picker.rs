@@ -1,6 +1,7 @@
 //! A picker: the filter typed so far, the entries it leaves with the number
 //! that picks each of the first nine, and the keys that choose and close.
 
+use super::text;
 use ratatui::Frame;
 use ratatui::layout::{Margin, Rect};
 use ratatui::style::Stylize;
@@ -89,15 +90,20 @@ fn render_title(state: &State, form: &CreateForm, heading: &str, frame: &mut Fra
     let width = lines
         .iter()
         .map(Line::width)
-        .chain([heading.chars().count() + 2, bottom.width(), MIN_WIDTH])
+        .chain([text::width(heading) + 2, bottom.width(), MIN_WIDTH])
         .max()
         .unwrap_or(0)
         + 4;
     let width = u16::try_from(width).unwrap_or(u16::MAX);
     let popup = super::centered(area, width, 5);
+    let edge = usize::from(popup.width.saturating_sub(2));
     let block = super::popup_block(state)
-        .title(format!(" {heading} "))
-        .title_bottom(bottom);
+        .title(text::fit(&format!(" {heading} "), edge))
+        .title_bottom(text::fit_line(bottom, edge));
+    let lines: Vec<Line> = lines
+        .into_iter()
+        .map(|line| text::fit_line(line, edge.saturating_sub(2)))
+        .collect();
     frame.render_widget(Clear, popup);
     frame.render_widget(
         Paragraph::new(lines).block(block.padding(Padding::horizontal(1))),
@@ -143,15 +149,20 @@ pub fn render_due_date(state: &State, prompt: &DuePrompt, frame: &mut Frame, are
     let width = lines
         .iter()
         .map(Line::width)
-        .chain([title.chars().count() + 2, bottom.width(), MIN_WIDTH])
+        .chain([text::width(&title) + 2, bottom.width(), MIN_WIDTH])
         .max()
         .unwrap_or(0)
         + 4;
     let width = u16::try_from(width).unwrap_or(u16::MAX);
     let popup = super::centered(area, width, 5);
+    let edge = usize::from(popup.width.saturating_sub(2));
     let block = super::popup_block(state)
-        .title(format!(" {title} "))
-        .title_bottom(bottom);
+        .title(text::fit(&format!(" {title} "), edge))
+        .title_bottom(text::fit_line(bottom, edge));
+    let lines: Vec<Line> = lines
+        .into_iter()
+        .map(|line| text::fit_line(line, edge.saturating_sub(2)))
+        .collect();
     frame.render_widget(Clear, popup);
     frame.render_widget(
         Paragraph::new(lines).block(block.padding(Padding::horizontal(1))),
@@ -255,7 +266,7 @@ fn render_with<T>(
         .collect();
     let key_width = number_keys
         .iter()
-        .map(|key| key.chars().count())
+        .map(|key| text::width(key))
         .max()
         .unwrap_or(0);
 
@@ -321,7 +332,7 @@ fn render_with<T>(
         .chain(note.iter())
         .chain([&query])
         .map(Line::width)
-        .chain([title.chars().count() + 2, bottom.width(), MIN_WIDTH])
+        .chain([text::width(title) + 2, bottom.width(), MIN_WIDTH])
         .max()
         .unwrap_or(0)
         + 4;
@@ -338,9 +349,14 @@ fn render_with<T>(
     lines.extend(rows.drain(..).skip(offset).take(room));
     lines.extend(note);
 
+    let edge = usize::from(popup.width.saturating_sub(2));
     let block = super::popup_block(state)
-        .title(format!(" {title} "))
-        .title_bottom(bottom);
+        .title(text::fit(&format!(" {title} "), edge))
+        .title_bottom(text::fit_line(bottom, edge));
+    let lines: Vec<Line> = lines
+        .into_iter()
+        .map(|line| text::fit_line(line, edge.saturating_sub(2)))
+        .collect();
     frame.render_widget(Clear, popup);
     frame.render_widget(
         Paragraph::new(lines).block(block.padding(Padding::horizontal(1))),

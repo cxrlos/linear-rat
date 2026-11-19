@@ -3,7 +3,7 @@ source: tests/keys.rs
 expression: narrow.backend()
 ---
 " [1] My Issues │ [2] │ [3] │ [4] │ [5]            "
-"┌My Issues · group: workflow state · sort: active┐"
+"┌My Issues───────────────────────────────────────┐"
 "│No op┌ Keys ─────────────────────────────┐      │"
 "│     │  gr     related issue             │      │"
 "│     │                                   │      │"

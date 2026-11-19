@@ -4,7 +4,7 @@ expression: app.backend()
 ---
 " [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    "
 "t ENG Engineering · 0 of … · f Filters none                                     "
-"┌Team Issues · group: none · sort: updated, newest first───────────────────────┐"
+"┌Team Issues───────────────────────────────────────────────────────────────────┐"
 "│Not accessible with this key                                                  │"
 "│                                                                              │"
 "│                                                                              │"

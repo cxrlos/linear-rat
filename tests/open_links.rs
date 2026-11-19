@@ -426,3 +426,29 @@ fn the_links_picker_footer_names_the_copy_key() {
 fn failed(message: &str) -> Failure {
     Failure::new(ErrorKind::Other, "test", message)
 }
+
+#[test]
+fn on_a_narrow_terminal_a_link_too_long_for_the_picker_ends_in_an_ellipsis() {
+    let mut app = focused_on("DES-34");
+    app.backend_mut().resize(40, 24);
+    app.handle(Event::Resize {
+        columns: 40,
+        rows: 24,
+    })
+    .unwrap();
+
+    open(&mut app, "o");
+
+    let buffer = app.backend().buffer();
+    let rows: Vec<String> = buffer
+        .content()
+        .chunks(usize::from(buffer.area.width))
+        .map(|row| row.iter().map(|cell| cell.symbol()).collect())
+        .collect();
+    let pull_request = rows
+        .iter()
+        .find(|row| row.contains("Pull request nibble#412"))
+        .unwrap_or_else(|| panic!("{rows:#?}"));
+    assert!(pull_request.contains("…"), "{rows:#?}");
+    assert!(!pull_request.contains("(merged)"), "{rows:#?}");
+}

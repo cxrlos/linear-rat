@@ -1,6 +1,7 @@
 //! The confirmation modal: a title, a body and the keys that confirm or
 //! cancel, all from the keymap.
 
+use super::text;
 use ratatui::Frame;
 use ratatui::layout::{Margin, Rect};
 use ratatui::text::{Line, Span};
@@ -31,7 +32,7 @@ pub fn render(state: &State, confirm: &Confirm, frame: &mut Frame, area: Rect) {
     let widest = lines
         .iter()
         .map(Line::width)
-        .chain([title.chars().count(), bottom.width()])
+        .chain([text::width(&title), bottom.width()])
         .max()
         .unwrap_or(0);
     let width = u16::try_from(widest + 4).unwrap_or(u16::MAX);

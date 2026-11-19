@@ -3,7 +3,7 @@ source: tests/palette.rs
 expression: "format!(\"{}\\n\\n{}\", quit.join(\"\\n\"), screen(&app).join(\"\\n\"))"
 ---
  [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    
-┌My Issues · group: workflow state · sort: active cycle, then priority─────────┐
+┌My Issues─────────────────────────────────────────────────────────────────────┐
 │◐┌ Palette ─────────────────────────────────────────────────────────────────┐ │
 │▸│ : quit                                                                   │ │
 │ │──────────────────────────────────────────────────────────────────────────│ │
@@ -20,15 +20,15 @@ expression: "format!(\"{}\\n\\n{}\", quit.join(\"\\n\"), screen(&app).join(\"\\n
 │ │                                                                          │ │
 │ │                                                                          │ │
 │ └ Esc close ───────────────────────────────────────────────────────────────┘ │
-│  DES-16 Accessible focus rings across wh ○ Todo        ▮▮▮ High    5         │
-│  ENG-56 Notification settings reset afte ○ Todo        ▮▮▮ High    2         │
+│  DES-16 Accessible focus rings across w… ○ Todo        ▮▮▮ High    5         │
+│  ENG-56 Notification settings reset aft… ○ Todo        ▮▮▮ High    2         │
 └──────────────────────────────────────────────────────────────────────────────┘
  Move │ Down/Up move                                                            
  Do   │ Enter choose │ Esc close                                                
                                                                                 
 
  [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    
-┌My Issues · group: workflow state · sort: active cycle, then priority─────────┐
+┌My Issues─────────────────────────────────────────────────────────────────────┐
 │◐┌ Palette ─────────────────────────────────────────────────────────────────┐ │
 │▸│ : every key                                                              │ │
 │ │──────────────────────────────────────────────────────────────────────────│ │
@@ -45,8 +45,8 @@ expression: "format!(\"{}\\n\\n{}\", quit.join(\"\\n\"), screen(&app).join(\"\\n
 │ │                                                                          │ │
 │ │                                                                          │ │
 │ └ Esc close ───────────────────────────────────────────────────────────────┘ │
-│  DES-16 Accessible focus rings across wh ○ Todo        ▮▮▮ High    5         │
-│  ENG-56 Notification settings reset afte ○ Todo        ▮▮▮ High    2         │
+│  DES-16 Accessible focus rings across w… ○ Todo        ▮▮▮ High    5         │
+│  ENG-56 Notification settings reset aft… ○ Todo        ▮▮▮ High    2         │
 └──────────────────────────────────────────────────────────────────────────────┘
  Move │ Down/Up move                                                            
  Do   │ Enter choose │ Esc close

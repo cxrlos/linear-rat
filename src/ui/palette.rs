@@ -1,5 +1,6 @@
 //! The palette overlay, and the query box and list it shares with search.
 
+use super::text;
 use ratatui::Frame;
 use ratatui::layout::{Margin, Rect};
 use ratatui::style::{Modifier, Style};
@@ -136,7 +137,7 @@ pub(super) fn render_list(
 /// The widest identifier of `issues`, so their titles line up.
 pub(super) fn identifier_width<'a>(issues: impl Iterator<Item = &'a Issue>) -> usize {
     issues
-        .map(|issue| issue.identifier.chars().count())
+        .map(|issue| text::width(&issue.identifier))
         .max()
         .unwrap_or(0)
 }
@@ -174,24 +175,10 @@ pub(super) fn issue_line(
 fn spread(left: Vec<Span<'static>>, right: Vec<Span<'static>>, width: usize) -> Line<'static> {
     let right_width: usize = right.iter().map(Span::width).sum();
     let room = width.saturating_sub(right_width + 3);
+    let left = text::fit_line(Line::from(left), room);
+    let used = left.width();
     let mut spans = vec![Span::raw(" ")];
-    let mut used = 0;
-    for span in left {
-        let left_here = room.saturating_sub(used);
-        if span.width() <= left_here {
-            used += span.width();
-            spans.push(span);
-        } else if left_here > 0 {
-            let cut: String = span
-                .content
-                .chars()
-                .take(left_here.saturating_sub(1))
-                .collect();
-            used += cut.chars().count() + 1;
-            spans.push(Span::styled(format!("{cut}…"), span.style));
-            break;
-        }
-    }
+    spans.extend(left.spans);
     spans.push(Span::raw(
         " ".repeat(width.saturating_sub(used + right_width + 2).max(1)),
     ));

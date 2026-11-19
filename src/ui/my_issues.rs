@@ -1,5 +1,6 @@
 //! My Issues: the grouped list and the focused issue's detail.
 
+use super::text;
 use std::collections::BTreeMap;
 
 use jiff::civil::Date;
@@ -97,12 +98,15 @@ pub(super) enum Focus {
     Unfocused,
 }
 
+/// A bordered pane drawn in `area`, its title cut with `…` to fit.
 pub(super) fn pane_block(
     title: impl Into<Line<'static>>,
+    area: Rect,
     focus: Focus,
     theme: &Theme,
 ) -> Block<'static> {
-    let block = Block::bordered().title(title);
+    let room = usize::from(area.width.saturating_sub(2));
+    let block = Block::bordered().title(text::fit_line(title.into(), room));
     match focus {
         Focus::Alone => block.border_style(style::border(theme)),
         Focus::Focused => block
@@ -122,9 +126,10 @@ fn render_list(view: &View, state: &State, frame: &mut Frame, area: Rect, focus:
     let title = list_title(
         "My Issues",
         my_issues.arrangement(),
+        state.ui.my_issues,
         "active cycle, then priority",
     );
-    let block = pane_block(title, focus, view.theme);
+    let block = pane_block(title, area, focus, view.theme);
     let inner = block.inner(area);
     frame.render_widget(block, area);
     if my_issues.is_empty() {
@@ -136,8 +141,17 @@ fn render_list(view: &View, state: &State, frame: &mut Frame, area: Rect, focus:
 }
 
 /// `My Issues · group: workflow state · sort: priority, urgent first`, with
-/// `own` naming the list's own order.
-pub(super) fn list_title(title: &str, arrangement: Arrangement, own: &str) -> String {
+/// `own` naming the list's own order. Just `title` while the list is
+/// arranged as it starts out.
+pub(super) fn list_title(
+    title: &str,
+    arrangement: Arrangement,
+    default: Arrangement,
+    own: &str,
+) -> String {
+    if arrangement == default {
+        return title.to_owned();
+    }
     let sort = arrangement.sort.map_or_else(|| own.to_owned(), Sort::label);
     format!(
         "{title} · group: {} · sort: {sort}",
@@ -244,7 +258,7 @@ pub(super) fn visible_offset(scroll: usize, focused_line: usize, inner: Rect) ->
 /// of `issues`.
 pub(super) fn row_cells<'a>(issues: impl Iterator<Item = &'a Issue>) -> Layout {
     let id_width = issues
-        .map(|issue| issue.identifier.chars().count())
+        .map(|issue| text::width(&issue.identifier))
         .max()
         .unwrap_or(0);
     Layout::horizontal([
@@ -260,7 +274,7 @@ pub(super) fn row_cells<'a>(issues: impl Iterator<Item = &'a Issue>) -> Layout {
 }
 
 /// The columns a row's title keeps before its due date is shown beside it.
-const TITLE_BESIDE_DUE: u16 = 12;
+const TITLE_BESIDE_DUE: u16 = 30;
 
 /// One issue row: marker, identifier, title with its due date when there is
 /// room, state, priority, estimate and cycle, highlighted when it is the
@@ -279,7 +293,11 @@ pub(super) fn render_row(
     if is_focused {
         frame.render_widget("▸", marker);
     }
-    frame.render_widget(Span::raw(&issue.identifier).fg(theme.muted), identifier);
+    text::draw(
+        frame,
+        Span::raw(&issue.identifier).fg(theme.muted),
+        identifier,
+    );
     let due = issue
         .due_date
         .map(|date| due_span(view, issue, date))
@@ -314,9 +332,8 @@ pub(super) fn render_row(
     } else {
         Span::raw(issue.title.as_str())
     });
-    let title_line = Line::from(title_spans);
-    frame.render_widget(title_line, title);
-    frame.render_widget(state_line(view, &issue.state), state);
+    text::draw(frame, title_spans, title);
+    text::draw(frame, state_line(view, &issue.state), state);
     frame.render_widget(priority_line(view, issue.priority), priority);
     frame.render_widget(
         Line::from(
@@ -329,7 +346,7 @@ pub(super) fn render_row(
         .alignment(Alignment::Right),
         estimate,
     );
-    frame.render_widget(cycle_span(view, issue), cycle);
+    text::draw(frame, cycle_span(view, issue), cycle);
     if is_focused {
         let highlight = if focus == Focus::Unfocused {
             Style::new().add_modifier(Modifier::BOLD)
@@ -351,10 +368,10 @@ pub(super) fn render_detail(
 ) {
     let theme = &state.theme;
     let Some(issue) = issue else {
-        frame.render_widget(pane_block("Detail", focus, theme), area);
+        frame.render_widget(pane_block("Detail", area, focus, theme), area);
         return;
     };
-    let block = pane_block(issue.identifier.clone(), focus, theme);
+    let block = pane_block(issue.identifier.clone(), area, focus, theme);
     let inner = block.inner(area);
     let lines = detail::lines(state, issue, inner.width);
     // The kept scroll may be past the end after the detail got shorter.

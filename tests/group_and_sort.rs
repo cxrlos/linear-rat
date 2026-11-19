@@ -45,14 +45,37 @@ fn focused_id(app: &App<TestBackend>) -> String {
 }
 
 #[test]
-fn my_issues_shows_how_it_is_grouped_and_sorted() {
+fn the_default_arrangement_leaves_the_title_bare() {
     let app = sized(120, 30, State::demo());
 
     let title = &screen(&app)[1];
+    assert!(title.contains("My Issues━"), "{title}");
+    assert!(!title.contains("group:"), "{title}");
+}
+
+#[test]
+fn a_changed_arrangement_names_itself_in_the_title() {
+    let mut app = sized(120, 30, State::demo());
+
+    press(&mut app, "vgpriority\n");
+
+    let title = &screen(&app)[1];
     assert!(
-        title.contains("My Issues · group: workflow state · sort: active cycle, then priority"),
+        title.contains("My Issues · group: priority · sort: active cycle, then priority"),
         "{title}"
     );
+}
+
+#[test]
+fn a_default_from_ui_counts_as_the_default() {
+    let loaded = config::parse(
+        "[ui]\nmy-issues-group = \"priority\"\n",
+        Path::new("config.toml"),
+    );
+    let app = sized(120, 30, State::demo().with_config(&loaded));
+
+    let title = &screen(&app)[1];
+    assert!(title.contains("My Issues━"), "{title}");
 }
 
 #[test]
