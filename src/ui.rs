@@ -1,6 +1,7 @@
 //! Rendering: a pure function of [`State`].
 
 mod analytics;
+mod browse;
 mod cheatsheet;
 mod confirm;
 mod detail;
@@ -39,7 +40,7 @@ pub fn render(state: &State, frame: &mut Frame) {
     let selected = Screen::ALL
         .iter()
         .position(|&screen| screen == state.screen);
-    let titles = Screen::ALL.map(|screen| tab_title(state, screen));
+    let titles = tab_titles(state, tabs_area.width);
     let tabs_width = titles_width(&titles);
     frame.render_widget(Tabs::new(titles).select(selected), tabs_area);
     render_sync_indicator(state, frame, tabs_area, tabs_width);
@@ -59,6 +60,8 @@ pub fn render(state: &State, frame: &mut Frame) {
         },
         Screen::TeamIssues => team_issues::render(state, frame, body_area),
         Screen::Analytics => analytics::render(state, frame, body_area),
+        Screen::Cycles => browse::render_cycles(state, frame, body_area),
+        Screen::Projects => browse::render_projects(state, frame, body_area),
         Screen::Results => results::render(state, frame, body_area),
     }
     frame.render_widget(
@@ -84,15 +87,32 @@ pub fn render(state: &State, frame: &mut Frame) {
     }
 }
 
+/// Every tab's title, as [`tab_title`] has it. When they do not fit in
+/// `width` beside the sync indicator, the tabs of the other screens show
+/// only their key, as `[2]`.
+fn tab_titles(state: &State, width: u16) -> [String; Screen::ALL.len()] {
+    let full = Screen::ALL.map(|screen| tab_title(state, screen, false));
+    let indicator = state.sync_status.indicator().map_or(0, |indicator| {
+        Span::raw(format!("{} ", indicator.text)).width() + 1
+    });
+    let room = usize::from(width).saturating_sub(indicator);
+    if usize::from(titles_width(&full)) <= room {
+        return full;
+    }
+    Screen::ALL.map(|screen| tab_title(state, screen, screen != state.screen))
+}
+
 /// The screen's title after the first key that shows it from here, as
-/// `[1] My Issues`, or the bare title if no key reaches it (unbound, or
-/// shadowed by a binding of the current screen).
-fn tab_title(state: &State, screen: Screen) -> String {
+/// `[1] My Issues`, or only the key when `short`, as `[1]`. The bare title
+/// if no key reaches it (unbound, or shadowed by a binding of the current
+/// screen).
+fn tab_title(state: &State, screen: Screen, short: bool) -> String {
     match state
         .keymap
         .keys_for(Action::ShowScreen(screen), &keys::screen_contexts(state))
         .first()
     {
+        Some(key) if short => format!("[{key}]"),
         Some(key) => format!("[{key}] {}", screen.title()),
         None => screen.title().to_owned(),
     }
@@ -186,7 +206,7 @@ pub fn detail_rows(state: &State, viewport: Size) -> (usize, usize) {
         Screen::MyIssues => my_issues::detail_area(state, body_area, state.my_issues.pane()),
         Screen::TeamIssues => team_issues::detail_area(state, body_area),
         Screen::Results => my_issues::detail_area(state, body_area, state.results.pane()),
-        Screen::Analytics => None,
+        Screen::Analytics | Screen::Cycles | Screen::Projects => None,
     };
     let Some(pane) = pane else {
         return (0, 0);
@@ -201,6 +221,16 @@ pub fn detail_rows(state: &State, viewport: Size) -> (usize, usize) {
 /// terminal, under its header.
 pub fn team_list_rows(state: &State, viewport: Size) -> usize {
     list_rows(state, viewport).saturating_sub(usize::from(team_issues::header_rows(state)))
+}
+
+/// How many rows fit in the list of the Cycles or Projects screen of a
+/// `viewport`-sized terminal, under any header.
+pub fn browse_rows(state: &State, viewport: Size) -> usize {
+    let header = match state.screen {
+        Screen::Cycles => browse::cycles_header_rows(state),
+        _ => 0,
+    };
+    list_rows(state, viewport).saturating_sub(usize::from(header))
 }
 
 /// How far the cheatsheet can scroll in a `viewport`-sized terminal: how

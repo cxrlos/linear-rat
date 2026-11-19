@@ -2,8 +2,8 @@
 source: tests/copy_and_open.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
-"┌My Issues─────────────────────────────────────────────────────────────────────┐"
+" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    "
+"┌My Issues · group: workflow state · sort: active cycle, then priority─────────┐"
 "│◐ Started (9)                                                                 │"
 "│▸ DES-34 Design QA for the autu due Nov 6 ◐ In Progress ▮▮▮ High    3 Cycle 7 │"
 "│  ENG-51 Add a dry-run mode to due Oct 30 ◐ In Progress ▮▮▯ Medium  2 Cycle 7 │"

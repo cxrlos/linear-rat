@@ -7,7 +7,9 @@
 
 use linear_rat::auth::ApiKey;
 use linear_rat::linear::model::{Estimation, StateType};
-use linear_rat::linear::{ClientConfig, HttpClient, LinearClient, TeamFilter, TeamQuery};
+use linear_rat::linear::{
+    ClientConfig, HttpClient, LinearClient, TeamFilter, TeamOrder, TeamQuery,
+};
 use serde_json::{Value, json};
 use wiremock::matchers::{body_partial_json, body_string_contains, method};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -76,6 +78,7 @@ fn eng() -> TeamQuery {
     TeamQuery {
         team_id: "team-eng".to_owned(),
         filter: TeamFilter::default(),
+        order: TeamOrder::default(),
     }
 }
 
@@ -98,11 +101,31 @@ async fn a_page_of_team_issues_names_the_cursor_of_the_next_one() {
     let body = &bodies(&server.received_requests().await.unwrap())[0];
     assert_eq!(
         body["variables"],
-        json!({ "teamId": "team-eng", "filter": null, "after": null })
+        json!({ "teamId": "team-eng", "filter": null, "after": null, "orderBy": "updatedAt" })
     );
     let query = body["query"].as_str().unwrap();
     assert!(query.contains("first: 50"), "{query}");
-    assert!(query.contains("orderBy: updatedAt"), "{query}");
+    assert!(query.contains("orderBy: $orderBy"), "{query}");
+}
+
+#[tokio::test]
+async fn a_created_order_asks_linear_for_the_newest_created_first() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(body_partial_json(
+            json!({ "variables": { "orderBy": "createdAt" } }),
+        ))
+        .respond_with(ok(issues_page(json!([issue(1)]), None)))
+        .mount(&server)
+        .await;
+    let query = TeamQuery {
+        order: TeamOrder::Created,
+        ..eng()
+    };
+
+    let page = client_for(&server).team_issues(&query, None).await.unwrap();
+
+    assert_eq!(page.issues.len(), 1);
 }
 
 #[tokio::test]

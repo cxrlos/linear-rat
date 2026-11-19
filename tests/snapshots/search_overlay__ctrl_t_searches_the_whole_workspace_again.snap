@@ -2,7 +2,7 @@
 source: tests/search_overlay.rs
 expression: prompt
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    "
 "t ENG Engineering · 2 of 2 · f Filters State In Progress, Label backend         "
 "┌T┌ Search Linear ───────────────────────────────────────────────────────────┐─┐"
 "│▸│ /                                                                        │ │"

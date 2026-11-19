@@ -1,11 +1,15 @@
 //! Team Issues: one of the viewer's teams, its issues a page at a time,
 //! narrowed by a filter, with the focused issue and its detail.
 
+use super::arrange::linear_order;
 use super::modal::{Choice, Purpose};
 use super::picker::{Entry, Picker};
-use super::{Action, Effect, Failure, Modal, Names, Pane, State};
+use super::{
+    Action, Arrangement, Effect, Failure, IssueList, Modal, Names, Pane, State, Store, arrange,
+};
 use crate::linear::model::{Issue, Team};
 use crate::linear::{TeamFilter, TeamIssuesPage, TeamOptions, TeamQuery};
+use crate::ui;
 
 /// A field Team Issues can be filtered by.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -87,9 +91,15 @@ pub struct TeamIssues {
     count: Option<usize>,
     /// Whether the count failed, so the next page asks for it again.
     count_failed: bool,
-    focused: usize,
-    scroll: usize,
-    pane: Pane,
+    /// The loaded issues as they show: grouped, sorted, and where the focus
+    /// is.
+    list: IssueList,
+    /// How the list is grouped and sorted; `None` until the viewer or the
+    /// config chose, which is [`Arrangement::TEAM_ISSUES`].
+    arrangement: Option<Arrangement>,
+    /// The issue to focus once a reload brings it back, as after a sort
+    /// that asks Linear for another order.
+    refocus: Option<String>,
     names: Names,
 }
 
@@ -128,23 +138,18 @@ impl TeamIssues {
         self.next.is_some()
     }
 
-    /// Position of the focused issue in the list.
-    pub fn focused_index(&self) -> usize {
-        self.focused
+    /// The loaded issues as they show.
+    pub fn list(&self) -> &IssueList {
+        &self.list
     }
 
     /// The id of the issue the list cursor is on.
     pub fn focused_id(&self) -> Option<&str> {
-        self.ids.get(self.focused).map(String::as_str)
-    }
-
-    /// The first list row on screen.
-    pub fn scroll(&self) -> usize {
-        self.scroll
+        self.list.focused_issue().map(|issue| issue.id.as_str())
     }
 
     pub fn pane(&self) -> Pane {
-        self.pane
+        self.list.pane()
     }
 
     /// The names its rows and detail look up.
@@ -152,47 +157,59 @@ impl TeamIssues {
         &self.names
     }
 
+    /// How the list is grouped and sorted.
+    pub fn arrangement(&self) -> Arrangement {
+        self.arrangement.unwrap_or(Arrangement::TEAM_ISSUES)
+    }
+
+    /// Groups and sorts the list as `arrangement` says from the next
+    /// build on, as at startup before any team shows.
+    pub(super) fn set_arrangement(&mut self, arrangement: Arrangement) {
+        self.arrangement = Some(arrangement);
+    }
+
+    /// Whether the sort orders every matching issue, not only those loaded:
+    /// Linear sends pages in its order, or every page is in.
+    pub fn sort_covers_all(&self) -> bool {
+        let sort = self.arrangement().sort;
+        !self.has_more() || sort.is_some_and(|sort| linear_order(sort).is_some())
+    }
+
     /// Carries out a navigation action on a list that shows `rows` rows at
-    /// once. Returns whether anything changed.
+    /// once. Returns whether anything changed. Once the viewer moves, a
+    /// reload no longer brings the focus back to the issue it was on.
     pub fn perform(&mut self, action: Action, rows: usize) -> bool {
-        let page = (rows / 2).max(1);
-        let last = self.ids.len().saturating_sub(1);
-        let changed = match (self.pane, action) {
-            (Pane::List, Action::MoveDown) => self.focus(self.focused.saturating_add(1)),
-            (Pane::List, Action::MoveUp) => self.focus(self.focused.saturating_sub(1)),
-            (Pane::List, Action::MoveToTop) => self.focus(0),
-            (Pane::List, Action::MoveToBottom) => self.focus(last),
-            (Pane::List, Action::HalfPageDown) => self.focus(self.focused.saturating_add(page)),
-            (Pane::List, Action::HalfPageUp) => self.focus(self.focused.saturating_sub(page)),
-            (Pane::List, Action::Open | Action::FocusRight) if !self.ids.is_empty() => {
-                self.pane = Pane::Detail;
-                true
-            }
-            (Pane::Detail, Action::Close | Action::FocusLeft) => {
-                self.pane = Pane::List;
-                true
-            }
-            _ => false,
-        };
-        self.scroll_into_view(rows) || changed
+        let changed = self.list.perform(action, rows);
+        if changed {
+            self.refocus = None;
+        }
+        changed
     }
 
     /// Scrolls the least that brings the focused issue on screen in a list
     /// of `rows` rows. Returns whether the scroll moved.
     pub fn scroll_into_view(&mut self, rows: usize) -> bool {
-        if rows == 0 {
-            return false;
+        self.list.scroll_into_view(rows)
+    }
+
+    /// Builds the list again from `store`, keeping the focused issue, or
+    /// the one a reload is to bring back once it is in.
+    pub(super) fn rebuild(&mut self, store: &Store, rows: usize) {
+        let issues: Vec<Issue> = self
+            .ids
+            .iter()
+            .filter_map(|id| store.issue(id))
+            .cloned()
+            .collect();
+        let mut list = IssueList::new(arrange(issues, self.arrangement(), &self.names));
+        list.keep_place_of(&self.list, rows);
+        if let Some(id) = &self.refocus
+            && list.focus_id(id)
+        {
+            self.refocus = None;
+            list.scroll_into_view(rows);
         }
-        let scroll = if self.focused < self.scroll {
-            self.focused
-        } else if self.focused >= self.scroll + rows {
-            self.focused + 1 - rows
-        } else {
-            self.scroll
-        };
-        let changed = scroll != self.scroll;
-        self.scroll = scroll;
-        changed
+        self.list = list;
     }
 
     /// Puts a new issue at the top of the list and focuses it, when it is
@@ -204,14 +221,14 @@ impl TeamIssues {
         if query.team_id == issue.team_id && query.filter.matches(issue) {
             self.ids.insert(0, issue.id.clone());
             self.count = self.count.map(|count| count + 1);
-            self.focused = 0;
-            self.pane = Pane::List;
+            self.list.reset();
+            self.refocus = Some(issue.id.clone());
         }
     }
 
     /// Puts the id Linear gave a new issue in place of its stand-in's.
     pub(super) fn replace_created(&mut self, local_id: &str, id: &str) {
-        for listed in &mut self.ids {
+        for listed in self.ids.iter_mut().chain(&mut self.refocus) {
             if listed == local_id {
                 id.clone_into(listed);
             }
@@ -224,11 +241,11 @@ impl TeamIssues {
         self.ids.retain(|listed| listed != id);
         if self.ids.len() < before {
             self.count = self.count.map(|count| count.saturating_sub(1));
-            self.focus(self.focused);
         }
     }
 
-    /// Takes the issue with `id` off the list and returns where it was.
+    /// Takes the issue with `id` off the list and returns where it was. The
+    /// list shows it until it is built again.
     pub(super) fn forget_at(&mut self, id: &str) -> Option<usize> {
         let position = self.ids.iter().position(|listed| listed == id)?;
         self.forget(id);
@@ -244,13 +261,6 @@ impl TeamIssues {
         self.count = self.count.map(|count| count + 1);
     }
 
-    fn focus(&mut self, index: usize) -> bool {
-        let index = index.min(self.ids.len().saturating_sub(1));
-        let changed = index != self.focused;
-        self.focused = index;
-        changed
-    }
-
     /// Starts over on `query`: nothing loaded, the focus at the top, and the
     /// first page and the count asked for.
     fn reload(&mut self, query: TeamQuery) -> Vec<Effect> {
@@ -258,6 +268,7 @@ impl TeamIssues {
             teams: std::mem::take(&mut self.teams),
             options: std::mem::take(&mut self.options),
             names: std::mem::take(&mut self.names),
+            arrangement: self.arrangement,
             query: Some(query.clone()),
             page: Progress::Loading,
             ..Self::default()
@@ -308,9 +319,16 @@ pub(super) fn teams_loaded(state: &mut State, result: Result<Vec<Team>, Failure>
 /// Shows `team_id` with no filter, and asks for its filter options unless
 /// they are in.
 fn switch(state: &mut State, team_id: String) -> Vec<Effect> {
+    let order = state
+        .team_issues
+        .arrangement()
+        .sort
+        .and_then(linear_order)
+        .unwrap_or_default();
     let mut effects = state.team_issues.reload(TeamQuery {
         team_id: team_id.clone(),
         filter: TeamFilter::default(),
+        order,
     });
     state.team_issues.options = Progress::NotAsked;
     effects.splice(0..0, ask_for_options(state, team_id));
@@ -413,6 +431,7 @@ pub(super) fn page_loaded(
             team_issues.page = Progress::Done;
             team_issues.loading_after = None;
             refresh_names(state);
+            rebuild(state);
         }
         Err(failure) => {
             let team_issues = &mut state.team_issues;
@@ -645,7 +664,7 @@ fn carry_out(state: &mut State, purpose: Purpose, id: Option<String>) -> Vec<Eff
             }
             _ => Vec::new(),
         },
-        Purpose::AnalyticsTeam => Vec::new(),
+        Purpose::AnalyticsTeam | Purpose::CyclesTeam | Purpose::Group | Purpose::Sort => Vec::new(),
         Purpose::Filter(field) => {
             let Some(mut query) = state.team_issues.query.clone() else {
                 return Vec::new();
@@ -662,12 +681,36 @@ fn carry_out(state: &mut State, purpose: Purpose, id: Option<String>) -> Vec<Eff
 
 /// Builds the names rows look up again from the store.
 fn refresh_names(state: &mut State) {
-    let store = &state.store;
-    state.team_issues.names = Names::new(
-        store.cycles(),
-        store.labels(),
-        store.members(),
-        store.teams(),
-        store.as_of().unwrap_or_default(),
-    );
+    state.team_issues.names = Names::from_store(&state.store);
+}
+
+/// Builds the list again from the store, keeping the focus.
+pub(super) fn rebuild(state: &mut State) {
+    let rows = ui::team_list_rows(state, state.viewport);
+    state.team_issues.rebuild(&state.store, rows);
+}
+
+/// Groups and sorts Team Issues as `arrangement` says, keeping the focused
+/// issue. A sort Linear can send pages in reloads them in that order, and
+/// the focus comes back to the issue once it is in.
+pub(super) fn rearrange(state: &mut State, arrangement: Arrangement) -> Vec<Effect> {
+    let team_issues = &mut state.team_issues;
+    team_issues.arrangement = Some(arrangement);
+    let order = arrangement.sort.and_then(linear_order).unwrap_or_default();
+    match &team_issues.query {
+        Some(query) if query.order != order => {
+            let focused = team_issues.focused_id().map(str::to_owned);
+            let query = TeamQuery {
+                order,
+                ..query.clone()
+            };
+            let effects = team_issues.reload(query);
+            team_issues.refocus = focused;
+            effects
+        }
+        _ => {
+            rebuild(state);
+            Vec::new()
+        }
+    }
 }

@@ -2,8 +2,8 @@
 source: tests/capabilities.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
-"┌My Issues─────────────────────────────────────────────────────────────────────┐"
+" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    "
+"┌My Issues · group: workflow state · sort: active cycle, then priority─────────┐"
 "│◐┌ Palette ─────────────────────────────────────────────────────────────────┐ │"
 "│▸│ : change                                                                 │ │"
 "│ │──────────────────────────────────────────────────────────────────────────│ │"

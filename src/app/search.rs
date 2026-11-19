@@ -184,7 +184,7 @@ pub(super) fn finish(
             }
             state.record_problems(SEARCH, &found.problems);
             state.store.merge_search(found);
-            state.rebuild_my_issues();
+            state.rebuild_lists();
         }
         Err(failure) => state.record(failure.clone()),
     }

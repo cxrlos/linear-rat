@@ -73,6 +73,10 @@ pub enum Action {
     Confirm,
     /// Close the confirmation on top without running anything.
     Decline,
+    /// Pick how the issue list on screen is grouped.
+    GroupBy,
+    /// Pick how the issue list on screen is sorted.
+    SortBy,
     /// Write a comment on the focused issue in `$EDITOR`.
     Comment,
     /// Open the form that creates an issue.
@@ -81,6 +85,10 @@ pub enum Action {
     ToggleAnalyticsView,
     /// Pick another of the viewer's teams for the Team view of Analytics.
     SwitchAnalyticsTeam,
+    /// Pick another of the viewer's teams for the Cycles screen.
+    SwitchCyclesTeam,
+    /// List the issues of the focused cycle or project.
+    ListIssues,
 }
 
 /// What [`Action::Copy`] puts on the clipboard.

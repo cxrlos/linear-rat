@@ -7,8 +7,8 @@ use jiff::Timestamp;
 use jiff::civil::Date;
 
 use super::{
-    AnalyticsScreen, Detail, Drafts, ErrorLog, Failure, Load, LoadError, ModalStack, MyIssues,
-    Results, Store, SyncStatus, TeamIssues, WriteClass,
+    AnalyticsScreen, Cycles, Detail, Drafts, ErrorLog, Failure, Load, LoadError, ModalStack,
+    MyIssues, Names, Projects, Results, Store, SyncStatus, TeamIssues, WriteClass,
 };
 use crate::auth::KeySource;
 use crate::config::{AnalyticsSettings, Loaded, SyncSettings, UiSettings};
@@ -59,6 +59,10 @@ pub struct State {
     /// `[analytics]`: the range the Analytics screen opens on.
     pub analytics: AnalyticsSettings,
     pub analytics_screen: AnalyticsScreen,
+    /// The Cycles screen: a team's recent cycles.
+    pub cycles: Cycles,
+    /// The Projects screen: the projects of the viewer's teams.
+    pub projects: Projects,
     /// Comments and descriptions Linear did not take, to write again.
     pub drafts: Drafts,
     /// The most recent failures, for the messages overlay.
@@ -178,7 +182,7 @@ impl State {
             self.sync_status.forget_syncs();
         }
         self.store.merge(loaded);
-        self.rebuild_my_issues();
+        self.rebuild_lists();
         self.load = Load::Loaded;
     }
 
@@ -202,24 +206,23 @@ impl State {
             sync_status: SyncStatus::from_snapshot(synced_at),
             ..self
         };
-        state.rebuild_my_issues();
+        state.rebuild_lists();
         state
     }
 
-    /// Builds My Issues again from the store, for example after a merge,
-    /// keeping the focused issue, the pane and the scroll. When the focused
-    /// issue left, the focus stays at its place in the list.
-    pub fn rebuild_my_issues(&mut self) {
+    /// Builds the issue lists again from the store, for example after a
+    /// merge, keeping each one's focused issue, pane and scroll. When the
+    /// focused issue left My Issues, the focus stays at its place in the
+    /// list.
+    pub fn rebuild_lists(&mut self) {
+        super::team_issues::rebuild(self);
+        super::results::rebuild(self);
         let Some(viewer) = self.store.viewer() else {
             return;
         };
-        let as_of = self.store.as_of().unwrap_or_default();
         let issues: Vec<_> = self.store.issues().cloned().collect();
-        let cycles: Vec<_> = self.store.cycles().cloned().collect();
-        let labels: Vec<_> = self.store.labels().cloned().collect();
-        let members: Vec<_> = self.store.members().cloned().collect();
-        let teams: Vec<_> = self.store.teams().cloned().collect();
-        let mut rebuilt = MyIssues::new(viewer, &issues, &cycles, &labels, &members, &teams, as_of);
+        let names = Names::from_store(&self.store);
+        let mut rebuilt = MyIssues::arranged(viewer, &issues, names, self.my_issues.arrangement());
         let rows = ui::list_rows(self, self.viewport);
         rebuilt.keep_place_of(&self.my_issues, rows);
         self.my_issues = rebuilt;
@@ -257,14 +260,14 @@ impl State {
                 .results
                 .focused_id()
                 .and_then(|id| self.store.issue(id)),
-            Screen::Analytics => None,
+            Screen::Analytics | Screen::Cycles | Screen::Projects => None,
         }
     }
 
     /// This state with the keymap, theme and settings from `loaded`, and its
     /// first error, if any, as the notice.
     pub fn with_config(self, loaded: &Loaded) -> Self {
-        Self {
+        let mut state = Self {
             keymap: Keymap::new(&loaded.config.keys),
             notice: summary(&loaded.errors),
             theme: loaded.theme.clone(),
@@ -272,7 +275,13 @@ impl State {
             sync: loaded.config.sync,
             analytics: loaded.config.analytics,
             ..self
-        }
+        };
+        state.my_issues.arrangement = loaded.config.ui.my_issues;
+        state
+            .team_issues
+            .set_arrangement(loaded.config.ui.team_issues);
+        state.rebuild_lists();
+        state
     }
 }
 
@@ -293,19 +302,29 @@ pub enum Screen {
     MyIssues,
     TeamIssues,
     Analytics,
-    /// Search results or a palette jump, opened over another screen and
-    /// left with Esc. It has no tab.
+    Cycles,
+    Projects,
+    /// Search results, a palette jump, or the issues of a cycle or project,
+    /// opened over another screen and left with Esc. It has no tab.
     Results,
 }
 
 impl Screen {
-    pub const ALL: [Screen; 3] = [Screen::MyIssues, Screen::TeamIssues, Screen::Analytics];
+    pub const ALL: [Screen; 5] = [
+        Screen::MyIssues,
+        Screen::TeamIssues,
+        Screen::Analytics,
+        Screen::Cycles,
+        Screen::Projects,
+    ];
 
     pub fn title(self) -> &'static str {
         match self {
             Screen::MyIssues => "My Issues",
             Screen::TeamIssues => "Team Issues",
             Screen::Analytics => "Analytics",
+            Screen::Cycles => "Cycles",
+            Screen::Projects => "Projects",
             Screen::Results => "Results",
         }
     }

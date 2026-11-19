@@ -56,6 +56,18 @@ pub enum Effect {
         team_id: String,
         window: AnalyticsWindow,
     },
+    /// Load the recent cycles of the team with this id; the result comes
+    /// back as [`Event::CyclesLoaded`](super::Event::CyclesLoaded).
+    LoadCycles(String),
+    /// Load the projects of the viewer's teams; the result comes back as
+    /// [`Event::ProjectsLoaded`](super::Event::ProjectsLoaded).
+    LoadProjects,
+    /// Load the issues of the cycle with this id; the result comes back as
+    /// [`Event::CycleIssuesLoaded`](super::Event::CycleIssuesLoaded).
+    LoadCycleIssues(String),
+    /// Load the issues of the project with this id; the result comes back
+    /// as [`Event::ProjectIssuesLoaded`](super::Event::ProjectIssuesLoaded).
+    LoadProjectIssues(String),
     /// Put this text on the system clipboard.
     Copy(String),
     /// Open this URL in the viewer's browser.

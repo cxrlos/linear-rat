@@ -65,6 +65,24 @@ _Avoid_: status, column
 A team's fixed time box of committed issues.
 _Avoid_: sprint, iteration
 
+**Project**:
+A body of work with a goal, spanning one or more teams' issues.
+
+**Project status**:
+Where a project stands (for example "In Progress"), always of one type: backlog, planned, started, paused, completed or canceled. It belongs to projects only; an issue has a workflow state.
+_Avoid_: project state (Linear's deprecated field)
+
+**Project milestone**:
+A named stage within one project, in that project's own order; an issue belongs to at most one.
+_Avoid_: milestone on its own when the project is unclear, epic
+
+**Grouping**:
+How a list of issues is split into groups with a header each, such as by workflow state or assignee.
+_Avoid_: view, board
+
+**Sort**:
+The order of issues within each group, such as by priority or due date.
+
 ## Analytics
 
 **Personal analytics**:

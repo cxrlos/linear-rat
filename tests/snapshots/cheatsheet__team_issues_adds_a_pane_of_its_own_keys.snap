@@ -2,9 +2,9 @@
 source: tests/cheatsheet.rs
 expression: text
 ---
- [1] My Issues │ [2] Team Issues │ [3] Analytics                                                                                                                
+ [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects                                                                                    
 t ENG Engineering · 50 of 70 m more · f Filters none                                                                                                            
-┏Team Issues━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓┌ENG-69────────────────────────────────────────────────────────┐
+┏Team Issues · group: none · sort: updated, newest first━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓┌ENG-69────────────────────────────────────────────────────────┐
 ┃▸ ENG-69 Make the importer resumable                      ● Done        ▮▮▯ Medium  8 Cycle 7 ┃│Make the importer resumable                                   │
 ┃  ENG-49 Support metric and imperial wheel sizes          ● Done        !!! Urgent  8 Cycle 7 ┃│                                                              │
 ┃  ENG-41 Fix memory leak in the crumb producer            ⊘ Canceled    ▮▮▯ Medium  8         ┃│State     ● Done                                              │
@@ -12,22 +12,22 @@ t ENG Engineering · 50 of 70 m more · f Filters none
 ┃  ENG-35 Split the auth module out of the monolith        ◌ Backlog     ▮▮▯ Medium            ┃│Estimate  8                                                   │
 ┃  ENG-67 Expiry dates parse wrong in some locales         ● Done        ··· None    8 Cycle 7 ┃│                                                              │
 ┃  ENG-64 Support multiple cellars per household           ● Done        ▮▯▯ Low     5 Cycle 7 ┃│Part of the Nibble 3.0 push. Keep the old behaviour behind a  │
-┃  ENG-63 Precompute nightly cellar reports                ◇ Triage      ▮▯▯ Low     8         ┃│flag until the mobile apps catch up.                          │
 ┃┌ Keys ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐ │
 ┃│ Move                                 │ Edit the issue                       │ Open & copy                          │ App                                  │ │
-┃│  j/k      down / up                  │  s    workflow state                 │  Enter  open the issue               │  1/2/3  screens   r      refresh     │ │
-┃│  gg/G     top / bottom               │  a    assignee                       │  yi/yu  copy key / URL               │  ?      keys      :,C-k  palette     │ │
-┃│  C-d/C-u  half page                  │  p    priority                       │  yb/ym  copy branch / link           │  /      search    !      messages    │ │
-┃│  h/l      pane left / right          │  L    labels                         │  o      Linear page or PR            │  q      quit      C-z    suspend     │ │
-┃│  Esc      close or step back         │  e    estimate                       │  O      other links                  │                                      │ │
-┃│                                      │  C/P  cycle / project                │                                      │ Team Issues                          │ │
-┃│                                      │  M/d  milestone / due date           │                                      │  t   switch team                     │ │
-┃│                                      │  E    title and description          │                                      │  fs  filter by state                 │ │
-┃│                                      │  c    comment                        │                                      │  fa  filter by assignee              │ │
-┃│                                      │  A/U  archive / unarchive            │                                      │  fl  filter by label                 │ │
-┃│                                      │  X/S  trash / subscribe              │                                      │  fc  filter by cycle                 │ │
-┃│                                      │  n    new issue                      │                                      │  fp  filter by project               │ │
-┃│                                      │                                      │                                      │  m   load more                       │ │
+┃│  j/k      down / up                  │  s    workflow state                 │  Enter  open the issue               │  1/2/3  screens    4      cycles     │ │
+┃│  gg/G     top / bottom               │  a    assignee                       │  yi/yu  copy key / URL               │  5      projects   r      refresh    │ │
+┃│  C-d/C-u  half page                  │  p    priority                       │  yb/ym  copy branch / link           │  ?      keys       :,C-k  palette    │ │
+┃│  h/l      pane left / right          │  L    labels                         │  o      Linear page or PR            │  /      search     !      messages   │ │
+┃│  Esc      close or step back         │  e    estimate                       │  O      other links                  │  q      quit       C-z    suspend    │ │
+┃│                                      │  C/P  cycle / project                │                                      │                                      │ │
+┃│ Team Issues                          │  M/d  milestone / due date           │ Issue list                           │                                      │ │
+┃│  t   switch team                     │  E    title and description          │  vg/vs  group / sort                 │                                      │ │
+┃│  fs  filter by state                 │  c    comment                        │                                      │                                      │ │
+┃│  fa  filter by assignee              │  A/U  archive / unarchive            │                                      │                                      │ │
+┃│  fl  filter by label                 │  X/S  trash / subscribe              │                                      │                                      │ │
+┃│  fc  filter by cycle                 │  n    new issue                      │                                      │                                      │ │
+┃│  fp  filter by project               │                                      │                                      │                                      │ │
+┃│  m   load more                       │                                      │                                      │                                      │ │
 ┃└ Esc close ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘ │
 ┃  ENG-42 Add a webhook for ripening milestones            ● Done        ▮▮▯ Medium  1 Cycle 6 ┃│Labels    performance, improvement                            │
 ┃  ENG-32 Validate humidity readings from sensors          ◌ Backlog     ▮▮▮ High    2         ┃│Assignee  Ada Roquefort                                       │

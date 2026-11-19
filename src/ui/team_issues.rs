@@ -147,10 +147,28 @@ fn header(state: &State, width: u16) -> Line<'static> {
     Line::from(spans)
 }
 
+/// `Team Issues · group: none · sort: priority, urgent first`. When the
+/// sort orders only the loaded issues, `sorted: loaded 50 of 70` follows
+/// the name, ahead of what a narrow pane cuts off.
+fn list_title(state: &State) -> String {
+    let team_issues = &state.team_issues;
+    if team_issues.sort_covers_all() {
+        return my_issues::list_title("Team Issues", team_issues.arrangement(), "");
+    }
+    let total = team_issues
+        .total()
+        .map_or("…".to_owned(), |total| total.to_string());
+    let name = format!(
+        "Team Issues · sorted: loaded {} of {total}",
+        team_issues.ids().len()
+    );
+    my_issues::list_title(&name, team_issues.arrangement(), "")
+}
+
 fn render_list(view: &View, state: &State, frame: &mut Frame, area: Rect, focus: Focus) {
     let theme = &state.theme;
     let team_issues = &state.team_issues;
-    let block = my_issues::pane_block("Team Issues", focus, theme);
+    let block = my_issues::pane_block(list_title(state), focus, theme);
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
@@ -195,16 +213,5 @@ fn render_list(view: &View, state: &State, frame: &mut Frame, area: Rect, focus:
         return;
     }
 
-    let issues: Vec<_> = team_issues
-        .ids()
-        .iter()
-        .filter_map(|id| state.store.issue(id))
-        .collect();
-    let offset =
-        my_issues::visible_offset(team_issues.scroll(), team_issues.focused_index(), inner);
-    let cells = my_issues::row_cells(issues.iter().copied());
-    for (line_area, (index, issue)) in inner.rows().zip(issues.iter().enumerate().skip(offset)) {
-        let is_focused = index == team_issues.focused_index();
-        my_issues::render_row(view, frame, line_area, &cells, issue, is_focused, focus);
-    }
+    my_issues::render_groups(view, frame, inner, team_issues.list(), focus);
 }

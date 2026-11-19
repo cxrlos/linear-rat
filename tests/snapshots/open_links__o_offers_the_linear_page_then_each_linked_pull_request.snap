@@ -2,8 +2,8 @@
 source: tests/open_links.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics                                                    "
-"┌My Issues─────────────────────────────────────────────────────────────────────────────────────────┐"
+" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects                        "
+"┌My Issues · group: workflow state · sort: active cycle, then priority─────────────────────────────┐"
 "│◐ Started (9)                                                                                     │"
 "│▸ DES-34 Design QA for the autumn release           due Nov 6 ◐ In Progress ▮▮▮ High    3 Cycle 7 │"
 "│  ENG-51 Add a dry-run mode to the importer        due Oct 30 ◐ In Progress ▮▮▯ Medium  2 Cycle 7 │"

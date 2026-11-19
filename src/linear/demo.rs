@@ -10,9 +10,10 @@ use jiff::{SignedDuration, Timestamp};
 
 use super::model::{
     Attachment, Comment, Cycle, Estimation, Issue, Label, Member, Priority, Project,
-    ProjectMilestone, StateSpan, StateType, Team, Viewer, WorkflowState, Workspace,
+    ProjectMilestone, ProjectOverview, ProjectStatus, ProjectStatusType, StateSpan, StateType,
+    Team, Viewer, WorkflowState, Workspace,
 };
-use super::{TeamOptions, TeamQuery};
+use super::{TeamOptions, TeamOrder, TeamQuery};
 
 /// The demo's "now": every date in the demo workspace is anchored to it.
 pub const NOW: Timestamp = Timestamp::constant(1_793_631_600, 0); // 2026-11-02T15:00:00Z
@@ -87,7 +88,7 @@ pub fn workspace() -> DemoWorkspace {
                     .iter()
                     .enumerate()
                     .map(move |(n, name)| ProjectMilestone {
-                        id: format!("milestone-{}-{}", index + 1, n + 1),
+                        id: milestone_id(index, n),
                         name: (*name).to_owned(),
                         project_id: format!("project-{}", index + 1),
                     })
@@ -102,6 +103,7 @@ pub fn workspace() -> DemoWorkspace {
         add_team(&mut data, spec, &mut rng);
     }
     add_links(&mut data);
+    add_milestones(&mut data);
     add_schedule(&mut data);
     data
 }
@@ -130,6 +132,115 @@ fn add_schedule(data: &mut DemoWorkspace) {
             issue.project_milestone_id = milestone.map(str::to_owned);
         }
     }
+}
+
+/// A demo project's status name and type, target date (year, month, day)
+/// and lead's handle.
+type ProjectDetails = (
+    &'static str,
+    ProjectStatusType,
+    Option<(i16, i8, i8)>,
+    Option<&'static str>,
+);
+
+/// Each demo project's details, as `PROJECTS` lists the projects.
+const PROJECT_DETAILS: [ProjectDetails; 4] = [
+    (
+        "In Progress",
+        ProjectStatusType::Started,
+        Some((2026, 12, 15)),
+        Some("mira"),
+    ),
+    (
+        "In Progress",
+        ProjectStatusType::Started,
+        Some((2027, 1, 31)),
+        Some("ada"),
+    ),
+    ("Planned", ProjectStatusType::Planned, None, Some("jun")),
+    (
+        "Paused",
+        ProjectStatusType::Paused,
+        Some((2026, 11, 30)),
+        None,
+    ),
+];
+
+fn milestone_id(project_index: usize, milestone_index: usize) -> String {
+    format!("milestone-{}-{}", project_index + 1, milestone_index + 1)
+}
+
+/// Puts the issues of each project with milestones in one of them, or in
+/// none, by issue number. Added after the generated data, so the seed's
+/// draws stay as they were.
+fn add_milestones(data: &mut DemoWorkspace) {
+    for issue in &mut data.issues {
+        let Some(project_index) = issue
+            .project_id
+            .as_deref()
+            .and_then(|id| id.strip_prefix("project-"))
+            .and_then(|n| n.parse::<usize>().ok())
+            .and_then(|n| n.checked_sub(1))
+        else {
+            continue;
+        };
+        let number: usize = issue
+            .identifier
+            .rsplit('-')
+            .next()
+            .and_then(|n| n.parse().ok())
+            .unwrap_or(0);
+        let slot = number % (MILESTONES.len() + 1);
+        issue.project_milestone_id =
+            (slot < MILESTONES.len()).then(|| milestone_id(project_index, slot));
+    }
+}
+
+/// The demo projects as the Projects screen shows them, each with its
+/// progress the share of its issues that are completed.
+pub fn project_overviews(data: &DemoWorkspace) -> Vec<ProjectOverview> {
+    data.projects
+        .iter()
+        .enumerate()
+        .map(|(index, project)| {
+            let (name, status_type, target, lead) = PROJECT_DETAILS[index % PROJECT_DETAILS.len()];
+            let issues: Vec<&Issue> = data
+                .issues
+                .iter()
+                .filter(|issue| issue.project_id.as_ref() == Some(&project.id))
+                .collect();
+            let done = issues
+                .iter()
+                .filter(|issue| issue.state.state_type == StateType::Completed)
+                .count();
+            let progress = if issues.is_empty() {
+                0.0
+            } else {
+                f64::from(count(done)) / f64::from(count(issues.len()))
+            };
+            ProjectOverview {
+                project: project.clone(),
+                status: ProjectStatus {
+                    name: name.to_owned(),
+                    status_type,
+                },
+                target_date: target.map(|(year, month, day)| jiff::civil::date(year, month, day)),
+                lead: lead.and_then(|handle| {
+                    data.members
+                        .iter()
+                        .find(|member| member.id == member_id(handle))
+                        .cloned()
+                }),
+                progress,
+                milestones: data
+                    .milestones
+                    .iter()
+                    .filter(|milestone| milestone.project_id == project.id)
+                    .cloned()
+                    .collect(),
+            }
+        })
+        .collect()
 }
 
 /// The issue DES-34's pull requests and other attachments.
@@ -253,7 +364,7 @@ pub fn administrable_team_ids() -> Vec<String> {
     vec!["team-eng".to_owned(), "team-ops".to_owned()]
 }
 
-/// The issues of `query` in `data`, most recently updated first, as the fake
+/// The issues of `query` in `data`, newest first by its order, as the fake
 /// client pages through them.
 pub fn team_issues(data: &DemoWorkspace, query: &TeamQuery) -> Vec<Issue> {
     let mut issues: Vec<Issue> = data
@@ -263,9 +374,11 @@ pub fn team_issues(data: &DemoWorkspace, query: &TeamQuery) -> Vec<Issue> {
         .cloned()
         .collect();
     issues.sort_by(|a, b| {
-        b.updated_at
-            .cmp(&a.updated_at)
-            .then_with(|| a.id.cmp(&b.id))
+        let (a_at, b_at) = match query.order {
+            TeamOrder::Updated => (a.updated_at, b.updated_at),
+            TeamOrder::Created => (a.created_at, b.created_at),
+        };
+        b_at.cmp(&a_at).then_with(|| a.id.cmp(&b.id))
     });
     issues
 }

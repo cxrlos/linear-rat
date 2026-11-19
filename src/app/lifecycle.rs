@@ -224,7 +224,7 @@ fn send(state: &mut State, issue_id: &str, change: Lifecycle, undo: Undo) -> Upd
         })
         .unwrap_or_default();
     state.row_errors.remove(issue_id);
-    state.rebuild_my_issues();
+    state.rebuild_lists();
     Update {
         redraw: true,
         effects: vec![Effect::ChangeLifecycle(LifecycleWrite {
@@ -266,7 +266,7 @@ pub(super) fn finished(
             state.row_errors.insert(write.issue_id.clone(), error);
         }
     }
-    state.rebuild_my_issues();
+    state.rebuild_lists();
     Update::redraw()
 }
 

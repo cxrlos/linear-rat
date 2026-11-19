@@ -105,6 +105,40 @@ pub struct Project {
     pub name: String,
 }
 
+/// Where a project stands, as Linear's `ProjectStatus`: the workspace's
+/// name for it and the type it belongs to.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectStatus {
+    pub name: String,
+    pub status_type: ProjectStatusType,
+}
+
+/// Every project status belongs to one of these, as Linear's
+/// `ProjectStatusType`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ProjectStatusType {
+    Backlog,
+    Planned,
+    Started,
+    Paused,
+    Completed,
+    Canceled,
+}
+
+/// A project as the Projects screen shows it: its status, target date,
+/// lead and progress, and its milestones in Linear's order.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProjectOverview {
+    pub project: Project,
+    pub status: ProjectStatus,
+    pub target_date: Option<Date>,
+    pub lead: Option<Member>,
+    /// From 0 to 1, as Linear's `Project.progress`.
+    pub progress: f64,
+    pub milestones: Vec<ProjectMilestone>,
+}
+
 /// A stage inside a project that issues can be grouped under.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProjectMilestone {

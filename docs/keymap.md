@@ -4,7 +4,7 @@
 
 These are lrat's default keys. Press `?` in lrat to see the keys of the screen you are on, with the ones that cannot run now muted. Keys are written in the vim notation `config.toml` uses, and each table heading names the config table that rebinds its actions; see [Configuration](https://github.com/cxrlos/linear-rat/blob/main/docs/config.md#keys).
 
-The Team Issues list also takes the Issue list keys. While an overlay has a text field, as the pickers, the palette and the search do, a character typed without Ctrl or Alt goes into the field instead, except a picker's number keys.
+The Team Issues list also takes the Issue list keys, and the Cycles screen the Cycles and Projects keys. While an overlay has a text field, as the pickers, the palette and the search do, a character typed without Ctrl or Alt goes into the field instead, except a picker's number keys.
 
 ## Everywhere (`[keys.global]`)
 
@@ -13,6 +13,8 @@ The Team Issues list also takes the Issue list keys. While an overlay has a text
 | `show-my-issues` | `1` | Show My Issues |
 | `show-team-issues` | `2` | Show Team Issues |
 | `show-analytics` | `3` | Show Analytics |
+| `show-cycles` | `4` | Show Cycles |
+| `show-projects` | `5` | Show Projects |
 | `refresh` | `r` | Refresh now |
 | `show-cheatsheet` | `?` | Show every key for this context |
 | `show-palette` | `:`, `<C-k>` | Find an action or loaded issue |
@@ -56,6 +58,8 @@ The Team Issues list also takes the Issue list keys. While an overlay has a text
 | `trash` | `X` | Move the issue to the trash |
 | `toggle-subscription` | `S` | Subscribe to or unsubscribe from the issue |
 | `create-issue` | `n` | Create an issue |
+| `group-by` | `vg` | Pick how the issue list is grouped |
+| `sort-by` | `vs` | Pick how the issue list is sorted |
 | `close` | `<Esc>` | Close the top overlay or step back |
 
 ## Team Issues (`[keys.team-issues]`)
@@ -139,3 +143,21 @@ The Team Issues list also takes the Issue list keys. While an overlay has a text
 | `longer-range` | `]` | Show a longer range |
 | `toggle-analytics-view` | `v` | Show Personal or Team analytics |
 | `switch-analytics-team` | `t` | Pick the team for Team analytics |
+
+## Cycles and Projects (`[keys.browse]`)
+
+| Action | Keys | Description |
+| --- | --- | --- |
+| `move-down` | `j` | Move down |
+| `move-up` | `k` | Move up |
+| `move-to-top` | `gg` | Move to the top |
+| `move-to-bottom` | `G` | Move to the bottom |
+| `half-page-down` | `<C-d>` | Move down half a page |
+| `half-page-up` | `<C-u>` | Move up half a page |
+| `list-issues` | `<Enter>` | List the issues of the focused cycle or project |
+
+## Cycles (`[keys.cycles]`)
+
+| Action | Keys | Description |
+| --- | --- | --- |
+| `switch-cycles-team` | `t` | Switch the team of the Cycles screen |

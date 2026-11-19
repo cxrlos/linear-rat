@@ -10,12 +10,13 @@ use jiff::Timestamp;
 use linear_rat::app::{App, Event, State};
 use linear_rat::auth::KeySource;
 use linear_rat::linear::model::{
-    Issue, Label, Member, ProjectMilestone, Team, Viewer, WorkflowState, Workspace,
+    Cycle, Issue, Label, Member, ProjectMilestone, Team, Viewer, WorkflowState, Workspace,
 };
 use linear_rat::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, Diagnostics, FakeClient,
-    IssueDetail, IssueLink, IssueUpdate, LinearClient, LiveEvent, SearchQuery, SearchResults,
-    TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery, Urgency, demo,
+    IssueDetail, IssueLink, IssueUpdate, LinearClient, LiveEvent, ProjectList, SearchQuery,
+    SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
+    Urgency, demo,
 };
 use linear_rat::runtime;
 use linear_rat::snapshot::SnapshotCache;
@@ -170,6 +171,22 @@ impl LinearClient for RejectingClient {
     }
 
     async fn count_team_issues(&self, _: &TeamQuery) -> Result<usize, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn recent_cycles(&self, _: &str) -> Result<Vec<Cycle>, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn viewer_projects(&self) -> Result<ProjectList, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn cycle_issues(&self, _: &str) -> Result<SearchResults, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn project_issues(&self, _: &str) -> Result<SearchResults, ClientError> {
         Err(ClientError::InvalidKey)
     }
 
@@ -350,6 +367,18 @@ async fn q_quits_while_the_load_is_still_in_flight() {
         async fn count_team_issues(&self, _: &TeamQuery) -> Result<usize, ClientError> {
             future::pending().await
         }
+        async fn recent_cycles(&self, _: &str) -> Result<Vec<Cycle>, ClientError> {
+            future::pending().await
+        }
+        async fn viewer_projects(&self) -> Result<ProjectList, ClientError> {
+            future::pending().await
+        }
+        async fn cycle_issues(&self, _: &str) -> Result<SearchResults, ClientError> {
+            future::pending().await
+        }
+        async fn project_issues(&self, _: &str) -> Result<SearchResults, ClientError> {
+            future::pending().await
+        }
         async fn analytics_issues(
             &self,
             _: AnalyticsWindow,
@@ -520,6 +549,18 @@ impl LinearClient for CountingClient {
     }
     async fn count_team_issues(&self, query: &TeamQuery) -> Result<usize, ClientError> {
         FakeClient.count_team_issues(query).await
+    }
+    async fn recent_cycles(&self, team_id: &str) -> Result<Vec<Cycle>, ClientError> {
+        FakeClient.recent_cycles(team_id).await
+    }
+    async fn viewer_projects(&self) -> Result<ProjectList, ClientError> {
+        FakeClient.viewer_projects().await
+    }
+    async fn cycle_issues(&self, cycle_id: &str) -> Result<SearchResults, ClientError> {
+        FakeClient.cycle_issues(cycle_id).await
+    }
+    async fn project_issues(&self, project_id: &str) -> Result<SearchResults, ClientError> {
+        FakeClient.project_issues(project_id).await
     }
     async fn analytics_issues(
         &self,

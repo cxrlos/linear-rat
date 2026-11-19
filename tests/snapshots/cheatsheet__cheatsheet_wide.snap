@@ -2,8 +2,8 @@
 source: tests/cheatsheet.rs
 expression: "text(&cheatsheet(160, 40))"
 ---
- [1] My Issues │ [2] Team Issues │ [3] Analytics                                                                                                                
-┏My Issues━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓┌DES-34────────────────────────────────────────────────────────┐
+ [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects                                                                                    
+┏My Issues · group: workflow state · sort: active cycle, then priority━━━━━━━━━━━━━━━━━━━━━━━━━┓┌DES-34────────────────────────────────────────────────────────┐
 ┃◐ Started (9)                                                                                 ┃│Design QA for the autumn release                              │
 ┃▸ DES-34 Design QA for the autumn release       due Nov 6 ◐ In Progress ▮▮▮ High    3 Cycle 7 ┃│                                                              │
 ┃  ENG-51 Add a dry-run mode to the importer    due Oct 30 ◐ In Progress ▮▮▯ Medium  2 Cycle 7 ┃│State     ◐ In Progress                                       │
@@ -15,14 +15,14 @@ expression: "text(&cheatsheet(160, 40))"
 ┃  OPS-15 Tag cloud resources by team                      ◐ In Review   ▮▮▯ Medium            ┃│Comments                                                      │
 ┃┌ Keys ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐ │
 ┃│ Move                                 │ Edit the issue                       │ Open & copy                          │ App                                  │ │
-┃│  j/k      down / up                  │  s    workflow state                 │  Enter  open the issue               │  1/2/3  screens   r      refresh     │ │
-┃│  gg/G     top / bottom               │  a    assignee                       │  yi/yu  copy key / URL               │  ?      keys      :,C-k  palette     │ │
-┃│  C-d/C-u  half page                  │  p    priority                       │  yb/ym  copy branch / link           │  /      search    !      messages    │ │
-┃│  h/l      pane left / right          │  L    labels                         │  o      Linear page or PR            │  q      quit      C-z    suspend     │ │
-┃│  Esc      close or step back         │  e    estimate                       │  O      other links                  │                                      │ │
+┃│  j/k      down / up                  │  s    workflow state                 │  Enter  open the issue               │  1/2/3  screens    4      cycles     │ │
+┃│  gg/G     top / bottom               │  a    assignee                       │  yi/yu  copy key / URL               │  5      projects   r      refresh    │ │
+┃│  C-d/C-u  half page                  │  p    priority                       │  yb/ym  copy branch / link           │  ?      keys       :,C-k  palette    │ │
+┃│  h/l      pane left / right          │  L    labels                         │  o      Linear page or PR            │  /      search     !      messages   │ │
+┃│  Esc      close or step back         │  e    estimate                       │  O      other links                  │  q      quit       C-z    suspend    │ │
 ┃│                                      │  C/P  cycle / project                │                                      │                                      │ │
-┃│                                      │  M/d  milestone / due date           │                                      │                                      │ │
-┃│                                      │  E    title and description          │                                      │                                      │ │
+┃│ Issue list                           │  M/d  milestone / due date           │                                      │                                      │ │
+┃│  vg/vs  group / sort                 │  E    title and description          │                                      │                                      │ │
 ┃│                                      │  c    comment                        │                                      │                                      │ │
 ┃│                                      │  A/U  archive / unarchive            │                                      │                                      │ │
 ┃│                                      │  X/S  trash / subscribe              │                                      │                                      │ │

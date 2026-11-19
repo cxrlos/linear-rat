@@ -2,8 +2,8 @@
 source: tests/cheatsheet.rs
 expression: "text(&cheatsheet(80, 24))"
 ---
- [1] My Issues │ [2] Team Issues │ [3] Analytics                                
-┌My Issues─────────────────────────────────────────────────────────────────────┐
+ [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    
+┌My Issues · group: workflow state · sort: active cycle, then priority─────────┐
 │┌ Keys ─────────────────────────────────────────────────────────────────────┐ │
 ││ Move                                │ Edit the issue                      │ │
 ││  j/k      down / up                 │  s    workflow state                │ │
@@ -19,8 +19,8 @@ expression: "text(&cheatsheet(80, 24))"
 ││  o      Linear page or PR           │  X/S  trash / subscribe             │ │
 ││  O      other links                 │  n    new issue                     │ │
 ││                                     │                                     │ │
-││ App                                 │                                     │ │
-││  1/2/3  screens   r      refresh    │                                     │ │
+││ App                                 │ Issue list                          │ │
+││  1/2/3  screens    4      cycles    │  vg/vs  group / sort                │ │
 │└ Esc close ────────────────────────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────────────────────────────────┘
  Move │ j/k move                                                                

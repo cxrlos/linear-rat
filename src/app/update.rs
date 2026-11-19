@@ -4,8 +4,8 @@ use ratatui::layout::Size;
 use super::edit::{self, Editable};
 use super::{
     Action, Copyable, Effect, Event, Load, Modal, Palette, Pane, Purpose, Screen, State,
-    analytics_screen, compose, create, detail, lifecycle, links, palette, results, search, sync,
-    team_issues,
+    analytics_screen, browse, compose, create, detail, lifecycle, links, palette, rearrange,
+    results, search, sync, team_issues,
 };
 use crate::keys::{self, Key, Resolution};
 use crate::ui;
@@ -78,10 +78,30 @@ fn apply(state: &mut State, event: Event) -> Update {
             clamp_analytics_scroll(state);
             Update::redraw()
         }
-        Event::TeamsLoaded(result) => Update {
-            redraw: true,
-            effects: team_issues::teams_loaded(state, result),
+        Event::TeamsLoaded(result) => {
+            let mut effects = team_issues::teams_loaded(state, result);
+            effects.extend(browse::teams_loaded(state));
+            Update {
+                redraw: true,
+                effects,
+            }
+        }
+        Event::CyclesLoaded { team_id, result } => Update {
+            redraw: browse::cycles_loaded(state, &team_id, result),
+            effects: Vec::new(),
         },
+        Event::ProjectsLoaded(result) => {
+            browse::projects_loaded(state, result);
+            Update::redraw()
+        }
+        Event::CycleIssuesLoaded { cycle_id, result } => {
+            browse::cycle_issues_loaded(state, &cycle_id, result);
+            Update::redraw()
+        }
+        Event::ProjectIssuesLoaded { project_id, result } => {
+            browse::project_issues_loaded(state, &project_id, result);
+            Update::redraw()
+        }
         Event::TeamOptionsLoaded(result) => {
             let team_id = result.as_ref().ok().map(|options| options.team_id.clone());
             let failure = result.as_ref().err().cloned();
@@ -294,6 +314,8 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             let effects = match screen {
                 Screen::TeamIssues => team_issues::open(state),
                 Screen::Analytics => analytics_screen::request_missing(state),
+                Screen::Cycles => browse::open_cycles(state),
+                Screen::Projects => browse::open_projects(state),
                 Screen::MyIssues | Screen::Results => Vec::new(),
             };
             Update {
@@ -416,6 +438,30 @@ pub fn perform(state: &mut State, action: Action) -> Update {
                 effects: Vec::new(),
             }
         }
+        Action::MoveDown
+        | Action::MoveUp
+        | Action::MoveToTop
+        | Action::MoveToBottom
+        | Action::HalfPageDown
+        | Action::HalfPageUp
+            if matches!(state.screen, Screen::Cycles | Screen::Projects) =>
+        {
+            let rows = ui::browse_rows(state, state.viewport);
+            Update {
+                redraw: browse::perform(state, action, rows),
+                effects: Vec::new(),
+            }
+        }
+        Action::ListIssues => {
+            let effects = browse::list_issues(state);
+            Update {
+                redraw: !effects.is_empty(),
+                effects,
+            }
+        }
+        Action::SwitchCyclesTeam if state.screen == Screen::Cycles => {
+            open_choice(state, browse::team_choice(state))
+        }
         Action::ScrollDown | Action::ScrollUp => match state.modals.top() {
             Some(Modal::Picker(_)) => edit::select(state, step(action)),
             Some(Modal::Links(_)) => links::select(state, step(action)),
@@ -451,6 +497,8 @@ pub fn perform(state: &mut State, action: Action) -> Update {
                 ..open_choice(state, choice)
             }
         }
+        Action::GroupBy => open_choice(state, rearrange::group_choice(state)),
+        Action::SortBy => open_choice(state, rearrange::sort_choice(state)),
         Action::LoadMore if state.screen == Screen::TeamIssues => {
             let effects = team_issues::load_more(state);
             Update {
@@ -518,10 +566,20 @@ fn choose(state: &mut State, nth: Option<usize>) -> Update {
     let Some(Modal::Choice(choice)) = state.modals.top() else {
         return Update::default();
     };
-    if choice.purpose == Purpose::AnalyticsTeam {
+    if choice.purpose == Purpose::CyclesTeam {
+        browse::pick_team(state, nth).map_or_else(Update::default, |effects| Update {
+            redraw: true,
+            effects,
+        })
+    } else if choice.purpose == Purpose::AnalyticsTeam {
         let update = analytics_screen::pick_team(state, nth);
         clamp_analytics_scroll(state);
         update
+    } else if matches!(choice.purpose, Purpose::Group | Purpose::Sort) {
+        rearrange::pick(state, nth).map_or_else(Update::default, |effects| Update {
+            redraw: true,
+            effects,
+        })
     } else {
         team_issues::pick(state, nth).map_or_else(Update::default, |effects| Update {
             redraw: true,

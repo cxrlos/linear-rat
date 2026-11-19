@@ -2,9 +2,9 @@
 source: tests/team_issues.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics                                                                                                                                                        "
+" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects                                                                                                                            "
 "t ENG Engineering · 50 of 70 m more · f Filters none                                                                                                                                                    "
-"┏Team Issues━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓┌ENG-69────────────────────────────────────────────────────────────────────────┐"
+"┏Team Issues · group: none · sort: updated, newest first━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓┌ENG-69────────────────────────────────────────────────────────────────────────┐"
 "┃▸ ENG-69 Make the importer resumable                                              ● Done        ▮▮▯ Medium  8 Cycle 7 ┃│Make the importer resumable                                                   │"
 "┃  ENG-49 Support metric and imperial wheel sizes                                  ● Done        !!! Urgent  8 Cycle 7 ┃│                                                                              │"
 "┃  ENG-41 Fix memory leak in the crumb producer                                    ⊘ Canceled    ▮▮▯ Medium  8         ┃│State     ● Done                                                              │"
@@ -26,7 +26,7 @@ expression: app.backend()
 "┃  ENG-50 Retry failed rind photo uploads in the background                        ○ Todo        !!! Urgent  5 Cycle 7 ┃│Details                                                                       │"
 "┃  ENG-45 Encrypt household notes at rest                                          ⊘ Canceled    ··· None    2         ┃│Team      Engineering                                                         │"
 "┃  ENG-40 Allow archiving an empty cellar                                          ● Done        ▮▮▯ Medium  5 Cycle 6 ┃│Project   Shared pantries                                                     │"
-"┃  ENG-48 Shared pantry shows stale counts after leaving                           ● Done        ▮▮▯ Medium  1 Cycle 6 ┃│Milestone None                                                                │"
+"┃  ENG-48 Shared pantry shows stale counts after leaving                           ● Done        ▮▮▯ Medium  1 Cycle 6 ┃│Milestone Loading…                                                            │"
 "┃  ENG-58 Migrate the tasting note schema                                          ● Done        ▮▯▯ Low     5 Cycle 6 ┃│Cycle     Cycle 7 (active)                                                    │"
 "┃  ENG-43 Sort the pantry list by expiry date                                      ● Done        ▮▮▮ High    1 Cycle 6 ┃│Due       None                                                                │"
 "┃  ENG-42 Add a webhook for ripening milestones                                    ● Done        ▮▮▯ Medium  1 Cycle 6 ┃│Labels    performance, improvement                                            │"

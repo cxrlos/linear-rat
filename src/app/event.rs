@@ -4,11 +4,11 @@ use jiff::Timestamp;
 use super::{
     Failure, LifecycleWrite, LoadError, NewComment, NewIssue, SyncFailure, Write, Writing,
 };
-use crate::linear::model::{Issue, Label, Member, ProjectMilestone, Team, WorkflowState};
+use crate::linear::model::{Cycle, Issue, Label, Member, ProjectMilestone, Team, WorkflowState};
 use crate::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, LiveEvent, PostedComment,
-    SearchQuery, SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions,
-    TeamQuery,
+    ProjectList, SearchQuery, SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage,
+    TeamOptions, TeamQuery,
 };
 
 /// Something that happened, fed to [`update`](super::update).
@@ -75,6 +75,26 @@ pub enum Event {
         team_id: String,
         window: AnalyticsWindow,
         result: Result<TeamAnalyticsIssues, Failure>,
+    },
+    /// The result of [`Effect::LoadCycles`](super::Effect::LoadCycles) for
+    /// team `team_id`, or why it failed.
+    CyclesLoaded {
+        team_id: String,
+        result: Result<Vec<Cycle>, Failure>,
+    },
+    /// The result of [`Effect::LoadProjects`](super::Effect::LoadProjects).
+    ProjectsLoaded(Result<ProjectList, Failure>),
+    /// The result of
+    /// [`Effect::LoadCycleIssues`](super::Effect::LoadCycleIssues).
+    CycleIssuesLoaded {
+        cycle_id: String,
+        result: Result<SearchResults, Failure>,
+    },
+    /// The result of
+    /// [`Effect::LoadProjectIssues`](super::Effect::LoadProjectIssues).
+    ProjectIssuesLoaded {
+        project_id: String,
+        result: Result<SearchResults, Failure>,
     },
     /// The runtime could not carry out an effect. The message, with its
     /// context, becomes the notice.

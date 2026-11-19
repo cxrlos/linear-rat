@@ -2,8 +2,8 @@
 source: tests/messages.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics                   sync failing "
-"┌My Issues─────────────────────────────────────────────────────────────────────┐"
+" [1] My Issues │ [2] │ [3] │ [4] │ [5]                             sync failing "
+"┌My Issues · group: workflow state · sort: active cycle, then priority─────────┐"
 "│┌ Messages ──────────────────────────────────────────────────────────────────┐│"
 "││ 09:02:00  rate limited · load the teams you administer                     ││"
 "││   Linear's rate limit is used up until 09:02:40. Wait for it to lift;      ││"

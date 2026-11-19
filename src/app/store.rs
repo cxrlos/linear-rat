@@ -15,8 +15,8 @@ use crate::linear::model::{
     Viewer, WorkflowState, Workspace,
 };
 use crate::linear::{
-    AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, PostedComment, SearchResults,
-    TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions,
+    AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, PostedComment, ProjectList,
+    SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions,
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
@@ -61,11 +61,12 @@ pub struct Store {
     /// Project ids by team id, for the teams whose filter options have
     /// loaded.
     team_projects: BTreeMap<String, Vec<String>>,
-    /// Project milestones by id, from the detail and the milestone picker.
+    /// Project milestones by id, from the detail, the milestone picker and
+    /// the Projects screen.
     #[serde(default)]
     milestones: BTreeMap<String, ProjectMilestone>,
     /// The ids of a project's milestones, in Linear's order, by project id,
-    /// once loaded for a milestone picker.
+    /// once loaded for a milestone picker or the Projects screen.
     #[serde(default)]
     project_milestones: BTreeMap<String, Vec<String>>,
     /// The windows analytics loads have covered in this session. Left out
@@ -307,6 +308,15 @@ impl Store {
         by_id(&mut self.teams, &found.teams, |team| &team.id);
         by_id(&mut self.labels, &found.labels, |label| &label.id);
         by_id(&mut self.members, &found.members, |member| &member.id);
+    }
+
+    /// Takes in the Projects screen's projects and their milestones.
+    pub fn merge_projects(&mut self, loaded: &ProjectList) {
+        for overview in &loaded.projects {
+            let project = &overview.project;
+            self.projects.insert(project.id.clone(), project.clone());
+            self.set_project_milestones(&project.id, &overview.milestones);
+        }
     }
 
     /// Takes in an analytics load for `window`. Issues go through
@@ -610,6 +620,14 @@ impl Store {
 
     pub fn projects(&self) -> impl Iterator<Item = &Project> {
         self.projects.values()
+    }
+
+    /// Every loaded project milestone, each project's in Linear's order.
+    pub fn milestones(&self) -> impl Iterator<Item = &ProjectMilestone> {
+        self.project_milestones
+            .values()
+            .flatten()
+            .filter_map(|id| self.milestones.get(id))
     }
 
     /// Whether the filter options of `team_id` have loaded. A picker's

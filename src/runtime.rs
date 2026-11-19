@@ -408,6 +408,49 @@ where
             }));
             Ok(())
         }
+        Effect::LoadCycles(team_id) => {
+            let client = reach.client;
+            in_flight.push(Box::pin(async move {
+                let what = "could not load the team's cycles";
+                let result = ask(client, "load cycles", what, |c| c.recent_cycles(&team_id)).await;
+                Event::CyclesLoaded { team_id, result }
+            }));
+            Ok(())
+        }
+        Effect::LoadProjects => {
+            let client = reach.client;
+            in_flight.push(Box::pin(async move {
+                let what = "could not load your projects";
+                Event::ProjectsLoaded(
+                    ask(client, "load projects", what, |c| c.viewer_projects()).await,
+                )
+            }));
+            Ok(())
+        }
+        Effect::LoadCycleIssues(cycle_id) => {
+            let client = reach.client;
+            in_flight.push(Box::pin(async move {
+                let what = "could not load the cycle's issues";
+                let result = ask(client, "load a cycle's issues", what, |c| {
+                    c.cycle_issues(&cycle_id)
+                })
+                .await;
+                Event::CycleIssuesLoaded { cycle_id, result }
+            }));
+            Ok(())
+        }
+        Effect::LoadProjectIssues(project_id) => {
+            let client = reach.client;
+            in_flight.push(Box::pin(async move {
+                let what = "could not load the project's issues";
+                let result = ask(client, "load a project's issues", what, |c| {
+                    c.project_issues(&project_id)
+                })
+                .await;
+                Event::ProjectIssuesLoaded { project_id, result }
+            }));
+            Ok(())
+        }
         Effect::LoadTeamOptions(team_id) => {
             let client = reach.client;
             in_flight.push(Box::pin(async move {

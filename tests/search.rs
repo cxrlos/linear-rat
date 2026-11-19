@@ -232,6 +232,7 @@ async fn a_search_within_a_team_sends_the_team_and_its_filter() {
                 label: Some("label-chore".to_owned()),
                 ..TeamFilter::default()
             },
+            ..TeamQuery::default()
         }),
         ..SearchQuery::new("vault keys")
     };
@@ -257,7 +258,7 @@ async fn a_search_in_comments_within_a_team_sends_both() {
         include_comments: true,
         within: Some(TeamQuery {
             team_id: "team-ops".to_owned(),
-            filter: TeamFilter::default(),
+            ..TeamQuery::default()
         }),
         ..SearchQuery::new("vault keys")
     };
@@ -307,6 +308,7 @@ async fn the_fake_client_keeps_to_the_team_and_filter() {
                 state: Some(state.clone()),
                 ..TeamFilter::default()
             },
+            ..TeamQuery::default()
         }),
         ..SearchQuery::new("cheese")
     };

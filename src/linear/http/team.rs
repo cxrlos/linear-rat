@@ -148,6 +148,7 @@ pub(super) async fn issues(
         "teamId": query.team_id,
         "filter": issue_filter(&query.filter),
         "after": after,
+        "orderBy": query.order.as_graphql(),
     });
     let response: Response<IssuesData<IssueNode>> = client
         .send(TEAM_ISSUES, &variables, Urgency::Urgent)

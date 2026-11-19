@@ -11,7 +11,8 @@ use std::path::Path;
 use linear_rat::app::{App, Effect, Event, Failure, State};
 use linear_rat::config;
 use linear_rat::linear::{
-    ErrorKind, FakeClient, LinearClient, TeamFilter, TeamIssuesPage, TeamQuery, Urgency, demo,
+    ErrorKind, FakeClient, LinearClient, TeamFilter, TeamIssuesPage, TeamOrder, TeamQuery, Urgency,
+    demo,
 };
 use ratatui::backend::TestBackend;
 
@@ -112,6 +113,7 @@ fn query(team_id: &str, filter: TeamFilter) -> TeamQuery {
     TeamQuery {
         team_id: team_id.to_owned(),
         filter,
+        order: TeamOrder::default(),
     }
 }
 
@@ -668,6 +670,97 @@ async fn a_later_page_asked_for_before_switching_away_and_back_is_dropped() {
         screen(&app)[3]
     );
     assert!(header(&app).contains("0 of …"), "{}", header(&app));
+}
+
+#[tokio::test]
+async fn a_sort_linear_cannot_send_says_it_covers_only_the_loaded_issues() {
+    let mut app = team_issues(160, 30).await;
+    let (n, m) = n_of_m(&app);
+    assert!(n < m, "the demo team has more than one page");
+
+    // v s opens the sort picker: updated, created, then priority (5).
+    let effects = press(&mut app, "vs5");
+
+    assert!(effects.is_empty(), "{effects:?}");
+    let title = &screen(&app)[2];
+    assert!(
+        title.contains(&format!(
+            "Team Issues · sorted: loaded {n} of {m} · group: none · sort: priority, urgent first"
+        )),
+        "{title}"
+    );
+    assert_snapshot!(screen(&app).join("\n"));
+}
+
+#[tokio::test]
+async fn a_created_sort_reloads_in_that_order_and_keeps_the_focus() {
+    let mut app = team_issues(160, 30).await;
+    press(&mut app, "jjj");
+    let focused = app.state().team_issues.focused_id().unwrap().to_owned();
+
+    // 3 is created, newest first.
+    let effects = press(&mut app, "vs3");
+    assert!(
+        effects.iter().any(|effect| matches!(
+            effect,
+            Effect::LoadTeamIssues { query, after: None } if query.order == TeamOrder::Created
+        )),
+        "{effects:?}"
+    );
+    settle(&mut app, effects).await;
+
+    let title = &screen(&app)[2];
+    assert!(title.contains("sort: created, newest first"), "{title}");
+    assert!(!title.contains("loaded"), "{title}");
+    assert!(app.state().team_issues.ids().contains(&focused));
+    assert_eq!(app.state().team_issues.focused_id(), Some(focused.as_str()));
+}
+
+#[tokio::test]
+async fn moving_after_a_reloading_sort_keeps_the_focus_when_more_pages_load() {
+    let mut app = team_issues(160, 30).await;
+    // Far enough down that the issue is not on the first page newest first.
+    press(&mut app, &"j".repeat(42));
+    let focused = app.state().team_issues.focused_id().unwrap().to_owned();
+    let effects = press(&mut app, "vs3");
+    settle(&mut app, effects).await;
+    assert!(!app.state().team_issues.ids().contains(&focused));
+
+    press(&mut app, "jj");
+    let moved_to = app.state().team_issues.focused_id().unwrap().to_owned();
+    let effects = press(&mut app, "m");
+    settle(&mut app, effects).await;
+
+    assert!(app.state().team_issues.ids().contains(&focused));
+    assert_eq!(
+        app.state().team_issues.focused_id(),
+        Some(moved_to.as_str())
+    );
+}
+
+#[tokio::test]
+async fn the_loaded_only_note_shows_in_the_title_at_the_default_wide_layout() {
+    let mut app = team_issues(120, 30).await;
+    let (n, m) = n_of_m(&app);
+
+    // 9 is estimate, largest first.
+    press(&mut app, "vs9");
+
+    let title = &screen(&app)[2];
+    assert!(
+        title.contains(&format!("Team Issues · sorted: loaded {n} of {m} ·")),
+        "{title}"
+    );
+}
+
+#[tokio::test]
+async fn team_issues_grouped_by_assignee_and_sorted_by_priority() {
+    let mut app = team_issues(160, 30).await;
+
+    // v g 5 is assignee; v s 5 is priority, urgent first.
+    press(&mut app, "vg6vs5");
+
+    assert_snapshot!(screen(&app).join("\n"));
 }
 
 /// A failure with `message`, as the runtime sends one.

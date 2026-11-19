@@ -15,11 +15,11 @@ use linear_rat::auth::{
     KeyringEntry, KeyringError, KeyringStore, WorkspaceFile,
 };
 use linear_rat::linear::model::{
-    Issue, Label, Member, ProjectMilestone, Team, Viewer, WorkflowState, Workspace,
+    Cycle, Issue, Label, Member, ProjectMilestone, Team, Viewer, WorkflowState, Workspace,
 };
 use linear_rat::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, Diagnostics, FakeClient,
-    IssueDetail, IssueLink, IssueUpdate, LinearClient, SearchQuery, SearchResults,
+    IssueDetail, IssueLink, IssueUpdate, LinearClient, ProjectList, SearchQuery, SearchResults,
     TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery, Urgency,
 };
 
@@ -228,6 +228,22 @@ impl LinearClient for RejectingClient {
     }
 
     async fn count_team_issues(&self, _: &TeamQuery) -> Result<usize, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn recent_cycles(&self, _: &str) -> Result<Vec<Cycle>, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn viewer_projects(&self) -> Result<ProjectList, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn cycle_issues(&self, _: &str) -> Result<SearchResults, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn project_issues(&self, _: &str) -> Result<SearchResults, ClientError> {
         Err(ClientError::InvalidKey)
     }
 

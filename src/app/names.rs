@@ -2,17 +2,26 @@ use std::collections::{HashMap, HashSet};
 
 use jiff::Timestamp;
 
-use crate::linear::model::{Cycle, Estimation, Issue, Label, Member, Team};
+use super::Store;
+use crate::linear::model::{
+    Cycle, Estimation, Issue, Label, Member, Project, ProjectMilestone, Team,
+};
 
 /// What issue rows and details look up by id: cycle, label and member
 /// names, which cycles are running, and which teams use estimates.
 #[derive(Debug, Default)]
 pub struct Names {
     cycle_names: HashMap<String, String>,
+    cycle_starts: HashMap<String, Timestamp>,
     active_cycles: HashSet<String>,
     label_names: HashMap<String, String>,
     member_names: HashMap<String, String>,
     teams_without_estimates: HashSet<String>,
+    project_names: HashMap<String, String>,
+    milestone_names: HashMap<String, String>,
+    /// Where each milestone comes among all of them: by project name, then
+    /// in its project's order.
+    milestone_places: HashMap<String, usize>,
 }
 
 impl Names {
@@ -35,6 +44,7 @@ impl Names {
                 .clone()
                 .unwrap_or_else(|| format!("Cycle {}", cycle.number));
             names.cycle_names.insert(cycle.id.clone(), name);
+            names.cycle_starts.insert(cycle.id.clone(), cycle.starts_at);
         }
         names.label_names = labels
             .into_iter()
@@ -50,6 +60,73 @@ impl Names {
             .map(|team| team.id.clone())
             .collect();
         names
+    }
+
+    /// The names of everything in `store`, with the active cycle as of
+    /// when it was loaded.
+    pub fn from_store(store: &Store) -> Self {
+        Self::new(
+            store.cycles(),
+            store.labels(),
+            store.members(),
+            store.teams(),
+            store.as_of().unwrap_or_default(),
+        )
+        .with_projects(store.projects())
+        .with_milestones(store.milestones())
+    }
+
+    /// These names with the names of `projects` too.
+    pub fn with_projects<'a>(mut self, projects: impl IntoIterator<Item = &'a Project>) -> Self {
+        self.project_names = projects
+            .into_iter()
+            .map(|project| (project.id.clone(), project.name.clone()))
+            .collect();
+        self
+    }
+
+    /// These names with the names of `milestones` too, given in each
+    /// project's order. Milestones group by project name first.
+    pub fn with_milestones<'a>(
+        mut self,
+        milestones: impl IntoIterator<Item = &'a ProjectMilestone>,
+    ) -> Self {
+        let mut milestones: Vec<(usize, &ProjectMilestone)> =
+            milestones.into_iter().enumerate().collect();
+        milestones.sort_by_cached_key(|(index, milestone)| {
+            let project = self
+                .project_name(&milestone.project_id)
+                .unwrap_or(&milestone.project_id)
+                .to_lowercase();
+            (project, milestone.project_id.clone(), *index)
+        });
+        for (place, (_, milestone)) in milestones.into_iter().enumerate() {
+            self.milestone_names
+                .insert(milestone.id.clone(), milestone.name.clone());
+            self.milestone_places.insert(milestone.id.clone(), place);
+        }
+        self
+    }
+
+    /// The name of a project milestone, by id.
+    pub fn milestone_name(&self, milestone_id: &str) -> Option<&str> {
+        self.milestone_names.get(milestone_id).map(String::as_str)
+    }
+
+    /// Where a project milestone's group comes, by id; `None`, after every
+    /// known one, for a milestone not loaded.
+    pub fn milestone_place(&self, milestone_id: &str) -> Option<usize> {
+        self.milestone_places.get(milestone_id).copied()
+    }
+
+    /// When the cycle starts, by id.
+    pub fn cycle_start(&self, cycle_id: &str) -> Option<Timestamp> {
+        self.cycle_starts.get(cycle_id).copied()
+    }
+
+    /// The name of a project, by id.
+    pub fn project_name(&self, project_id: &str) -> Option<&str> {
+        self.project_names.get(project_id).map(String::as_str)
     }
 
     /// The cycle's name, or `Cycle <number>` when it has none.
