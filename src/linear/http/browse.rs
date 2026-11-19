@@ -186,17 +186,8 @@ struct ProjectNode {
 
 impl ProjectNode {
     fn into_overview(self) -> ProjectOverview {
-        let mut milestones = self.project_milestones.nodes;
-        milestones.sort_by(|a, b| a.sort_order.total_cmp(&b.sort_order));
         ProjectOverview {
-            milestones: milestones
-                .into_iter()
-                .map(|node| ProjectMilestone {
-                    id: node.id,
-                    name: node.name,
-                    project_id: self.id.clone(),
-                })
-                .collect(),
+            milestones: milestones(self.project_milestones.nodes, &self.id),
             project: Project {
                 id: self.id,
                 name: self.name,
@@ -219,12 +210,27 @@ struct StatusNode {
     status_type: ProjectStatusType,
 }
 
+/// A project milestone as the Projects screen and the milestone picker ask
+/// for it.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct MilestoneNode {
+pub(super) struct MilestoneNode {
     id: String,
     name: String,
     sort_order: f64,
+}
+
+/// The milestones of project `project_id` in the project's own order.
+pub(super) fn milestones(mut nodes: Vec<MilestoneNode>, project_id: &str) -> Vec<ProjectMilestone> {
+    nodes.sort_by(|a, b| a.sort_order.total_cmp(&b.sort_order));
+    nodes
+        .into_iter()
+        .map(|node| ProjectMilestone {
+            id: node.id,
+            name: node.name,
+            project_id: project_id.to_owned(),
+        })
+        .collect()
 }
 
 #[derive(Deserialize)]

@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
 use super::assigned::{Connection, IssueNode, LabelsPage, PersonNode, StateNode, timestamp};
+use super::browse::{MilestoneNode, milestones};
 use super::{HttpClient, Urgency};
 use crate::linear::model::{Issue, Label, Member, Priority, ProjectMilestone, WorkflowState};
 use crate::linear::{ClientError, IssueUpdate, Patch, Response};
@@ -87,15 +88,11 @@ pub(super) async fn project_milestones(
             |page: &MilestonesPage| &page.project.project_milestones.page_info,
         )
         .await?;
-    Ok(pages
+    let nodes = pages
         .into_iter()
         .flat_map(|page| page.project.project_milestones.nodes)
-        .map(|node| ProjectMilestone {
-            id: node.id,
-            name: node.name,
-            project_id: project_id.to_owned(),
-        })
-        .collect())
+        .collect();
+    Ok(milestones(nodes, project_id))
 }
 
 pub(super) async fn update_issue(
@@ -239,12 +236,6 @@ struct MilestonesPage {
 #[serde(rename_all = "camelCase")]
 struct ProjectMilestones {
     project_milestones: Connection<MilestoneNode>,
-}
-
-#[derive(Deserialize)]
-struct MilestoneNode {
-    id: String,
-    name: String,
 }
 
 #[derive(Deserialize)]

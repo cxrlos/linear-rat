@@ -467,9 +467,9 @@ async fn an_updated_issue_carries_its_due_date_milestone_and_parent() {
 #[tokio::test]
 async fn project_milestones_follow_every_page_of_the_project_asked_for() {
     let server = MockServer::start().await;
-    let page = |id: &str, name: &str, next: Option<&str>| {
+    let page = |id: &str, name: &str, sort_order: f64, next: Option<&str>| {
         json!({ "data": { "project": { "projectMilestones": {
-            "nodes": [{ "id": id, "name": name }],
+            "nodes": [{ "id": id, "name": name, "sortOrder": sort_order }],
             "pageInfo": { "hasNextPage": next.is_some(), "endCursor": next }
         } } } })
     };
@@ -480,6 +480,7 @@ async fn project_milestones_follow_every_page_of_the_project_asked_for() {
         .respond_with(ResponseTemplate::new(200).set_body_json(page(
             "milestone-1",
             "Beta",
+            1.0,
             Some("c1"),
         )))
         .mount(&server)
@@ -488,7 +489,12 @@ async fn project_milestones_follow_every_page_of_the_project_asked_for() {
         .and(wiremock::matchers::body_partial_json(
             json!({ "variables": { "after": "c1" } }),
         ))
-        .respond_with(ResponseTemplate::new(200).set_body_json(page("milestone-2", "Launch", None)))
+        .respond_with(ResponseTemplate::new(200).set_body_json(page(
+            "milestone-2",
+            "Launch",
+            2.0,
+            None,
+        )))
         .mount(&server)
         .await;
 
