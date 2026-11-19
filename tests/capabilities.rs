@@ -459,8 +459,8 @@ fn the_cheatsheet_mutes_denied_keys_only() {
 
     press(&mut app, "?");
 
-    assert_eq!(fg_at(&app, "s    workflow state", "s"), muted(&app));
-    assert_eq!(fg_at(&app, "c    comment", "c"), accent(&app));
+    assert_eq!(fg_at(&app, "s          workflow state", "s"), muted(&app));
+    assert_eq!(fg_at(&app, "c          comment", "c"), accent(&app));
 }
 
 #[test]

@@ -30,5 +30,5 @@ expression: app.backend()
 "│                                                                                                  │"
 "└──────────────────────────────────────────────────────────────────────────────────────────────────┘"
 " Move │ j/k move                                                                                    "
-" Do   │ Enter pick │ Tab toggle │ Esc close │ C-y copy                                              "
+" Do   │ Esc close                                                                                   "
 "                                                                                                    "

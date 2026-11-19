@@ -93,7 +93,11 @@ pub(super) fn pick(state: &mut State, nth: Option<usize>) -> Option<Vec<Effect>>
             arrangement.group = name.as_deref().and_then(Grouping::from_name)?;
         }
         Purpose::Sort => arrangement.sort = name.as_deref().and_then(Sort::from_name),
-        Purpose::Team | Purpose::AnalyticsTeam | Purpose::CyclesTeam | Purpose::Filter(_) => {
+        Purpose::Team
+        | Purpose::AnalyticsTeam
+        | Purpose::CyclesTeam
+        | Purpose::Filter(_)
+        | Purpose::RelationKind => {
             return None;
         }
     }

@@ -2,9 +2,12 @@ use crossterm::event::KeyEvent;
 use jiff::Timestamp;
 
 use super::{
-    Failure, LifecycleWrite, LoadError, NewComment, NewIssue, SyncFailure, Write, Writing,
+    Failure, LifecycleWrite, LoadError, NewComment, NewIssue, RelationWrite, SyncFailure, Write,
+    Writing,
 };
-use crate::linear::model::{Cycle, Issue, Label, Member, ProjectMilestone, Team, WorkflowState};
+use crate::linear::model::{
+    Cycle, Issue, IssueRelation, Label, Member, ProjectMilestone, Team, WorkflowState,
+};
 use crate::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, LiveEvent, PostedComment,
     ProjectList, SearchQuery, SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage,
@@ -36,6 +39,10 @@ pub enum Event {
         query: SearchQuery,
         result: Result<SearchResults, Failure>,
     },
+    /// The pause asked for by
+    /// [`Effect::SearchAfterPause`](super::Effect::SearchAfterPause) for this
+    /// query has passed.
+    TypingPaused(String),
     /// The result of [`Effect::LoadTeams`](super::Effect::LoadTeams). An
     /// error is a message with its context.
     TeamsLoaded(Result<Vec<Team>, Failure>),
@@ -160,6 +167,19 @@ pub enum Event {
     /// why it was rejected.
     LifecycleChanged {
         write: LifecycleWrite,
+        result: Result<(), String>,
+    },
+    /// Linear's answer to
+    /// [`Effect::CreateRelation`](super::Effect::CreateRelation): the
+    /// relation as it stored it, or why it was not created.
+    RelationCreated {
+        write: RelationWrite,
+        result: Result<IssueRelation, String>,
+    },
+    /// Linear's answer to
+    /// [`Effect::DeleteRelation`](super::Effect::DeleteRelation).
+    RelationDeleted {
+        write: RelationWrite,
         result: Result<(), String>,
     },
     /// The editor of [`Effect::OpenEditor`](super::Effect::OpenEditor)

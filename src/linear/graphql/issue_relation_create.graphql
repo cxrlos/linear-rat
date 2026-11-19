@@ -1,0 +1,19 @@
+# budget: 10
+# Creates one relation: `issueId` relates to `relatedIssueId` as `type` says
+# (`blocks`, `duplicate` or `related`). Returns the relation as Linear stored
+# it.
+mutation IssueRelationCreate($input: IssueRelationCreateInput!) {
+  issueRelationCreate(input: $input) {
+    success
+    issueRelation {
+      id
+      type
+      issue {
+        id
+      }
+      relatedIssue {
+        id
+      }
+    }
+  }
+}

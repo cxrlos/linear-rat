@@ -12,6 +12,7 @@ mod edit;
 mod issue_key;
 mod lifecycle;
 mod live;
+mod relations;
 mod search;
 mod team;
 mod team_analytics;
@@ -28,15 +29,16 @@ use serde_json::{Value, json};
 
 use super::governor::{Governor, SystemTimer, Timer, Urgency};
 use super::model::{
-    Cycle, Issue, Label, Member, ProjectMilestone, Team, Viewer, WorkflowState, Workspace,
+    Cycle, Issue, IssueRelation, Label, Member, ProjectMilestone, Team, Viewer, WorkflowState,
+    Workspace,
 };
 use super::paging::{Next, RepeatedCursor, Stitch};
 use super::search_bucket::SearchBucket;
 use super::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, Diagnostics, GraphQlError,
     IssueCreate, IssueDetail, IssueLink, IssueUpdate, LinearClient, LiveEvent, PostedComment,
-    ProjectList, Response, SearchQuery, SearchResults, TeamAnalyticsIssues, TeamChanges,
-    TeamIssuesPage, TeamOptions, TeamQuery,
+    ProjectList, RelationCreate, Response, SearchQuery, SearchResults, TeamAnalyticsIssues,
+    TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
 };
 use crate::auth::ApiKey;
 
@@ -461,6 +463,14 @@ impl LinearClient for HttpClient {
 
     async fn create_issue(&self, input: &IssueCreate) -> Result<Issue, ClientError> {
         create::create_issue(self, input).await
+    }
+
+    async fn create_relation(&self, input: &RelationCreate) -> Result<IssueRelation, ClientError> {
+        relations::create(self, input).await
+    }
+
+    async fn delete_relation(&self, id: &str) -> Result<(), ClientError> {
+        relations::delete(self, id).await
     }
 
     async fn administrable_teams(&self) -> Result<Vec<String>, ClientError> {

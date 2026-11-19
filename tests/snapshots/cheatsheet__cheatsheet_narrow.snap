@@ -4,24 +4,24 @@ expression: "text(&cheatsheet(50, 24))"
 ---
  [1] My Issues │ [2] │ [3] │ [4] │ [5]            
 ┌My Issues · group: workflow state · sort: active┐
-│◐ Starte┌ Keys ────────────────────────┐        │
-│▸ DES-34│ Move                         │Cycle 7 │
-│  ENG-51│  j/k      down / up          │Cycle 7 │
-│  OPS-37│  gg/G     top / bottom       │Cycle 7 │
-│  ENG-61│  C-d/C-u  half page          │Cycle 7 │
-│  OPS-36│  h/l      pane left / right  │Cycle 7 │
-│  ENG-60│  Esc      close or step back │Cycle 7 │
-│  ENG-22│                              │        │
-│  OPS-15│ Edit the issue               │        │
-│  DES-12│  s    workflow state         │        │
-│○ Unstar│  a    assignee               │        │
-│  DES-40│  p    priority               │Cycle 7 │
-│  ENG-57│  L    labels                 │Cycle 7 │
-│  OPS-38│  e    estimate               │Cycle 7 │
-│  DES-31│  C/P  cycle / project        │Cycle 7 │
-│  ENG-65│  M/d  milestone / due date   │Cycle 7 │
-│  DES-16│  E    title and description  │        │
-│  ENG-56└ Esc close ───────────────────┘        │
+│◐ Sta┌ Keys ─────────────────────────────┐      │
+│▸ DES│ Move                              │cle 7 │
+│  ENG│  j/k      down / up               │cle 7 │
+│  OPS│  gg/G     top / bottom            │cle 7 │
+│  ENG│  C-d/C-u  half page               │cle 7 │
+│  OPS│  h/l      pane left / right       │cle 7 │
+│  ENG│  Esc      close or step back      │cle 7 │
+│  ENG│                                   │      │
+│  OPS│ Edit the issue                    │      │
+│  DES│  s          workflow state        │      │
+│○ Uns│  a          assignee              │      │
+│  DES│  p          priority              │cle 7 │
+│  ENG│  L          labels                │cle 7 │
+│  OPS│  e          estimate              │cle 7 │
+│  DES│  C/P        cycle / project       │cle 7 │
+│  ENG│  M/d        milestone / due date  │cle 7 │
+│  DES│  E          title and description │      │
+│  ENG└ Esc close ────────────────────────┘      │
 └────────────────────────────────────────────────┘
  Move │ j/k move                                  
- Do   │ Enter pick  Tab toggle  Esc close
+ Do   │ Esc close

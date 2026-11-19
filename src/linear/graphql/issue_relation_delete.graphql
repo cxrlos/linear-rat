@@ -1,0 +1,7 @@
+# budget: 10
+# Deletes one relation by its id.
+mutation IssueRelationDelete($id: String!) {
+  issueRelationDelete(id: $id) {
+    success
+  }
+}

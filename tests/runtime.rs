@@ -10,13 +10,14 @@ use jiff::Timestamp;
 use linear_rat::app::{App, Event, State};
 use linear_rat::auth::KeySource;
 use linear_rat::linear::model::{
-    Cycle, Issue, Label, Member, ProjectMilestone, Team, Viewer, WorkflowState, Workspace,
+    Cycle, Issue, IssueRelation, Label, Member, ProjectMilestone, Team, Viewer, WorkflowState,
+    Workspace,
 };
 use linear_rat::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, Diagnostics, FakeClient,
-    IssueDetail, IssueLink, IssueUpdate, LinearClient, LiveEvent, ProjectList, SearchQuery,
-    SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
-    Urgency, demo,
+    IssueDetail, IssueLink, IssueUpdate, LinearClient, LiveEvent, ProjectList, RelationCreate,
+    SearchQuery, SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions,
+    TeamQuery, Urgency, demo,
 };
 use linear_rat::runtime;
 use linear_rat::snapshot::SnapshotCache;
@@ -206,6 +207,14 @@ impl LinearClient for RejectingClient {
         &self,
         _: &linear_rat::linear::IssueCreate,
     ) -> Result<Issue, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn create_relation(&self, _: &RelationCreate) -> Result<IssueRelation, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn delete_relation(&self, _: &str) -> Result<(), ClientError> {
         Err(ClientError::InvalidKey)
     }
 
@@ -401,6 +410,14 @@ async fn q_quits_while_the_load_is_still_in_flight() {
             future::pending().await
         }
 
+        async fn create_relation(&self, _: &RelationCreate) -> Result<IssueRelation, ClientError> {
+            future::pending().await
+        }
+
+        async fn delete_relation(&self, _: &str) -> Result<(), ClientError> {
+            future::pending().await
+        }
+
         async fn administrable_teams(&self) -> Result<Vec<String>, ClientError> {
             future::pending().await
         }
@@ -582,6 +599,14 @@ impl LinearClient for CountingClient {
         input: &linear_rat::linear::IssueCreate,
     ) -> Result<Issue, ClientError> {
         FakeClient.create_issue(input).await
+    }
+
+    async fn create_relation(&self, input: &RelationCreate) -> Result<IssueRelation, ClientError> {
+        FakeClient.create_relation(input).await
+    }
+
+    async fn delete_relation(&self, id: &str) -> Result<(), ClientError> {
+        FakeClient.delete_relation(id).await
     }
 
     async fn administrable_teams(&self) -> Result<Vec<String>, ClientError> {

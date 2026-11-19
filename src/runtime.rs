@@ -18,10 +18,11 @@ use tokio::time::{Instant, MissedTickBehavior};
 
 use crate::app::{
     App, Effect, Event, Failure, Lifecycle, LifecycleWrite, LoadError, NewComment, NewIssue,
-    SyncFailure, TeamPoll, Write,
+    RelationWrite, SEARCH_PAUSE, SyncFailure, TeamPoll, Write,
 };
 use crate::linear::{
-    AnalyticsWindow, ClientError, ErrorKind, LinearClient, LiveEvent, SearchQuery, Urgency,
+    AnalyticsWindow, ClientError, ErrorKind, LinearClient, LiveEvent, RelationCreate, SearchQuery,
+    Urgency,
 };
 use crate::snapshot::SnapshotCache;
 use crate::terminal::JobControl;
@@ -400,6 +401,13 @@ where
             in_flight.push(Box::pin(search(reach.client, query)));
             Ok(())
         }
+        Effect::SearchAfterPause(query) => {
+            in_flight.push(Box::pin(async move {
+                tokio::time::sleep(SEARCH_PAUSE).await;
+                Event::TypingPaused(query)
+            }));
+            Ok(())
+        }
         Effect::LoadTeams => {
             let client = reach.client;
             in_flight.push(Box::pin(async move {
@@ -537,6 +545,14 @@ where
         }
         Effect::ChangeLifecycle(write) => {
             in_flight.push(Box::pin(change_lifecycle(reach.client, write)));
+            Ok(())
+        }
+        Effect::CreateRelation(write) => {
+            in_flight.push(Box::pin(create_relation(reach.client, write)));
+            Ok(())
+        }
+        Effect::DeleteRelation(write) => {
+            in_flight.push(Box::pin(delete_relation(reach.client, write)));
             Ok(())
         }
         Effect::CreateComment(comment) => {
@@ -757,6 +773,43 @@ async fn update_issue_text<C: LinearClient>(
         }
     };
     Event::IssueUpdated { write, result }
+}
+
+async fn create_relation<C: LinearClient>(client: Option<&C>, write: RelationWrite) -> Event {
+    let relation = &write.relation;
+    let input = RelationCreate {
+        issue_id: relation.issue_id.clone(),
+        related_issue_id: relation.related_issue_id.clone(),
+        kind: relation.kind,
+    };
+    let result = match client {
+        Some(client) => client.create_relation(&input).await.map_err(message),
+        None => Err(NO_CLIENT.to_owned()),
+    };
+    match &result {
+        Ok(_) => tracing::info!(issue = %write.identifier, "Linear created a relation"),
+        Err(error) => {
+            tracing::warn!(issue = %write.identifier, %error, "Linear did not create a relation")
+        }
+    }
+    Event::RelationCreated { write, result }
+}
+
+async fn delete_relation<C: LinearClient>(client: Option<&C>, write: RelationWrite) -> Event {
+    let result = match client {
+        Some(client) => client
+            .delete_relation(&write.relation.id)
+            .await
+            .map_err(message),
+        None => Err(NO_CLIENT.to_owned()),
+    };
+    match &result {
+        Ok(()) => tracing::info!(issue = %write.identifier, "Linear deleted a relation"),
+        Err(error) => {
+            tracing::warn!(issue = %write.identifier, %error, "Linear did not delete a relation")
+        }
+    }
+    Event::RelationDeleted { write, result }
 }
 
 async fn create_comment<C: LinearClient>(client: Option<&C>, comment: NewComment) -> Event {
@@ -1082,6 +1135,32 @@ mod tests {
             .map(|issue| issue.identifier)
             .collect();
         assert_eq!(found, ["OPS-36"]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_pause_comes_back_with_its_query_once_the_pause_has_passed() {
+        let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+        let mut in_flight = FuturesUnordered::new();
+        let reach = Reach {
+            client: Some(&FakeClient),
+            snapshots: None,
+            live: Cell::new(None),
+        };
+        let started = Instant::now();
+
+        let flow = execute(
+            &mut app,
+            Effect::SearchAfterPause("cave".to_owned()),
+            &reach,
+            &mut in_flight,
+            &mut Fake::default(),
+        )
+        .unwrap();
+        let event = in_flight.next().await.unwrap();
+
+        assert_eq!(flow, ControlFlow::Continue(()));
+        assert_eq!(event, Event::TypingPaused("cave".to_owned()));
+        assert!(started.elapsed() >= SEARCH_PAUSE);
     }
 
     #[tokio::test]

@@ -226,6 +226,9 @@ pub(super) fn issue_filter(filter: &TeamFilter) -> Value {
             fields.insert(name.to_owned(), value);
         }
     }
+    if filter.blocked {
+        fields.insert("hasBlockedByRelations".to_owned(), json!({ "eq": true }));
+    }
     if fields.is_empty() {
         Value::Null
     } else {

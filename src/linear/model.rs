@@ -261,3 +261,86 @@ impl Attachment {
             && self.url.contains("/pull/")
     }
 }
+
+/// A link between two issues, as Linear's `IssueRelation`: the issue with id
+/// `issue_id` relates to the one with id `related_issue_id` as `kind` says,
+/// for example it blocks it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IssueRelation {
+    pub id: String,
+    pub kind: RelationType,
+    pub issue_id: String,
+    pub related_issue_id: String,
+}
+
+/// Linear's `IssueRelationType`, read from the source issue.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RelationType {
+    Blocks,
+    /// The source issue is a duplicate of the related one.
+    Duplicate,
+    Related,
+    /// Suggested by Linear as alike; lrat does not show it.
+    Similar,
+}
+
+/// How a relation reads from one of its two issues.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RelationKind {
+    Blocks,
+    BlockedBy,
+    Related,
+    DuplicateOf,
+    DuplicatedBy,
+}
+
+impl RelationKind {
+    /// In the order the detail lists them.
+    pub const ALL: [RelationKind; 5] = [
+        RelationKind::Blocks,
+        RelationKind::BlockedBy,
+        RelationKind::Related,
+        RelationKind::DuplicateOf,
+        RelationKind::DuplicatedBy,
+    ];
+
+    /// What the detail and the pickers call it.
+    pub fn name(self) -> &'static str {
+        match self {
+            RelationKind::Blocks => "Blocks",
+            RelationKind::BlockedBy => "Blocked by",
+            RelationKind::Related => "Related",
+            RelationKind::DuplicateOf => "Duplicate of",
+            RelationKind::DuplicatedBy => "Duplicated by",
+        }
+    }
+}
+
+impl IssueRelation {
+    /// How this relation reads from the issue with id `issue_id`, and the
+    /// id of the issue at its other end. `None` when `issue_id` is at
+    /// neither end, or for a relation lrat does not show.
+    pub fn seen_from(&self, issue_id: &str) -> Option<(RelationKind, &str)> {
+        let outgoing = if self.issue_id == issue_id {
+            true
+        } else if self.related_issue_id == issue_id {
+            false
+        } else {
+            return None;
+        };
+        let other = if outgoing {
+            &self.related_issue_id
+        } else {
+            &self.issue_id
+        };
+        let kind = match (self.kind, outgoing) {
+            (RelationType::Blocks, true) => RelationKind::Blocks,
+            (RelationType::Blocks, false) => RelationKind::BlockedBy,
+            (RelationType::Related, _) => RelationKind::Related,
+            (RelationType::Duplicate, true) => RelationKind::DuplicateOf,
+            (RelationType::Duplicate, false) => RelationKind::DuplicatedBy,
+            (RelationType::Similar, _) => return None,
+        };
+        Some((kind, other))
+    }
+}

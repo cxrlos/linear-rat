@@ -14,20 +14,20 @@ t ENG Engineering · 50 of 70 m more · f Filters none
 ┃  ENG-54 Track aging time per shelf                       ◌ Backlog     ▮▮▮ High    1         ┃│Part of the Nibble 3.0 push. Keep the old behaviour behind a  │
 ┃  ENG-56 Notification settings reset after update         ○ Todo        ▮▮▮ High    2         ┃│flag until the mobile apps catch up.                          │
 ┃  ENG-52 Cellar map renders blank on tablets              ⊘ Canceled    ▮▮▮ High    2 Cycle 6 ┃│                                                              │
-┃  ENG-46 Add pagination cursors to the activity feed      ○ Todo        ▮▮▮ High    2 Cycle 7 ┃│Comments                                                      │
-┃  ENG-24 Add an audit log for shelf edits                 ● Done        ▮▮▮ High    1 Cycle 4 ┃│Loading…                                                      │
+┃  ENG-46 Add pagination cursors to the activity feed      ○ Todo        ▮▮▮ High    2 Cycle 7 ┃│Relations                                                     │
+┃  ENG-24 Add an audit log for shelf edits                 ● Done        ▮▮▮ High    1 Cycle 4 ┃│Parent        ◐ ENG-51 Add a dry-run mode to the importer     │
 ┃▸ ENG-69 Make the importer resumable                      ● Done        ▮▮▯ Medium  8 Cycle 7 ┃│                                                              │
-┃  ENG-41 Fix memory leak in the crumb producer            ⊘ Canceled    ▮▮▯ Medium  8         ┃│History                                                       │
+┃  ENG-41 Fix memory leak in the crumb producer            ⊘ Canceled    ▮▮▯ Medium  8         ┃│Comments                                                      │
 ┃  ENG-70 Gouda batch labels print off-center              ◇ Triage      ▮▮▯ Medium  3         ┃│Loading…                                                      │
 ┃  ENG-35 Split the auth module out of the monolith        ◌ Backlog     ▮▮▯ Medium            ┃│                                                              │
-┃  ENG-51 Add a dry-run mode to the importer    due Oct 30 ◐ In Progress ▮▮▯ Medium  2 Cycle 7 ┃│Attachments                                                   │
+┃  ENG-51 Add a dry-run mode to the importer    due Oct 30 ◐ In Progress ▮▮▯ Medium  2 Cycle 7 ┃│History                                                       │
 ┃  ENG-40 Allow archiving an empty cellar                  ● Done        ▮▮▯ Medium  5 Cycle 6 ┃│Loading…                                                      │
 ┃  ENG-48 Shared pantry shows stale counts after leaving   ● Done        ▮▮▯ Medium  1 Cycle 6 ┃│                                                              │
-┃  ENG-42 Add a webhook for ripening milestones            ● Done        ▮▮▯ Medium  1 Cycle 6 ┃│Details                                                       │
-┃  ENG-57 Throttle sensor writes during bursts             ○ Todo        ▮▮▯ Medium  2 Cycle 7 ┃│Team      Engineering                                         │
-┃  ENG-36 Move several shelves at once                     ● Done        ▮▮▯ Medium  3 Cycle 5 ┃│Project   Shared pantries                                     │
-┃  ENG-39 Reduce cold start time of the mobile app         ● Done        ▮▮▯ Medium  2 Cycle 5 ┃│Milestone Loading…                                            │
-┃  ENG-44 Sensor pairing hangs on the second device        ● Done        ▮▮▯ Medium  1 Cycle 5 ┃│Cycle     Cycle 7 (active)                                    │
+┃  ENG-42 Add a webhook for ripening milestones            ● Done        ▮▮▯ Medium  1 Cycle 6 ┃│Attachments                                                   │
+┃  ENG-57 Throttle sensor writes during bursts             ○ Todo        ▮▮▯ Medium  2 Cycle 7 ┃│Loading…                                                      │
+┃  ENG-36 Move several shelves at once                     ● Done        ▮▮▯ Medium  3 Cycle 5 ┃│                                                              │
+┃  ENG-39 Reduce cold start time of the mobile app         ● Done        ▮▮▯ Medium  2 Cycle 5 ┃│Details                                                       │
+┃  ENG-44 Sensor pairing hangs on the second device        ● Done        ▮▮▯ Medium  1 Cycle 5 ┃│Team      Engineering                                         │
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛└──────────────────────────────────────────────────────────────┘
  Move │ j down     │ k up     │ gg top  │ G bottom  │ C-d/C-u page │ h/l pane   │ / search                                                                      
  Do   │ Enter open │ y yank   │ o links │ Esc close │ ? keys       │ : palette  │ q quit                                                                        

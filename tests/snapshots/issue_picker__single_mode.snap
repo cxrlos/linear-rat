@@ -1,0 +1,28 @@
+---
+source: tests/issue_picker.rs
+expression: app.backend()
+---
+" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    "
+"┌My Issues · group: workflow state · sort: active cycle, then priority─────────┐"
+"│◐ Started (9)                                                                 │"
+"│▸ DES-34 Design QA for the autu due Nov 6 ◐ In Progress ▮▮▮ High    3 Cycle 7 │"
+"│  ENG-51 Add a dry-run mode to due Oct 30 ◐ In Progress ▮▮▯ Medium  2 Cycle 7 │"
+"│  OPS-37 Clean up unused API k due Nov 20 ◐ In Review   ▮▮▯ Medium    Cycle 7 │"
+"│  ENG-61┌ Go to an issue ───────────────────────────────────────────┐ Cycle 7 │"
+"│  OPS-36│ > ENG-6                                                   │ Cycle 7 │"
+"│  ENG-60│ 1 ○ ENG-6 Migrate burrow storage to the new bucket layout │ Cycle 7 │"
+"│  ENG-22│ 2 ◇ ENG-63 Precompute nightly cellar reports              │         │"
+"│  OPS-15│ 3 ◌ ENG-66 Add keyboard shortcuts to the web cellar view  │         │"
+"│  DES-12│ 4 ○ ENG-65 Rotate refresh tokens on every use             │         │"
+"│○ Unstar│ 5 ◐ ENG-61 Add contract tests for the recipes API         │         │"
+"│  DES-40│ 6 ◐ ENG-60 Improve error messages on sync conflicts       │ Cycle 7 │"
+"│  ENG-57│ 7 ○ ENG-56 Notification settings reset after update       │ Cycle 7 │"
+"│  OPS-38└ Down/Up select  Enter choose  Esc close ──────────────────┘ Cycle 7 │"
+"│  DES-31 Review copy for permission promp ○ Todo        ▮▯▯ Low     5 Cycle 7 │"
+"│  ENG-65 Rotate refresh tokens on every u ○ Todo        ··· None    2 Cycle 7 │"
+"│  DES-16 Accessible focus rings across wh ○ Todo        ▮▮▮ High    5         │"
+"│  ENG-56 Notification settings reset afte ○ Todo        ▮▮▮ High    2         │"
+"└──────────────────────────────────────────────────────────────────────────────┘"
+" Move │ Down/Up move                                                            "
+" Do   │ Enter choose │ Esc close                                                "
+"                                                                                "

@@ -9,11 +9,10 @@ use ratatui::widgets::{Clear, Padding, Paragraph};
 
 use super::style;
 use crate::app::{
-    Action, Choice, CreateForm, DUE_DATE_FORMS, DuePrompt, Edit, EditPicker, Links, Note, Picker,
-    State, Step,
+    Action, Choice, CreateForm, DUE_DATE_FORMS, DuePrompt, Edit, EditPicker, IssuePicker, Links,
+    Note, Picker, State, Step,
 };
-
-use crate::keys::Context;
+use crate::keys::{self, Context};
 
 /// The width the list asks for at least, so short entries leave room for
 /// the title and the keys at the bottom.
@@ -196,6 +195,23 @@ pub fn render_links(state: &State, links: &Links, frame: &mut Frame, area: Rect)
     );
 }
 
+/// Draws an issue picker centered inside `area`'s border, each issue led by
+/// its workflow state glyph.
+pub fn render_issues(state: &State, picker: &IssuePicker, frame: &mut Frame, area: Rect) {
+    let glyph = |id: &String| {
+        let state_type = state.store.issue(id)?.state.state_type;
+        Some(Span::raw(state.ui.icons.state(state_type)).fg(state.theme.state(state_type)))
+    };
+    render(
+        state,
+        &picker.title(&state.store),
+        &picker.list,
+        glyph,
+        frame,
+        area,
+    );
+}
+
 /// Draws a team switcher or filter centered inside `area`'s border.
 pub fn render_choice(state: &State, choice: &Choice, frame: &mut Frame, area: Rect) {
     render(state, &choice.title(), &choice.list, |_| None, frame, area);
@@ -335,23 +351,24 @@ fn render_with<T>(
 /// The keys that select, choose and close, as
 /// ` Down/Up select  Enter choose  Esc close `, with the key that toggles an
 /// entry in a multi-select picker. Keys the filter takes as text are left
-/// out.
+/// out. Choosing, toggling and closing say what the bottom bar says.
 fn bottom_keys(state: &State, multi: bool) -> Line<'static> {
-    let items: &[(&[Action], &str)] = if multi {
-        &[
-            (&[Action::ScrollDown, Action::ScrollUp], "select"),
-            (&[Action::ToggleEntry], "toggle"),
-            (&[Action::Accept], "save"),
-            (&[Action::Close], "close"),
-        ]
+    let select: (&[Action], &str) = (&[Action::ScrollDown, Action::ScrollUp], "select");
+    let toggle: (&[Action], &str) = (&[Action::ToggleEntry], hint_word(Action::ToggleEntry));
+    let choose: (&[Action], &str) = (&[Action::Accept], hint_word(Action::Accept));
+    let close: (&[Action], &str) = (&[Action::Close], hint_word(Action::Close));
+    if multi {
+        keys_line(state, &[select, toggle, choose, close])
     } else {
-        &[
-            (&[Action::ScrollDown, Action::ScrollUp], "select"),
-            (&[Action::Accept], "choose"),
-            (&[Action::Close], "close"),
-        ]
-    };
-    keys_line(state, items)
+        keys_line(state, &[select, choose, close])
+    }
+}
+
+/// The word the bottom bar says after `action`'s key.
+fn hint_word(action: Action) -> &'static str {
+    keys::spec(action)
+        .and_then(|spec| spec.hint)
+        .map_or("", |hint| hint.word)
 }
 
 /// Each group of `items` as its keys and word, leaving out keys the text

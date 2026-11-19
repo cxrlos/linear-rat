@@ -90,7 +90,8 @@ impl CreateForm {
             | Editable::Project
             | Editable::Milestone
             | Editable::DueDate
-            | Editable::Text => (Vec::new(), false),
+            | Editable::Text
+            | Editable::Parent => (Vec::new(), false),
         };
         let default = entries
             .iter()

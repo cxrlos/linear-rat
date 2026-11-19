@@ -1,6 +1,6 @@
 use jiff::Timestamp;
 
-use super::{LifecycleWrite, NewComment, NewIssue, TeamPoll, Write, Writing};
+use super::{LifecycleWrite, NewComment, NewIssue, RelationWrite, TeamPoll, Write, Writing};
 use crate::linear::{AnalyticsWindow, SearchQuery, TeamQuery, Urgency};
 
 /// A request to the outside world, returned by [`update`](super::update) and
@@ -26,6 +26,9 @@ pub enum Effect {
     /// Search Linear for this query; the result comes back as
     /// [`Event::SearchDone`](super::Event::SearchDone).
     Search(SearchQuery),
+    /// Wait [`SEARCH_PAUSE`](super::SEARCH_PAUSE), then send
+    /// [`Event::TypingPaused`](super::Event::TypingPaused) with this query.
+    SearchAfterPause(String),
     /// Load the viewer's teams; the result comes back as
     /// [`Event::TeamsLoaded`](super::Event::TeamsLoaded).
     LoadTeams,
@@ -121,6 +124,14 @@ pub enum Effect {
         writing: Writing,
         text: String,
     },
+    /// Send one `issueRelationCreate` for [`RelationWrite::relation`]; the
+    /// result comes back as
+    /// [`Event::RelationCreated`](super::Event::RelationCreated).
+    CreateRelation(RelationWrite),
+    /// Send one `issueRelationDelete` for [`RelationWrite::relation`]; the
+    /// result comes back as
+    /// [`Event::RelationDeleted`](super::Event::RelationDeleted).
+    DeleteRelation(RelationWrite),
     /// Send one `commentCreate`; the result comes back as
     /// [`Event::CommentCreated`](super::Event::CommentCreated).
     CreateComment(NewComment),

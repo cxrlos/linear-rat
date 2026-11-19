@@ -123,7 +123,7 @@ pub(super) fn accept(state: &mut State) -> Update {
 
 /// Shows the issue `id`: focused in My Issues when it is there, or else
 /// alone in the results view.
-fn jump_to(state: &mut State, id: String) {
+pub(super) fn jump_to(state: &mut State, id: String) {
     if state.my_issues.focus_id(&id) {
         state.screen = Screen::MyIssues;
         let rows = ui::list_rows(state, state.viewport);

@@ -1,9 +1,10 @@
 //! Changing an issue's workflow state, assignee, priority, labels,
-//! estimate, cycle, project, project milestone, due date, or title and
-//! description. A picker chooses the new value (labels are marked in a
-//! multi-select picker; the due date is typed in a prompt; the title and
-//! description are written in `$EDITOR`); the change shows at once, goes to
-//! Linear as one `issueUpdate`, and is rolled back if Linear rejects it.
+//! estimate, cycle, project, project milestone, due date, title and
+//! description, or parent. A picker chooses the new value (labels are
+//! marked in a multi-select picker; the due date is typed in a prompt; the
+//! title and description are written in `$EDITOR`; the parent is chosen in
+//! the issue picker); the change shows at once, goes to Linear as one
+//! `issueUpdate`, and is rolled back if Linear rejects it.
 
 use jiff::Timestamp;
 use jiff::civil::Date;
@@ -31,6 +32,8 @@ pub enum Editable {
     DueDate,
     /// The title and the description, edited together in `$EDITOR`.
     Text,
+    /// The issue this one is a sub-issue of, chosen in the issue picker.
+    Parent,
 }
 
 impl Editable {
@@ -47,6 +50,7 @@ impl Editable {
             Editable::Milestone => "milestone",
             Editable::DueDate => "due date",
             Editable::Text => "title and description",
+            Editable::Parent => "parent",
         }
     }
 
@@ -69,6 +73,7 @@ impl Editable {
                 title: issue.title.clone(),
                 description: super::edit_text::tidy(issue.description.as_deref().unwrap_or("")),
             },
+            Editable::Parent => Edit::Parent(issue.parent_id.clone()),
         }
     }
 }
@@ -103,6 +108,8 @@ pub enum Edit {
         title: String,
         description: String,
     },
+    /// An issue's id, or `None` for no parent.
+    Parent(Option<String>),
 }
 
 impl Edit {
@@ -118,6 +125,7 @@ impl Edit {
             Edit::Milestone(_) => Editable::Milestone,
             Edit::DueDate(_) => Editable::DueDate,
             Edit::Text { .. } => Editable::Text,
+            Edit::Parent(_) => Editable::Parent,
         }
     }
 
@@ -148,6 +156,7 @@ impl Edit {
                 issue.title.clone_from(title);
                 issue.description = (!description.is_empty()).then(|| description.clone());
             }
+            Edit::Parent(parent) => issue.parent_id.clone_from(parent),
         }
     }
 
@@ -197,6 +206,10 @@ impl Edit {
             Edit::Text { title, description } => IssueUpdate {
                 title: Some(title.clone()),
                 description: Some(description.clone()),
+                ..IssueUpdate::default()
+            },
+            Edit::Parent(parent) => IssueUpdate {
+                parent_id: parent.clone().map_or(Patch::Clear, Patch::Set),
                 ..IssueUpdate::default()
             },
         }
@@ -283,6 +296,7 @@ impl EditPicker {
             Editable::Milestone => "Milestone",
             Editable::DueDate => "Due date",
             Editable::Text => "Text",
+            Editable::Parent => "Parent",
         };
         format!("{field} of {}", self.identifier)
     }
@@ -323,7 +337,9 @@ impl EditPicker {
             Editable::State => state_entries(store, &self.team_id),
             Editable::Assignee => assignee_entries(store, &self.team_id),
             Editable::Priority => (priority_entries(), false),
-            Editable::Labels | Editable::DueDate | Editable::Text => (Vec::new(), false),
+            Editable::Labels | Editable::DueDate | Editable::Text | Editable::Parent => {
+                (Vec::new(), false)
+            }
             Editable::Estimate => (estimate_entries(store, &self.team_id, issue), false),
             Editable::Cycle => cycle_entries(store, &self.team_id, now),
             Editable::Project => project_entries(store, &self.team_id),
@@ -640,6 +656,9 @@ pub(super) fn open(state: &mut State, field: Editable) -> Update {
     if field == Editable::Text {
         return super::edit_text::open(state);
     }
+    if field == Editable::Parent {
+        return super::relations::open_parent(state);
+    }
     if field == Editable::Estimate && !focused_team_estimates(state) {
         return Update::default();
     }
@@ -762,7 +781,7 @@ pub(super) fn choose(state: &mut State, nth: Option<usize>) -> Update {
 
 /// Shows `edit` on the issue at once and asks Linear to make it. Choosing
 /// the value the issue already has sends nothing.
-fn write(state: &mut State, issue_id: &str, edit: Edit) -> Update {
+pub(super) fn write(state: &mut State, issue_id: &str, edit: Edit) -> Update {
     let Some(issue) = state.store.issue(issue_id) else {
         return Update::redraw();
     };

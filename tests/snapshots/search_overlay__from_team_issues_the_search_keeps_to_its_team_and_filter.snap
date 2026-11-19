@@ -23,6 +23,6 @@ expression: prompt
 "│                                                                              │"
 "│                                                                              │"
 "└──────────────────────────────────────────────────────────────────────────────┘"
-" Move │ Down/Up move                                                            "
-" Do   │ Enter pick   │ Tab toggle │ Esc close │ C-y copy                        "
+"                                                                                "
+" Do   │ Enter choose │ Tab toggle │ Esc close                                   "
 "                                                                                "

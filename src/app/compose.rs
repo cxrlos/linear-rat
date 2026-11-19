@@ -66,7 +66,7 @@ pub struct Drafts {
 
 /// Stand-in issues carry ids with this prefix. Linear's ids are UUIDs, so
 /// they never clash.
-const LOCAL_PREFIX: &str = "local-";
+pub(super) const LOCAL_PREFIX: &str = "local-";
 
 /// Whether `issue_id` is a stand-in for an issue Linear has not confirmed.
 pub fn is_local(issue_id: &str) -> bool {

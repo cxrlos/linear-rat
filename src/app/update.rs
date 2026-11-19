@@ -4,10 +4,11 @@ use ratatui::layout::Size;
 use super::edit::{self, Editable};
 use super::{
     Action, Copyable, Effect, Event, Load, Modal, Palette, Pane, Purpose, Screen, State,
-    analytics_screen, browse, compose, create, detail, lifecycle, links, palette, rearrange,
-    results, search, sync, team_issues,
+    analytics_screen, browse, compose, create, detail, issue_picker, lifecycle, links, palette,
+    rearrange, relations, results, search, sync, team_issues,
 };
 use crate::keys::{self, Key, Resolution};
+use crate::linear::SearchQuery;
 use crate::ui;
 
 /// What one event did: whether the screen must be drawn again, and what the
@@ -64,9 +65,20 @@ fn apply(state: &mut State, event: Event) -> Update {
         Event::Throttled => sync::throttled(state),
         Event::Live(event) => sync::live(state, event),
         Event::SearchDone { query, result } => {
+            // The issue picker searches by term alone, so only such a search
+            // can answer it.
+            let plain = query == SearchQuery::new(query.term.clone());
+            let outcome = match &result {
+                Ok(found) => Ok(found.issues.iter().map(|issue| issue.id.clone()).collect()),
+                Err(failure) => Err(failure.message.clone()),
+            };
             search::finish(state, &query, result);
+            if plain {
+                issue_picker::searched(state, &query.term, outcome);
+            }
             Update::redraw()
         }
+        Event::TypingPaused(query) => issue_picker::paused(state, &query),
         Event::Resize { columns, rows } => {
             state.viewport = Size::new(columns, rows);
             let rows = ui::list_rows(state, state.viewport);
@@ -219,6 +231,8 @@ fn apply(state: &mut State, event: Event) -> Update {
         }
         Event::IssueUpdated { write, result } => edit::finished(state, &write, result),
         Event::LifecycleChanged { write, result } => lifecycle::finished(state, &write, result),
+        Event::RelationCreated { write, result } => relations::created(state, &write, result),
+        Event::RelationDeleted { write, result } => relations::deleted(state, &write, result),
         Event::EditorClosed { writing, result } => compose::closed(state, writing, result),
         Event::CommentCreated { comment, result } => compose::commented(state, &comment, result),
         Event::IssueCreated { issue, result } => compose::created(state, &issue, result),
@@ -244,6 +258,9 @@ fn type_text(state: &mut State, key: Key) -> Option<Update> {
         None => {
             field.pop();
         }
+    }
+    if let Some(Modal::IssuePicker(_)) = state.modals.top() {
+        return Some(issue_picker::typed(state));
     }
     Some(Update::redraw())
 }
@@ -346,6 +363,7 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             Some(Modal::Choice(_)) => choose(state, None),
             Some(Modal::DueDate(_)) => edit::accept_due_date(state),
             Some(Modal::Confirm(_)) => lifecycle::confirm(state),
+            Some(Modal::IssuePicker(_)) => issue_picker::choose(state, None),
             _ => Update::default(),
         },
 
@@ -467,6 +485,7 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             Some(Modal::Links(_)) => links::select(state, step(action)),
             Some(Modal::Create(_)) => create::select(state, step(action)),
             Some(Modal::Choice(_)) => select_choice(state, step(action)),
+            Some(Modal::IssuePicker(_)) => issue_picker::select(state, step(action)),
             Some(Modal::Palette(_)) => palette::step(state, action),
             Some(Modal::Search(_)) => Update::default(),
             None if state.screen == Screen::Analytics => {
@@ -514,10 +533,12 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             Some(Modal::Links(_)) => links::choose(state, Some(usize::from(n))),
             Some(Modal::Choice(_)) => choose(state, Some(usize::from(n))),
             Some(Modal::Create(_)) => create::accept(state, Some(usize::from(n))),
+            Some(Modal::IssuePicker(_)) => issue_picker::choose(state, Some(usize::from(n))),
             _ => edit::choose(state, Some(usize::from(n))),
         },
         Action::ToggleEntry => match state.modals.top() {
             Some(Modal::Search(_)) => search::toggle_comments(state),
+            Some(Modal::IssuePicker(_)) => issue_picker::toggle(state, None),
             _ => edit::toggle(state, None),
         },
         Action::ToggleSearchScope => search::toggle_scope(state),
@@ -529,6 +550,14 @@ pub fn perform(state: &mut State, action: Action) -> Update {
         Action::Decline => lifecycle::decline(state),
         Action::Comment => compose::comment(state),
         Action::CreateIssue => create::open(state),
+        Action::AddRelation => relations::open_add(state),
+        Action::RemoveRelation => relations::open_remove(state),
+        Action::ClearParent => relations::clear_parent(state),
+        Action::GoToRelated => relations::open_related(state),
+        Action::ToggleBlocked if state.screen == Screen::TeamIssues => Update {
+            redraw: true,
+            effects: team_issues::toggle_blocked(state),
+        },
         _ => Update::default(),
     }
 }
@@ -566,6 +595,9 @@ fn choose(state: &mut State, nth: Option<usize>) -> Update {
     let Some(Modal::Choice(choice)) = state.modals.top() else {
         return Update::default();
     };
+    if choice.purpose == Purpose::RelationKind {
+        return relations::kind_chosen(state, nth);
+    }
     if choice.purpose == Purpose::CyclesTeam {
         browse::pick_team(state, nth).map_or_else(Update::default, |effects| Update {
             redraw: true,

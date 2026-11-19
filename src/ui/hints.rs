@@ -10,7 +10,7 @@ use ratatui::widgets::Paragraph;
 
 use super::style;
 use crate::app::{Modal, State};
-use crate::keys::{self, ACTIONS, HintRow, KeySequence};
+use crate::keys::{self, ACTIONS, Context, HintRow, KeySequence, OverlayKind};
 
 /// How many rows the bar takes, on every screen, so the layout above it
 /// does not jump.
@@ -77,10 +77,12 @@ fn line_items(state: &State, rows: &[HintRow]) -> (HintRow, Vec<Item>) {
 
 /// The items of `row` for the active contexts, merged by word in registry
 /// order. Actions without a live key are left out, and so are keys a text
-/// field takes while it has focus.
+/// field takes while it has focus and overlay keys that never apply to the
+/// open kind of overlay.
 fn items(state: &State, row: HintRow) -> Vec<Item> {
     let contexts = keys::active_contexts(state);
     let typing = state.modals.top().is_some_and(Modal::takes_text);
+    let overlay = state.modals.iter().rev().find_map(OverlayKind::of);
     let mut groups: Vec<Group> = Vec::new();
     let mut shown = Vec::new();
     for &context in &contexts {
@@ -89,6 +91,11 @@ fn items(state: &State, row: HintRow) -> Vec<Item> {
                 continue;
             };
             if shown.contains(&spec.action) {
+                continue;
+            }
+            if context == Context::Overlay
+                && overlay.is_some_and(|kind| !spec.overlays.contains(&kind))
+            {
                 continue;
             }
             let Some(key) = state

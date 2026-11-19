@@ -218,7 +218,7 @@ impl TeamIssues {
         let Some(query) = &self.query else {
             return;
         };
-        if query.team_id == issue.team_id && query.filter.matches(issue) {
+        if query.team_id == issue.team_id && query.filter.matches(issue, false) {
             self.ids.insert(0, issue.id.clone());
             self.count = self.count.map(|count| count + 1);
             self.list.reset();
@@ -664,7 +664,11 @@ fn carry_out(state: &mut State, purpose: Purpose, id: Option<String>) -> Vec<Eff
             }
             _ => Vec::new(),
         },
-        Purpose::AnalyticsTeam | Purpose::CyclesTeam | Purpose::Group | Purpose::Sort => Vec::new(),
+        Purpose::AnalyticsTeam
+        | Purpose::CyclesTeam
+        | Purpose::Group
+        | Purpose::Sort
+        | Purpose::RelationKind => Vec::new(),
         Purpose::Filter(field) => {
             let Some(mut query) = state.team_issues.query.clone() else {
                 return Vec::new();
@@ -677,6 +681,16 @@ fn carry_out(state: &mut State, purpose: Purpose, id: Option<String>) -> Vec<Eff
             state.team_issues.reload(query)
         }
     }
+}
+
+/// Shows only the issues another issue blocks, or every issue again, and
+/// loads the list afresh.
+pub(super) fn toggle_blocked(state: &mut State) -> Vec<Effect> {
+    let Some(mut query) = state.team_issues.query.clone() else {
+        return Vec::new();
+    };
+    query.filter.blocked = !query.filter.blocked;
+    state.team_issues.reload(query)
 }
 
 /// Builds the names rows look up again from the store.

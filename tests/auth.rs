@@ -15,12 +15,14 @@ use linear_rat::auth::{
     KeyringEntry, KeyringError, KeyringStore, WorkspaceFile,
 };
 use linear_rat::linear::model::{
-    Cycle, Issue, Label, Member, ProjectMilestone, Team, Viewer, WorkflowState, Workspace,
+    Cycle, Issue, IssueRelation, Label, Member, ProjectMilestone, Team, Viewer, WorkflowState,
+    Workspace,
 };
 use linear_rat::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, Diagnostics, FakeClient,
-    IssueDetail, IssueLink, IssueUpdate, LinearClient, ProjectList, SearchQuery, SearchResults,
-    TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery, Urgency,
+    IssueDetail, IssueLink, IssueUpdate, LinearClient, ProjectList, RelationCreate, SearchQuery,
+    SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
+    Urgency,
 };
 
 const SECRET: &str = "lin_api_fictional0000000000000000000000000000";
@@ -263,6 +265,14 @@ impl LinearClient for RejectingClient {
         &self,
         _: &linear_rat::linear::IssueCreate,
     ) -> Result<Issue, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn create_relation(&self, _: &RelationCreate) -> Result<IssueRelation, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn delete_relation(&self, _: &str) -> Result<(), ClientError> {
         Err(ClientError::InvalidKey)
     }
 

@@ -58,6 +58,11 @@ The Team Issues list also takes the Issue list keys, and the Cycles screen the C
 | `trash` | `X` | Move the issue to the trash |
 | `toggle-subscription` | `S` | Subscribe to or unsubscribe from the issue |
 | `create-issue` | `n` | Create an issue |
+| `set-parent` | `H` | Set the parent issue |
+| `clear-parent` | `Dp` | Clear the parent issue |
+| `add-relation` | `R` | Add a relation to other issues |
+| `remove-relation` | `Dr` | Remove relations to other issues |
+| `go-to-related` | `gr` | Go to a related issue |
 | `group-by` | `vg` | Pick how the issue list is grouped |
 | `sort-by` | `vs` | Pick how the issue list is sorted |
 | `close` | `<Esc>` | Close the top overlay or step back |
@@ -72,6 +77,7 @@ The Team Issues list also takes the Issue list keys, and the Cycles screen the C
 | `filter-by-label` | `fl` | Filter by label |
 | `filter-by-cycle` | `fc` | Filter by cycle |
 | `filter-by-project` | `fp` | Filter by project |
+| `filter-blocked` | `fb` | Show only blocked issues, or all again |
 | `load-more` | `m` | Load the next page of Team Issues |
 
 ## Issue detail (`[keys.detail]`)
@@ -108,6 +114,11 @@ The Team Issues list also takes the Issue list keys, and the Cycles screen the C
 | `trash` | `X` | Move the issue to the trash |
 | `toggle-subscription` | `S` | Subscribe to or unsubscribe from the issue |
 | `create-issue` | `n` | Create an issue |
+| `set-parent` | `H` | Set the parent issue |
+| `clear-parent` | `Dp` | Clear the parent issue |
+| `add-relation` | `R` | Add a relation to other issues |
+| `remove-relation` | `Dr` | Remove relations to other issues |
+| `go-to-related` | `gr` | Go to a related issue |
 | `close` | `<Esc>` | Close the top overlay or step back |
 
 ## Overlays (`[keys.overlay]`)

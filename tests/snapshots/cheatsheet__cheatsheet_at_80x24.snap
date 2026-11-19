@@ -6,22 +6,22 @@ expression: "text(&cheatsheet(80, 24))"
 ┌My Issues · group: workflow state · sort: active cycle, then priority─────────┐
 │┌ Keys ─────────────────────────────────────────────────────────────────────┐ │
 ││ Move                                │ Edit the issue                      │ │
-││  j/k      down / up                 │  s    workflow state                │ │
-││  gg/G     top / bottom              │  a    assignee                      │ │
-││  C-d/C-u  half page                 │  p    priority                      │ │
-││  h/l      pane left / right         │  L    labels                        │ │
-││  Esc      close or step back        │  e    estimate                      │ │
-││                                     │  C/P  cycle / project               │ │
-││ Open & copy                         │  M/d  milestone / due date          │ │
-││  Enter  open the issue              │  E    title and description         │ │
-││  yi/yu  copy key / URL              │  c    comment                       │ │
-││  yb/ym  copy branch / link          │  A/U  archive / unarchive           │ │
-││  o      Linear page or PR           │  X/S  trash / subscribe             │ │
-││  O      other links                 │  n    new issue                     │ │
+││  j/k      down / up                 │  s          workflow state          │ │
+││  gg/G     top / bottom              │  a          assignee                │ │
+││  C-d/C-u  half page                 │  p          priority                │ │
+││  h/l      pane left / right         │  L          labels                  │ │
+││  Esc      close or step back        │  e          estimate                │ │
+││                                     │  C/P        cycle / project         │ │
+││ Open & copy                         │  M/d        milestone / due date    │ │
+││  Enter  open the issue              │  E          title and description   │ │
+││  yi/yu  copy key / URL              │  c          comment                 │ │
+││  yb/ym  copy branch / link          │  A/U        archive / unarchive     │ │
+││  o      Linear page or PR           │  X/S        trash / subscribe       │ │
+││  O      other links                 │  n          new issue               │ │
+││  gr     related issue               │  H/Dp/R/Dr  parent / relations      │ │
 ││                                     │                                     │ │
 ││ App                                 │ Issue list                          │ │
-││  1/2/3  screens    4      cycles    │  vg/vs  group / sort                │ │
 │└ Esc close ────────────────────────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────────────────────────────────┘
  Move │ j/k move                                                                
- Do   │ Enter pick │ Tab toggle │ Esc close │ C-y copy
+ Do   │ Esc close

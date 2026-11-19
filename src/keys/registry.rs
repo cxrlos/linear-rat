@@ -28,6 +28,11 @@ pub struct ActionSpec {
     /// Where the action shows in the bottom bar, if it does.
     pub hint: Option<Hint>,
     pub contexts: &'static [Context],
+    /// The kinds of overlay it applies to, when it binds in
+    /// [`Context::Overlay`]. The bottom bar leaves it out over any other
+    /// kind, where it can never run; over these it is muted while it cannot
+    /// run now.
+    pub overlays: &'static [OverlayKind],
     pub default_keys: &'static [&'static [Key]],
     /// Whether it can run now, the API key aside. Unavailable actions are
     /// still listed, muted.
@@ -173,6 +178,69 @@ const ANALYTICS: &[Context] = &[Context::Analytics];
 /// The overlays and the Analytics screen both scroll by row.
 const SCROLLS: &[Context] = &[Context::Overlay, Context::Analytics];
 
+/// What an overlay is, as far as which keys can ever apply to it goes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OverlayKind {
+    /// The cheatsheet, which scrolls.
+    Cheatsheet,
+    /// A list to choose one entry from: a single-select edit picker, a link
+    /// picker, a team switcher or filter, the create form, an issue picker
+    /// for one issue.
+    List,
+    /// A list to mark entries in: the label picker, an issue picker for
+    /// several issues.
+    MultiList,
+    Palette,
+    Search,
+}
+
+impl OverlayKind {
+    pub const ALL: [OverlayKind; 5] = [
+        OverlayKind::Cheatsheet,
+        OverlayKind::List,
+        OverlayKind::MultiList,
+        OverlayKind::Palette,
+        OverlayKind::Search,
+    ];
+
+    /// The kind of `modal`, or `None` for the which-key popup, which only
+    /// waits for the rest of a chord.
+    pub fn of(modal: &Modal) -> Option<Self> {
+        Some(match modal {
+            Modal::Cheatsheet { .. } => OverlayKind::Cheatsheet,
+            Modal::WhichKey { .. } => return None,
+            Modal::Picker(picker) if picker.list.is_multi() => OverlayKind::MultiList,
+            Modal::IssuePicker(picker) if picker.list.is_multi() => OverlayKind::MultiList,
+            Modal::Picker(_)
+            | Modal::IssuePicker(_)
+            | Modal::Links(_)
+            | Modal::Choice(_)
+            | Modal::Create(_) => OverlayKind::List,
+            Modal::Confirm(_) => OverlayKind::List,
+            Modal::Palette(_) => OverlayKind::Palette,
+            Modal::Search(_) | Modal::DueDate(_) => OverlayKind::Search,
+            Modal::Messages { .. } => OverlayKind::Cheatsheet,
+        })
+    }
+}
+
+/// The lists, which numbers pick from.
+const LISTS: &[OverlayKind] = &[OverlayKind::List, OverlayKind::MultiList];
+/// The overlays with something to move through.
+const SCROLLING: &[OverlayKind] = &[
+    OverlayKind::Cheatsheet,
+    OverlayKind::List,
+    OverlayKind::MultiList,
+    OverlayKind::Palette,
+];
+/// The overlays Enter chooses or sends in.
+const ACCEPTING: &[OverlayKind] = &[
+    OverlayKind::List,
+    OverlayKind::MultiList,
+    OverlayKind::Palette,
+    OverlayKind::Search,
+];
+
 /// Every action lrat has, in the order hints and the cheatsheet list them.
 /// This is the only place a key binding is written down.
 pub static ACTIONS: &[ActionSpec] = &[
@@ -185,6 +253,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: moves("down"),
         contexts: MOVES,
+        overlays: &[],
         default_keys: &[&[Key::char('j')]],
         available: can_move_down,
     },
@@ -197,6 +266,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: moves("up"),
         contexts: MOVES,
+        overlays: &[],
         default_keys: &[&[Key::char('k')]],
         available: can_move_up,
     },
@@ -209,6 +279,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: moves("top"),
         contexts: MOVES,
+        overlays: &[],
         default_keys: &[&[Key::char('g'), Key::char('g')]],
         available: can_move_up,
     },
@@ -221,6 +292,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: moves("bottom"),
         contexts: MOVES,
+        overlays: &[],
         default_keys: &[&[Key::char('G')]],
         available: can_move_down,
     },
@@ -233,6 +305,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: moves("page"),
         contexts: MOVES,
+        overlays: &[],
         default_keys: &[&[Key::ctrl('d')]],
         available: can_move_down,
     },
@@ -245,6 +318,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: moves("page"),
         contexts: MOVES,
+        overlays: &[],
         default_keys: &[&[Key::ctrl('u')]],
         available: can_move_up,
     },
@@ -257,6 +331,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: moves("pane"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('h')]],
         available: always,
     },
@@ -269,6 +344,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: moves("pane"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('l')]],
         available: always,
     },
@@ -281,6 +357,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: does("open"),
         contexts: LIST,
+        overlays: &[],
         default_keys: &[&[Key::named(KeyCode::Enter)]],
         available: always,
     },
@@ -293,6 +370,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: does("issues"),
         contexts: BROWSE,
+        overlays: &[],
         default_keys: &[&[Key::named(KeyCode::Enter)]],
         available: |state| match state.screen {
             Screen::Cycles => state.cycles.focused().is_some(),
@@ -309,6 +387,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: does("yank"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('y'), Key::char('i')]],
         available: has_focused_issue,
     },
@@ -321,6 +400,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: does("yank"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('y'), Key::char('u')]],
         available: has_focused_issue,
     },
@@ -333,6 +413,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: does("yank"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('y'), Key::char('b')]],
         available: has_focused_issue,
     },
@@ -345,6 +426,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: does("yank"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('y'), Key::char('m')]],
         available: has_focused_issue,
     },
@@ -357,6 +439,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: does("links"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('o')]],
         available: has_focused_issue,
     },
@@ -369,6 +452,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('O')]],
         available: has_focused_issue,
     },
@@ -381,6 +465,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: Some(WriteClass::UpdateIssue),
         hint: edits("state"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('s')]],
         available: has_focused_issue,
     },
@@ -393,6 +478,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: Some(WriteClass::UpdateIssue),
         hint: edits("assignee"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('a')]],
         available: has_focused_issue,
     },
@@ -405,6 +491,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: Some(WriteClass::UpdateIssue),
         hint: edits("priority"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('p')]],
         available: has_focused_issue,
     },
@@ -417,6 +504,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: Some(WriteClass::UpdateIssue),
         hint: edits("labels"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('L')]],
         available: has_focused_issue,
     },
@@ -429,6 +517,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: Some(WriteClass::UpdateIssue),
         hint: edits("estimate"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('e')]],
         available: app::focused_team_estimates,
     },
@@ -441,6 +530,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('C')]],
         available: has_saved_issue,
     },
@@ -453,6 +543,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('P')]],
         available: has_saved_issue,
     },
@@ -465,6 +556,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('M')]],
         available: app::focused_has_project,
     },
@@ -477,6 +569,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('d')]],
         available: has_saved_issue,
     },
@@ -489,6 +582,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: Some(WriteClass::UpdateIssue),
         hint: edits("text"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('E')]],
         available: |state| {
             state
@@ -505,6 +599,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: Some(WriteClass::CreateComment),
         hint: edits("comment"),
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('c')]],
         available: |state| {
             state
@@ -521,6 +616,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('A')]],
         available: |state| has_saved_issue(state) && !app::focused_is_archived(state),
     },
@@ -533,6 +629,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('U')]],
         available: |state| has_saved_issue(state) && app::focused_is_archived(state),
     },
@@ -545,6 +642,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('X')]],
         available: has_saved_issue,
     },
@@ -557,6 +655,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('S')]],
         available: has_saved_issue,
     },
@@ -569,8 +668,79 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: PANES,
+        overlays: &[],
         default_keys: &[&[Key::char('n')]],
         available: |state| state.store.teams().next().is_some(),
+    },
+    ActionSpec {
+        action: Action::Edit(Editable::Parent),
+        id: "set-parent",
+        description: "Set the parent issue",
+        label: "parent / relations",
+        group: Group::Edit,
+        writes: None,
+        hint: None,
+        contexts: PANES,
+        overlays: &[],
+        default_keys: &[&[Key::char('H')]],
+        available: has_saved_issue,
+    },
+    ActionSpec {
+        action: Action::ClearParent,
+        id: "clear-parent",
+        description: "Clear the parent issue",
+        label: "parent / relations",
+        group: Group::Edit,
+        writes: None,
+        hint: None,
+        contexts: PANES,
+        overlays: &[],
+        default_keys: &[&[Key::char('D'), Key::char('p')]],
+        available: |state| {
+            has_saved_issue(state)
+                && state
+                    .focused_issue()
+                    .is_some_and(|issue| issue.parent_id.is_some())
+        },
+    },
+    ActionSpec {
+        action: Action::AddRelation,
+        id: "add-relation",
+        description: "Add a relation to other issues",
+        label: "parent / relations",
+        group: Group::Edit,
+        writes: None,
+        hint: None,
+        contexts: PANES,
+        overlays: &[],
+        default_keys: &[&[Key::char('R')]],
+        available: has_saved_issue,
+    },
+    ActionSpec {
+        action: Action::RemoveRelation,
+        id: "remove-relation",
+        description: "Remove relations to other issues",
+        label: "parent / relations",
+        group: Group::Edit,
+        writes: None,
+        hint: None,
+        contexts: PANES,
+        overlays: &[],
+        default_keys: &[&[Key::char('D'), Key::char('r')]],
+        available: has_saved_issue,
+    },
+    ActionSpec {
+        action: Action::GoToRelated,
+        id: "go-to-related",
+        description: "Go to a related issue",
+        label: "related issue",
+        group: Group::Open,
+        writes: None,
+        hint: None,
+        contexts: PANES,
+        overlays: &[],
+        default_keys: &[&[Key::char('g'), Key::char('r')]],
+        available: has_saved_issue,
     },
     ActionSpec {
         action: Action::PickNumber(1),
@@ -581,6 +751,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: OVERLAY,
+        overlays: LISTS,
         default_keys: &[&[Key::char('1')]],
         available: |state| picker_has(1, state),
     },
@@ -593,6 +764,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: OVERLAY,
+        overlays: LISTS,
         default_keys: &[&[Key::char('2')]],
         available: |state| picker_has(2, state),
     },
@@ -605,6 +777,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: OVERLAY,
+        overlays: LISTS,
         default_keys: &[&[Key::char('3')]],
         available: |state| picker_has(3, state),
     },
@@ -617,6 +790,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: OVERLAY,
+        overlays: LISTS,
         default_keys: &[&[Key::char('4')]],
         available: |state| picker_has(4, state),
     },
@@ -629,6 +803,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: OVERLAY,
+        overlays: LISTS,
         default_keys: &[&[Key::char('5')]],
         available: |state| picker_has(5, state),
     },
@@ -641,6 +816,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: OVERLAY,
+        overlays: LISTS,
         default_keys: &[&[Key::char('6')]],
         available: |state| picker_has(6, state),
     },
@@ -653,6 +829,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: OVERLAY,
+        overlays: LISTS,
         default_keys: &[&[Key::char('7')]],
         available: |state| picker_has(7, state),
     },
@@ -665,6 +842,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: OVERLAY,
+        overlays: LISTS,
         default_keys: &[&[Key::char('8')]],
         available: |state| picker_has(8, state),
     },
@@ -677,6 +855,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: OVERLAY,
+        overlays: LISTS,
         default_keys: &[&[Key::char('9')]],
         available: |state| picker_has(9, state),
     },
@@ -689,6 +868,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: views("team"),
         contexts: TEAM_ISSUES,
+        overlays: &[],
         default_keys: &[&[Key::char('t')]],
         available: |state| state.store.viewer_teams().next().is_some(),
     },
@@ -701,6 +881,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: views("team"),
         contexts: CYCLES,
+        overlays: &[],
         default_keys: &[&[Key::char('t')]],
         available: |state| state.store.viewer_teams().next().is_some(),
     },
@@ -713,6 +894,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: views("filter"),
         contexts: TEAM_ISSUES,
+        overlays: &[],
         default_keys: &[&[Key::char('f'), Key::char('s')]],
         available: has_team,
     },
@@ -725,6 +907,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: views("filter"),
         contexts: TEAM_ISSUES,
+        overlays: &[],
         default_keys: &[&[Key::char('f'), Key::char('a')]],
         available: has_team,
     },
@@ -737,6 +920,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: views("filter"),
         contexts: TEAM_ISSUES,
+        overlays: &[],
         default_keys: &[&[Key::char('f'), Key::char('l')]],
         available: has_team,
     },
@@ -749,6 +933,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: views("filter"),
         contexts: TEAM_ISSUES,
+        overlays: &[],
         default_keys: &[&[Key::char('f'), Key::char('c')]],
         available: has_team,
     },
@@ -761,7 +946,21 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: views("filter"),
         contexts: TEAM_ISSUES,
+        overlays: &[],
         default_keys: &[&[Key::char('f'), Key::char('p')]],
+        available: has_team,
+    },
+    ActionSpec {
+        action: Action::ToggleBlocked,
+        id: "filter-blocked",
+        description: "Show only blocked issues, or all again",
+        label: "blocked only",
+        group: Group::Screen,
+        writes: None,
+        hint: views("filter"),
+        contexts: TEAM_ISSUES,
+        overlays: &[],
+        default_keys: &[&[Key::char('f'), Key::char('b')]],
         available: has_team,
     },
     ActionSpec {
@@ -773,6 +972,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: views("more"),
         contexts: TEAM_ISSUES,
+        overlays: &[],
         default_keys: &[&[Key::char('m')]],
         available: can_load_more,
     },
@@ -785,6 +985,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: LIST,
+        overlays: &[],
         default_keys: &[&[Key::char('v'), Key::char('g')]],
         available: app::can_rearrange,
     },
@@ -797,6 +998,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: LIST,
+        overlays: &[],
         default_keys: &[&[Key::char('v'), Key::char('s')]],
         available: app::can_rearrange,
     },
@@ -809,6 +1011,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: moves("move"),
         contexts: SCROLLS,
+        overlays: SCROLLING,
         default_keys: &[
             &[Key::char('j')],
             &[Key::named(KeyCode::Down)],
@@ -825,6 +1028,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: moves("move"),
         contexts: SCROLLS,
+        overlays: SCROLLING,
         default_keys: &[
             &[Key::char('k')],
             &[Key::named(KeyCode::Up)],
@@ -839,8 +1043,9 @@ pub static ACTIONS: &[ActionSpec] = &[
         label: "choose",
         group: Group::Screen,
         writes: None,
-        hint: does("pick"),
+        hint: does("choose"),
         contexts: OVERLAY,
+        overlays: ACCEPTING,
         default_keys: &[&[Key::named(KeyCode::Enter)]],
         available: can_accept,
     },
@@ -853,6 +1058,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: OVERLAY,
+        overlays: &[],
         default_keys: &[&[Key::char('y')]],
         available: is_confirming,
     },
@@ -865,6 +1071,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: OVERLAY,
+        overlays: &[],
         default_keys: &[&[Key::char('n')]],
         available: is_confirming,
     },
@@ -877,11 +1084,17 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: does("toggle"),
         contexts: OVERLAY,
+        overlays: &[OverlayKind::MultiList, OverlayKind::Search],
         default_keys: &[&[Key::named(KeyCode::Tab)]],
         available: |state| match state.modals.top() {
             Some(Modal::Search(search)) => search.editable(),
-            _ => picker(state)
-                .is_some_and(|picker| picker.list.is_multi() && picker.list.selected().is_some()),
+            Some(Modal::Picker(picker)) => {
+                picker.list.is_multi() && picker.list.selected().is_some()
+            }
+            Some(Modal::IssuePicker(picker)) => {
+                picker.list.is_multi() && picker.list.selected().is_some()
+            }
+            _ => false,
         },
     },
     ActionSpec {
@@ -893,6 +1106,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: OVERLAY,
+        overlays: &[],
         default_keys: &[&[Key::ctrl('t')]],
         available: |state| matches!(state.modals.top(), Some(Modal::Search(search)) if search.scope.is_some() && search.editable()),
     },
@@ -905,6 +1119,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: views("range"),
         contexts: ANALYTICS,
+        overlays: &[],
         default_keys: &[&[Key::char('[')]],
         available: |state| state.analytics_range() != WeekRange::Four,
     },
@@ -917,6 +1132,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: views("range"),
         contexts: ANALYTICS,
+        overlays: &[],
         default_keys: &[&[Key::char(']')]],
         available: |state| state.analytics_range() != WeekRange::TwentySix,
     },
@@ -929,6 +1145,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: views("view"),
         contexts: ANALYTICS,
+        overlays: &[],
         default_keys: &[&[Key::char('v')]],
         available: always,
     },
@@ -941,6 +1158,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: views("team"),
         contexts: ANALYTICS,
+        overlays: &[],
         default_keys: &[&[Key::char('t')]],
         available: |state| {
             state.analytics_screen.view() == AnalyticsView::Team
@@ -956,6 +1174,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: does("close"),
         contexts: &[Context::List, Context::Detail, Context::Overlay],
+        overlays: &OverlayKind::ALL,
         default_keys: &[&[Key::named(KeyCode::Esc)]],
         available: |state| {
             state.modals.top().is_some() || in_detail(state) || state.screen == Screen::Results
@@ -971,6 +1190,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: does("copy"),
         contexts: OVERLAY,
+        overlays: &[],
         default_keys: &[&[Key::ctrl('y')]],
         available: |state| matches!(state.modals.top(), Some(Modal::Links(links)) if links.list.selected().is_some()),
     },
@@ -983,6 +1203,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: GLOBAL,
+        overlays: &[],
         default_keys: &[&[Key::char('1')]],
         available: |state| state.screen != Screen::MyIssues,
     },
@@ -995,6 +1216,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: GLOBAL,
+        overlays: &[],
         default_keys: &[&[Key::char('2')]],
         available: |state| state.screen != Screen::TeamIssues,
     },
@@ -1007,6 +1229,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: GLOBAL,
+        overlays: &[],
         default_keys: &[&[Key::char('3')]],
         available: |state| state.screen != Screen::Analytics,
     },
@@ -1019,6 +1242,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: GLOBAL,
+        overlays: &[],
         default_keys: &[&[Key::char('4')]],
         available: |state| state.screen != Screen::Cycles,
     },
@@ -1031,6 +1255,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: GLOBAL,
+        overlays: &[],
         default_keys: &[&[Key::char('5')]],
         available: |state| state.screen != Screen::Projects,
     },
@@ -1043,6 +1268,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: GLOBAL,
+        overlays: &[],
         default_keys: &[&[Key::char('r')]],
         available: |state| state.can_refresh(),
     },
@@ -1055,6 +1281,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: does("keys"),
         contexts: GLOBAL,
+        overlays: &[],
         default_keys: &[&[Key::char('?')]],
         available: always,
     },
@@ -1067,6 +1294,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: does("palette"),
         contexts: GLOBAL,
+        overlays: &[],
         default_keys: &[&[Key::char(':')], &[Key::ctrl('k')]],
         available: always,
     },
@@ -1079,6 +1307,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: moves("search"),
         contexts: GLOBAL,
+        overlays: &[],
         default_keys: &[&[Key::char('/')]],
         available: always,
     },
@@ -1091,6 +1320,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: GLOBAL,
+        overlays: &[],
         default_keys: &[&[Key::char('!')]],
         available: always,
     },
@@ -1103,6 +1333,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: does("quit"),
         contexts: GLOBAL,
+        overlays: &[],
         default_keys: &[&[Key::char('q')]],
         available: always,
     },
@@ -1115,6 +1346,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: None,
         contexts: GLOBAL,
+        overlays: &[],
         default_keys: &[&[Key::ctrl('z')]],
         available: always,
     },
@@ -1138,6 +1370,10 @@ fn can_scroll_down(state: &State) -> bool {
             .list
             .selected_position()
             .is_some_and(|position| position + 1 < links.list.visible().len()),
+        Some(Modal::IssuePicker(picker)) => picker
+            .list
+            .selected_position()
+            .is_some_and(|position| position + 1 < picker.list.visible().len()),
         Some(Modal::Create(form)) => form
             .list()
             .is_some_and(|(len, selected)| selected.is_some_and(|position| position + 1 < len)),
@@ -1171,6 +1407,10 @@ fn can_scroll_up(state: &State) -> bool {
             .list
             .selected_position()
             .is_some_and(|position| position > 0),
+        Some(Modal::IssuePicker(picker)) => picker
+            .list
+            .selected_position()
+            .is_some_and(|position| position > 0),
         Some(Modal::Create(form)) => form
             .list()
             .is_some_and(|(_, selected)| selected.is_some_and(|position| position > 0)),
@@ -1186,6 +1426,7 @@ fn can_accept(state: &State) -> bool {
         Some(Modal::Choice(choice)) => choice.list.selected().is_some(),
         Some(Modal::Picker(picker)) => picker.list.is_multi() || picker.list.selected().is_some(),
         Some(Modal::Links(links)) => links.list.selected().is_some(),
+        Some(Modal::IssuePicker(picker)) => picker.list.selected().is_some(),
         Some(Modal::Create(form)) => form.list().is_none_or(|(_, selected)| selected.is_some()),
         Some(Modal::Palette(palette)) => {
             palette.selected < app::palette_matches(state, &palette.query).len()
@@ -1220,8 +1461,22 @@ fn picker_has(count: usize, state: &State) -> bool {
         Some(Modal::Links(links)) => links.list.visible().len() >= count,
         Some(Modal::Choice(choice)) => choice.list.visible().len() >= count,
         Some(Modal::Create(form)) => form.list().is_some_and(|(len, _)| len >= count),
+        // A digit that continues a word, as in `ENG-12`, types into the
+        // query instead.
+        Some(Modal::IssuePicker(picker)) => {
+            !continues_word(picker.list.query()) && picker.list.visible().len() >= count
+        }
         _ => false,
     }
+}
+
+/// Whether a character typed after `query` continues its last word: the
+/// query ends in a letter, a digit or `-`.
+fn continues_word(query: &str) -> bool {
+    query
+        .chars()
+        .last()
+        .is_some_and(|c| c.is_alphanumeric() || c == '-')
 }
 
 fn has_team(state: &State) -> bool {

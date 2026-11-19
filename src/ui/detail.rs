@@ -1,5 +1,6 @@
-//! An issue's detail: its title and state, the description as Markdown, the
-//! comments, the workflow state history and the rest of what it refers to.
+//! An issue's detail: its title and state, the description as Markdown, its
+//! parent, sub-issues and relations, the comments, the workflow state
+//! history and the rest of what it refers to.
 //! Built as lines already wrapped to the pane, so scrolling counts real rows.
 
 use jiff::Timestamp;
@@ -73,6 +74,7 @@ pub(super) fn lines(state: &State, issue: &Issue, width: u16) -> Vec<Line<'stati
         }
         _ => lines.push(Line::styled("No description.", muted)),
     }
+    lines.extend(relations(state, issue, width));
 
     let load = state.detail.load(&issue.id);
     let comments = store.comments(&issue.id);
@@ -130,6 +132,83 @@ pub(super) fn lines(state: &State, issue: &Issue, width: u16) -> Vec<Line<'stati
     lines.push(Line::default());
     lines.push(Line::styled("Details", bold));
     lines.extend(details(state, issue, now, width));
+    lines
+}
+
+/// The Relations section: the parent, the sub-issues with how many are
+/// done, then the related issues by kind, each with its state glyph. Left
+/// out when the issue has none of them. The sub-issues wait on the detail's
+/// load, since the store may hold only some of them before it.
+fn relations(state: &State, issue: &Issue, width: u16) -> Vec<Line<'static>> {
+    const NAME_WIDTH: usize = 14;
+    let theme = &state.theme;
+    let store = &state.store;
+    let muted = style::muted(theme);
+    let children = if state.detail.load(&issue.id) == Some(&DetailLoad::Loaded) {
+        store.children(&issue.id)
+    } else {
+        Vec::new()
+    };
+    let related = store.relations(&issue.id);
+    if issue.parent_id.is_none() && children.is_empty() && related.is_empty() {
+        return Vec::new();
+    }
+    let issue_pieces = |id: &str| -> Pieces {
+        match store.issue(id) {
+            Some(other) => {
+                let state_type = other.state.state_type;
+                vec![
+                    (
+                        state.ui.icons.state(state_type).to_owned(),
+                        Style::new().fg(theme.state(state_type)),
+                    ),
+                    (format!(" {} ", other.identifier), muted),
+                    (other.title.clone(), Style::new()),
+                ]
+            }
+            None => vec![(id.to_owned(), muted)],
+        }
+    };
+    let mut rows: Vec<(String, Pieces)> = Vec::new();
+    if let Some(parent) = &issue.parent_id {
+        rows.push(("Parent".to_owned(), issue_pieces(parent)));
+    }
+    if !children.is_empty() {
+        let done = children
+            .iter()
+            .filter(|child| !child.state.state_type.is_open())
+            .count();
+        rows.push((
+            "Sub-issues".to_owned(),
+            plain(format!("{done}/{} done", children.len())),
+        ));
+        for child in &children {
+            rows.push((String::new(), issue_pieces(&child.id)));
+        }
+    }
+    let mut last_kind = None;
+    for (kind, _, other) in related {
+        let name = if last_kind == Some(kind) {
+            String::new()
+        } else {
+            kind.name().to_owned()
+        };
+        last_kind = Some(kind);
+        rows.push((name, issue_pieces(other)));
+    }
+
+    let mut lines = vec![
+        Line::default(),
+        Line::styled("Relations", Style::new().add_modifier(Modifier::BOLD)),
+    ];
+    for (name, value) in rows {
+        lines.extend(markdown::wrap(
+            &value,
+            width,
+            &[(format!("{name:NAME_WIDTH$}"), muted)],
+            &[(" ".repeat(NAME_WIDTH), Style::new())],
+        ));
+    }
     lines
 }
 
