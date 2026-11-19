@@ -40,6 +40,7 @@ Done when someone reading only the issue and the PR could pick up the next piece
 - All Linear API access goes through one module, so tests swap it for fixtures.
 - One action registry drives key handling, the keymap config, the `?` cheatsheet, the bottom-bar hints and the palette. Never list a key binding anywhere else.
 - No `unwrap`/`expect` outside tests; errors carry context to the status line.
+- Text is measured and cut only through `src/ui/text.rs`: widths in terminal cells, and cut text ends in `…`.
 - The terminal is restored on every exit path, panics included.
 
 ## Map
@@ -48,7 +49,7 @@ Done when someone reading only the issue and the PR could pick up the next piece
 - `src/app/`: the core. `State` (screens, modal stack, keymap, My Issues), `Event` in, `update(state, event)` returning an `Update` (redraw flag and `Effect`s), `perform(state, action)`, and `App`, the driver that applies events and redraws only when asked. Tests drive `App`. Beside them: grouping and sorting (`arrange.rs`, `rearrange.rs`, `issue_list.rs`), the issue picker (`issue_picker.rs`), relations and parents (`relations.rs`), archive, trash and subscribe (`lifecycle.rs`), the due-date prompt (`due_date.rs`), the Cycles and Projects screens (`browse.rs`), error kinds and the error log (`failure.rs`) and the per-team capability map (`capabilities.rs`).
 - `src/keys/`: the action registry (`registry.rs`, the only place a key binding is written), key notation, contexts and the keymap built from the registry plus config overrides.
 - `src/config.rs`: loads `config.toml` from the XDG config path (`[keys]`, `[ui]`, `[theme]`, `[sync]`, `[analytics]`), each section falling back to its defaults on its own, with errors and unknown-key warnings naming file and line. The format is in `docs/config.md`.
-- `src/ui.rs`, `src/ui/`: rendering, a pure function of `State`: the layout, My Issues, the loading message and error screens (`error.rs`), the bottom bar, cheatsheet and which-key, the Cycles and Projects screens (`browse.rs`), the confirmation modal (`confirm.rs`), the error log (`messages.rs`), themes (`theme.rs`, built-ins under `themes/`), icon sets (`icons.rs`) and the styles drawn from the theme (`style.rs`).
+- `src/ui.rs`, `src/ui/`: rendering, a pure function of `State`: the layout, My Issues, the loading message and error screens (`error.rs`), the bottom bar, cheatsheet and which-key, the Cycles and Projects screens (`browse.rs`), the confirmation modal (`confirm.rs`), the error log (`messages.rs`), themes (`theme.rs`, built-ins under `themes/`), icon sets (`icons.rs`), the styles drawn from the theme (`style.rs`) and measuring and cutting text (`text.rs`).
 - `src/runtime.rs`: the async loop. Reads terminal input and the shutdown signal, feeds events to `App` and carries out effects: loads through the Linear client, copying and opening URLs.
 - `src/clipboard.rs`: copying through OSC 52, so it works over SSH; inside tmux it checks `set-clipboard`.
 - `src/browser.rs`: opens a URL with `xdg-open` or `open`, detached from the terminal.
