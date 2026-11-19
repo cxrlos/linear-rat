@@ -203,6 +203,30 @@ fn shift_x_asks_to_confirm_and_trashes_nothing_until_then() {
 }
 
 #[test]
+fn at_any_width_the_trash_confirmation_shows_its_whole_warning() {
+    for columns in 30..=80 {
+        let mut state = State::demo();
+        let mut issue = state
+            .store
+            .issue(&format!("issue-{}", FIRST.to_lowercase()))
+            .unwrap()
+            .clone();
+        issue.title = vec!["a".repeat(38); 6].join(" ");
+        state.store.upsert_issue(issue);
+        state.rebuild_lists();
+        let mut app = App::new(TestBackend::new(columns, 24), state).unwrap();
+
+        press(&mut app, "X");
+
+        let lines = screen(&app);
+        let text = lines.join(" ");
+        assert!(text.contains("trash"), "{columns}: {lines:#?}");
+        assert!(text.contains("30"), "{columns}: {lines:#?}");
+        assert!(text.contains("days."), "{columns}: {lines:#?}");
+    }
+}
+
+#[test]
 fn esc_or_n_leaves_the_issue_untouched() {
     for cancel in ["\x1b", "n"] {
         let mut app = app();

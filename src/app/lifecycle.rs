@@ -73,6 +73,10 @@ struct Undo {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Confirm {
     pub title: String,
+    /// What the action applies to, on one line, cut with `…` when it is
+    /// too long, so the body below always fits.
+    pub subject: String,
+    /// What to know before confirming, wrapped to the popup.
     pub body: Vec<String>,
     /// What the confirming key's word says, as `trash`.
     pub verb: &'static str,
@@ -157,9 +161,8 @@ pub(super) fn ask_to_trash(state: &mut State) -> Update {
     };
     let confirm = Confirm {
         title: format!("Trash {}?", issue.identifier),
+        subject: format!("{} {}", issue.identifier, issue.title),
         body: vec![
-            format!("{} {}", issue.identifier, issue.title),
-            String::new(),
             "Its sub-issues go to the trash too.".to_owned(),
             "It can be restored from Linear for 30 days.".to_owned(),
         ],

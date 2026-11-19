@@ -4,21 +4,17 @@
 use super::text;
 use ratatui::Frame;
 use ratatui::layout::{Margin, Rect};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Clear, Padding, Paragraph, Wrap};
+use ratatui::widgets::{Clear, Padding, Paragraph};
 
-use super::style;
+use super::{markdown, style};
 use crate::app::{Action, Confirm, State};
 use crate::keys::Context;
 
 /// Draws `confirm` centered inside `area`'s border.
 pub fn render(state: &State, confirm: &Confirm, frame: &mut Frame, area: Rect) {
     let area = area.inner(Margin::new(1, 1));
-    let lines: Vec<Line> = confirm
-        .body
-        .iter()
-        .map(|line| Line::raw(line.clone()))
-        .collect();
     let bottom = Line::from(
         [
             (&[Action::Accept, Action::Confirm][..], confirm.verb),
@@ -29,31 +25,40 @@ pub fn render(state: &State, confirm: &Confirm, frame: &mut Frame, area: Rect) {
         .collect::<Vec<_>>(),
     );
     let title = format!(" {} ", confirm.title);
-    let widest = lines
+    let widest = confirm
+        .body
         .iter()
-        .map(Line::width)
-        .chain([text::width(&title), bottom.width()])
+        .map(|line| text::width(line))
+        .chain([
+            text::width(&confirm.subject),
+            text::width(&title),
+            bottom.width(),
+        ])
         .max()
         .unwrap_or(0);
     let width = u16::try_from(widest + 4).unwrap_or(u16::MAX);
-    let inner_width = usize::from(width.min(area.width).saturating_sub(4)).max(1);
-    let rows: usize = lines
-        .iter()
-        .map(|line| line.width().max(1).div_ceil(inner_width))
-        .sum();
-    let height = u16::try_from(rows + 2).unwrap_or(u16::MAX);
+    let inner_width = width.min(area.width).saturating_sub(4).max(1);
+    // Wrapped here, at word boundaries, so the popup is exactly as tall as
+    // what it shows.
+    let subject = text::fit(&confirm.subject, usize::from(inner_width));
+    let lines: Vec<Line> = [Line::raw(subject), Line::default()]
+        .into_iter()
+        .chain(confirm.body.iter().flat_map(|line| {
+            if line.is_empty() {
+                vec![Line::default()]
+            } else {
+                markdown::wrap(&[(line.clone(), Style::new())], inner_width, &[], &[])
+            }
+        }))
+        .collect();
+    let height = u16::try_from(lines.len() + 2).unwrap_or(u16::MAX);
     let popup = super::centered(area, width, height);
     let block = super::popup_block(state)
         .title(title)
         .title_bottom(bottom)
         .padding(Padding::horizontal(1));
     frame.render_widget(Clear, popup);
-    frame.render_widget(
-        Paragraph::new(lines)
-            .wrap(Wrap { trim: false })
-            .block(block),
-        popup,
-    );
+    frame.render_widget(Paragraph::new(lines).block(block), popup);
 }
 
 /// The first key of each of `actions` in the overlay, joined, then `word`.
