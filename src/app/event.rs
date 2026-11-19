@@ -1,5 +1,6 @@
 use crossterm::event::KeyEvent;
 use jiff::Timestamp;
+use semver::Version;
 
 use super::{
     Failure, LifecycleWrite, LoadError, NewComment, NewIssue, RelationWrite, SyncFailure, Write,
@@ -200,4 +201,7 @@ pub enum Event {
         issue: NewIssue,
         result: Result<Box<Issue>, Failure>,
     },
+    /// The result of [`Effect::CheckRelease`](super::Effect::CheckRelease):
+    /// the latest release, or `None` when the check failed.
+    ReleaseChecked(Option<Version>),
 }

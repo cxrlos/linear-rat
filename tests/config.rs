@@ -344,7 +344,7 @@ fn a_misspelt_table_is_reported_instead_of_ignored() {
         messages(&loaded),
         vec![
             "config.toml:1: unknown table `[key]` is ignored; lrat reads [ui], [theme], \
-             [keys], [sync], [analytics] and [auth]"
+             [keys], [sync], [analytics], [auth] and [updates]"
         ]
     );
     assert_eq!(loaded.config.keys, vec![]);
@@ -504,4 +504,33 @@ fn an_unknown_auth_store_is_reported_and_the_os_keyring_used() {
     );
     assert_eq!(loaded.config.auth.store, KeyringStore::Os);
     assert_eq!(loaded.config.ui.icons, IconSet::Nerd);
+}
+
+#[test]
+fn without_an_updates_section_lrat_checks_for_releases() {
+    let loaded = parse("");
+
+    assert!(loaded.config.updates.check);
+}
+
+#[test]
+fn updates_check_false_turns_the_release_check_off() {
+    let loaded = parse("[updates]\ncheck = false\n");
+
+    assert_eq!(loaded.errors, vec![]);
+    assert!(!loaded.config.updates.check);
+}
+
+#[test]
+fn a_bad_updates_value_is_reported_and_the_check_stays_on() {
+    let loaded = parse("[updates]\ncheck = \"never\"\nwhen = 3\n");
+
+    assert_eq!(
+        messages(&loaded),
+        vec![
+            "config.toml:2: `updates.check` must be true or false; [updates] uses its defaults",
+            "config.toml:3: unknown key `when` in [updates] is ignored",
+        ]
+    );
+    assert!(loaded.config.updates.check);
 }

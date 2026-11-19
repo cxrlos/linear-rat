@@ -5,6 +5,10 @@ use super::{Editable, FilterField, LinkSet, Screen};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
     Quit,
+    /// Hide the release notice until a newer release ships.
+    SkipRelease,
+    /// Open the GitHub page of the release the notice shows.
+    ShowReleaseNotes,
     /// Hand the terminal back to the shell and stop lrat until `fg`.
     Suspend,
     ShowScreen(Screen),

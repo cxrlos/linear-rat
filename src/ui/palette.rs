@@ -41,7 +41,7 @@ pub fn render(state: &State, palette: &Palette, frame: &mut Frame, area: Rect) {
             } else {
                 (style::muted(theme), style::muted(theme))
             };
-            let mut text = vec![Span::styled(spec.description, text_style)];
+            let mut text = vec![Span::styled(spec.description_in(state), text_style)];
             if let Some(reason) = availability.reason() {
                 text.push(Span::styled(format!(" · {reason}"), text_style));
             }

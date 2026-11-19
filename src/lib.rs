@@ -11,6 +11,7 @@ pub mod keys;
 pub mod linear;
 pub mod logging;
 pub mod open;
+pub mod release;
 pub mod runtime;
 pub mod snapshot;
 pub mod terminal;

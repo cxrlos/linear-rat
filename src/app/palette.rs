@@ -49,7 +49,7 @@ pub fn palette_matches<'a>(state: &'a State, query: &str) -> Vec<PaletteEntry<'a
         .iter()
         .filter(|spec| spec.contexts.iter().any(|&c| c != Context::Overlay))
         .filter_map(|spec| {
-            let found = score(&format!("{} {}", spec.description, spec.id))?;
+            let found = score(&format!("{} {}", spec.description_in(state), spec.id))?;
             Some((found, false, PaletteEntry::Action(spec)))
         });
     let mut found: Vec<(u32, bool, PaletteEntry)> = actions.collect();

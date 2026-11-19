@@ -2,6 +2,7 @@ use jiff::Timestamp;
 
 use super::{LifecycleWrite, NewComment, NewIssue, RelationWrite, TeamPoll, Write, Writing};
 use crate::linear::{AnalyticsWindow, SearchQuery, TeamQuery, Urgency};
+use crate::release::Record;
 
 /// A request to the outside world, returned by [`update`](super::update) and
 /// carried out by the runtime.
@@ -148,4 +149,9 @@ pub enum Effect {
         seen: Timestamp,
         text: String,
     },
+    /// Ask GitHub for the latest release; the answer comes back as
+    /// [`Event::ReleaseChecked`](super::Event::ReleaseChecked).
+    CheckRelease,
+    /// Write what the release checks found to the release cache.
+    SaveRelease(Record),
 }

@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crossterm::event::KeyCode;
 
 use super::{Context, Key};
@@ -40,6 +42,17 @@ pub struct ActionSpec {
 }
 
 impl ActionSpec {
+    /// What the palette says it does on `state`: its description, but with
+    /// the version named where it is about a release.
+    pub fn description_in(&self, state: &State) -> Cow<'static, str> {
+        match (self.action, state.release.notice()) {
+            (Action::ShowReleaseNotes, Some(version)) => {
+                Cow::Owned(format!("What's new in v{version}"))
+            }
+            _ => Cow::Borrowed(self.description),
+        }
+    }
+
     /// Whether it can run now: [`ActionSpec::available`], and then whether
     /// the API key may send what it [`writes`](ActionSpec::writes).
     pub fn availability(&self, state: &State) -> Availability {
@@ -1370,10 +1383,41 @@ pub static ACTIONS: &[ActionSpec] = &[
         default_keys: &[&[Key::ctrl('z')]],
         available: always,
     },
+    // The release actions run from the palette, so they have no keys.
+    ActionSpec {
+        action: Action::SkipRelease,
+        id: "skip-release",
+        description: "Skip this release",
+        label: "skip release",
+        group: Group::App,
+        writes: None,
+        hint: None,
+        contexts: GLOBAL,
+        overlays: &[],
+        default_keys: &[],
+        available: knows_newer_release,
+    },
+    ActionSpec {
+        action: Action::ShowReleaseNotes,
+        id: "release-notes",
+        description: "What's new in the latest release",
+        label: "release notes",
+        group: Group::App,
+        writes: None,
+        hint: None,
+        contexts: GLOBAL,
+        overlays: &[],
+        default_keys: &[],
+        available: knows_newer_release,
+    },
 ];
 
 fn always(_: &State) -> bool {
     true
+}
+
+fn knows_newer_release(state: &State) -> bool {
+    state.release.notice().is_some()
 }
 
 fn can_scroll_down(state: &State) -> bool {

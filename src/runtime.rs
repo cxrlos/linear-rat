@@ -24,6 +24,7 @@ use crate::linear::{
     AnalyticsWindow, ClientError, ErrorKind, LinearClient, LiveEvent, RelationCreate, SearchQuery,
     Urgency,
 };
+use crate::release::ReleaseCheck;
 use crate::snapshot::SnapshotCache;
 use crate::terminal::JobControl;
 use crate::{browser, clipboard, terminal};
@@ -43,11 +44,13 @@ type Live<'a> = Pin<Box<dyn Stream<Item = LiveEvent> + 'a>>;
 
 /// What effects reach beyond the app: Linear through `client`, which is
 /// `None` when there is no usable API key (the app then already shows why),
-/// the snapshot cache, which is `None` under `--demo`, and the live events
-/// once [`Effect::GoLive`] has opened them.
+/// the snapshot cache, which is `None` under `--demo`, the release source
+/// and cache, `None` unless this session checks for releases, and the live
+/// events once [`Effect::GoLive`] has opened them.
 struct Reach<'a, C> {
     client: Option<&'a C>,
     snapshots: Option<&'a SnapshotCache>,
+    releases: Option<&'a ReleaseCheck>,
     live: Cell<Option<Live<'a>>>,
 }
 
@@ -70,15 +73,26 @@ where
     S: Future<Output = ()>,
 {
     let no_job_control = futures_util::stream::pending();
-    run_with_job_control(app, client, snapshots, input, shutdown, no_job_control).await
+    run_with_job_control(
+        app,
+        client,
+        snapshots,
+        None,
+        input,
+        shutdown,
+        no_job_control,
+    )
+    .await
 }
 
-/// [`run`], suspending or resuming lrat on each `job_control` signal. The
-/// loop goes on after either.
+/// [`run`], checking for releases through `releases` when the app asks, and
+/// suspending or resuming lrat on each `job_control` signal. The loop goes
+/// on after either.
 pub async fn run_with_job_control<B, C, I, S, J>(
     app: &mut App<B>,
     client: Option<&C>,
     snapshots: Option<&SnapshotCache>,
+    releases: Option<&ReleaseCheck>,
     input: I,
     shutdown: S,
     job_control: J,
@@ -94,6 +108,7 @@ where
     let reach = Reach {
         client,
         snapshots,
+        releases,
         live: Cell::new(None),
     };
     let result = run_loop(app, &reach, input, shutdown, job_control).await;
@@ -316,6 +331,18 @@ where
         }
         Effect::SaveSnapshot => {
             save_snapshot_in_background(app, reach);
+            Ok(())
+        }
+        Effect::CheckRelease => {
+            in_flight.push(Box::pin(check_release(reach.releases)));
+            Ok(())
+        }
+        Effect::SaveRelease(record) => {
+            if let Some(releases) = reach.releases
+                && let Err(error) = releases.cache.save(&record)
+            {
+                tracing::warn!("could not save the release cache: {error:#}");
+            }
             Ok(())
         }
         Effect::GoLive(team_ids) => {
@@ -608,6 +635,24 @@ fn save_snapshot_in_background<B: Backend, C>(app: &App<B>, reach: &Reach<'_, C>
             tracing::warn!("could not save the snapshot: {error:#}");
         }
     });
+}
+
+/// The latest release, or `None`, logged, when it could not be read. A
+/// failed check is quiet: no notice and no entry in the error log.
+async fn check_release(releases: Option<&ReleaseCheck>) -> Event {
+    let Some(releases) = releases else {
+        return Event::ReleaseChecked(None);
+    };
+    match releases.source.latest().await {
+        Ok(latest) => {
+            tracing::info!(%latest, "checked for a newer release");
+            Event::ReleaseChecked(Some(latest))
+        }
+        Err(error) => {
+            tracing::warn!("could not check for a newer release: {error:#}");
+            Event::ReleaseChecked(None)
+        }
+    }
 }
 
 async fn load_my_issues<C: LinearClient>(client: Option<&C>) -> Event {
@@ -1025,6 +1070,7 @@ mod tests {
         let reach = Reach {
             client: None::<&FakeClient>,
             snapshots: None,
+            releases: None,
             live: Cell::new(None),
         };
         execute(app, effect, &reach, &mut in_flight, outside).unwrap()
@@ -1084,6 +1130,7 @@ mod tests {
             let reach = Reach {
                 client: Some(&FakeClient),
                 snapshots: None,
+                releases: None,
                 live: Cell::new(None),
             };
             for effect in [Effect::LoadMyIssues, Effect::Poll(Vec::new())] {
@@ -1110,6 +1157,7 @@ mod tests {
         let reach = Reach {
             client: Some(&FakeClient),
             snapshots: None,
+            releases: None,
             live: Cell::new(None),
         };
         let flow = execute(
@@ -1143,6 +1191,7 @@ mod tests {
         let reach = Reach {
             client: Some(&FakeClient),
             snapshots: None,
+            releases: None,
             live: Cell::new(None),
         };
         let started = Instant::now();
@@ -1195,6 +1244,7 @@ mod tests {
         let reach = Reach {
             client: Some(&FakeClient),
             snapshots: None,
+            releases: None,
             live: Cell::new(None),
         };
         let frames = app.frames_drawn();
@@ -1222,6 +1272,7 @@ mod tests {
         let reach = Reach {
             client: Some(&FakeClient),
             snapshots: None,
+            releases: None,
             live: Cell::new(None),
         };
 

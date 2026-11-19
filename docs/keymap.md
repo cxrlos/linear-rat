@@ -22,6 +22,8 @@ The Team Issues list also takes the Issue list keys, and the Cycles screen the C
 | `messages` | `!` | Show recent errors |
 | `quit` | `q` | Quit lrat |
 | `suspend` | `<C-z>` | Suspend lrat to the shell |
+| `skip-release` |  | Skip this release |
+| `release-notes` |  | What's new in the latest release |
 
 ## Issue list (`[keys.list]`)
 

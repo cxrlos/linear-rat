@@ -44,7 +44,8 @@ pub fn render(state: &State, frame: &mut Frame) {
     let titles = tab_titles(state, tabs_area.width);
     let tabs_width = titles_width(&titles);
     frame.render_widget(Tabs::new(titles).select(selected), tabs_area);
-    render_sync_indicator(state, frame, tabs_area, tabs_width);
+    let indicator_width = render_sync_indicator(state, frame, tabs_area, tabs_width);
+    render_release_notice(state, frame, tabs_area, tabs_width, indicator_width);
     match state.screen {
         Screen::MyIssues => match &state.load {
             Load::Loaded => my_issues::render(state, frame, body_area),
@@ -131,15 +132,15 @@ fn titles_width(titles: &[String]) -> u16 {
 
 /// The sync indicator at the right end of the tab row, muted while sync is
 /// fine and accented when it is failing or throttled. Left out when it
-/// would touch the tabs.
-fn render_sync_indicator(state: &State, frame: &mut Frame, area: Rect, tabs_width: u16) {
+/// would touch the tabs. Returns how many columns it took.
+fn render_sync_indicator(state: &State, frame: &mut Frame, area: Rect, tabs_width: u16) -> u16 {
     let Some(indicator) = state.sync_status.indicator() else {
-        return;
+        return 0;
     };
-    let text = Span::raw(format!("{} ", indicator.text));
-    let width = u16::try_from(text.width()).unwrap_or(u16::MAX);
+    let text = format!("{} ", indicator.text);
+    let width = u16::try_from(text::width(&text)).unwrap_or(u16::MAX);
     if tabs_width.saturating_add(width).saturating_add(1) > area.width {
-        return;
+        return 0;
     }
     let style = if indicator.alert {
         style::accent(&state.theme)
@@ -148,7 +149,36 @@ fn render_sync_indicator(state: &State, frame: &mut Frame, area: Rect, tabs_widt
     };
     let [_, right] =
         Layout::horizontal([Constraint::Fill(1), Constraint::Length(width)]).areas(area);
-    frame.render_widget(text.style(style), right);
+    frame.render_widget(Span::styled(text, style), right);
+    width
+}
+
+/// The release notice, muted, between the tabs and the sync indicator,
+/// `tabs_width` and `indicator_width` wide. The first thing left out when
+/// the row is too narrow.
+fn render_release_notice(
+    state: &State,
+    frame: &mut Frame,
+    area: Rect,
+    tabs_width: u16,
+    indicator_width: u16,
+) {
+    let Some(version) = state.release.notice() else {
+        return;
+    };
+    let text = format!("v{version} available  ");
+    let width = u16::try_from(text::width(&text)).unwrap_or(u16::MAX);
+    let taken = tabs_width.saturating_add(indicator_width);
+    if taken.saturating_add(width).saturating_add(1) > area.width {
+        return;
+    }
+    let left = area.width - indicator_width - width;
+    let notice = Rect {
+        x: area.x.saturating_add(left),
+        width,
+        ..area
+    };
+    frame.render_widget(Span::styled(text, style::muted(&state.theme)), notice);
 }
 
 /// The first key that closes an overlay, as ` Esc close `, or nothing if

@@ -14,12 +14,15 @@ use clap::Parser;
 use jiff::{SignedDuration, Timestamp};
 use linear_rat::auth::{ApiKey, Credentials, KeyStore, KeyringError, KeyringStore, WorkspaceFile};
 use linear_rat::cli::{Cli, Command};
-use linear_rat::doctor::{self, ConfigFacts, Facts, Report, Status, Terminal, Tmux};
+use linear_rat::doctor::{
+    self, ConfigFacts, Facts, NotChecked, Report, Status, Terminal, Tmux, VersionFacts,
+};
 use linear_rat::linear::{
     ClientConfig, Diagnostics, FakeClient, HttpClient, LinearClient, RateLimit, Role, demo,
 };
+use linear_rat::release::{self, Channel, Off, ReleaseSource};
 use serde_json::json;
-use wiremock::matchers::{body_string_contains, method};
+use wiremock::matchers::{body_string_contains, method, path};
 use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
 
 const SECRET: &str = "lin_api_fictional0000000000000000000000000000";
@@ -83,21 +86,38 @@ fn truecolor() -> Terminal {
     }
 }
 
+/// The running lrat is the latest release.
+fn up_to_date() -> VersionFacts {
+    VersionFacts {
+        running: release::running(),
+        channel: Channel::CargoBin,
+        latest: Ok(release::running()),
+    }
+}
+
 async fn gather_with<C: LinearClient>(
     env_key: Option<&str>,
     client: impl FnOnce(&ApiKey) -> Result<C, linear_rat::linear::ClientError>,
     terminal: Terminal,
     config: ConfigFacts,
 ) -> Facts {
-    doctor::gather(&credentials(env_key), client, terminal, config, || {
-        demo::NOW
-    })
+    doctor::gather(
+        &credentials(env_key),
+        client,
+        terminal,
+        config,
+        up_to_date(),
+        || demo::NOW,
+    )
     .await
 }
 
-/// The report's lines with the config path made stable.
+/// The report's lines with the config path and lrat's version made stable,
+/// so a release that bumps the version leaves the snapshot alone.
 fn printed(report: &Report, config_dir: Option<&str>) -> String {
-    let text = report.render(false);
+    let text = report
+        .render(false)
+        .replace(&format!("lrat {} ", release::running()), "lrat <version> ");
     match config_dir {
         Some(dir) => text.replace(dir, "<config dir>"),
         None => text,
@@ -264,6 +284,7 @@ fn reached(diagnostics: Diagnostics, now: Timestamp) -> Facts {
         },
         terminal: truecolor(),
         config: config(None),
+        version: up_to_date(),
         now,
     }
 }
@@ -472,7 +493,7 @@ fn doctor_help_describes_the_command() {
     assert_eq!(error.kind(), clap::error::ErrorKind::DisplayHelp);
     let help = error.to_string();
     assert!(
-        help.contains("Check the API key, Linear, the terminal and the config"),
+        help.contains("Check the API key, Linear, the terminal, the config and the version"),
         "{help}"
     );
     assert!(
@@ -589,6 +610,7 @@ async fn the_clock_is_read_right_after_the_dated_response() {
         |_| Ok(client),
         truecolor(),
         config(None),
+        up_to_date(),
         move || {
             clock_log.lock().unwrap().push("now");
             demo::NOW
@@ -633,6 +655,7 @@ async fn a_key_in_the_kernel_keyring_is_named_as_auth_status_names_it() {
         |_| Ok(FakeClient),
         truecolor(),
         config(None),
+        up_to_date(),
         || demo::NOW,
     )
     .await;
@@ -649,4 +672,116 @@ async fn a_key_in_the_kernel_keyring_is_named_as_auth_status_names_it() {
         facts.key.as_ref().unwrap().to_string(),
         "doctor prints KeySource's Display"
     );
+}
+
+async fn latest_release(tag: &str) -> MockServer {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/releases/latest"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "tag_name": tag })))
+        .mount(&server)
+        .await;
+    server
+}
+
+fn release_source(server: &MockServer) -> ReleaseSource {
+    ReleaseSource::new(format!("{}/releases/latest", server.uri())).unwrap()
+}
+
+fn version_report(version: VersionFacts) -> Report {
+    let mut facts = reached(limits(5000.0), demo::NOW);
+    facts.version = version;
+    doctor::report(&facts)
+}
+
+#[tokio::test]
+async fn the_version_line_says_when_lrat_is_the_latest() {
+    let running = release::running();
+    let server = latest_release(&format!("v{running}")).await;
+
+    let version = VersionFacts::check(&release_source(&server), None, Channel::CargoBin).await;
+    let report = version_report(version);
+
+    let line = line(&report, "Version");
+    assert_eq!(line.status, Status::Ok);
+    assert_eq!(line.detail, format!("lrat {running} is the latest"));
+}
+
+#[tokio::test]
+async fn the_version_line_names_a_newer_release_and_how_to_upgrade() {
+    let server = latest_release("v99.0.0").await;
+
+    for (channel, upgrade) in [
+        (Channel::Homebrew, "brew upgrade linear-rat"),
+        (
+            Channel::CargoBin,
+            "upgrade the way you installed it; see github.com/cxrlos/linear-rat#install",
+        ),
+        (Channel::Aur, "upgrade it through your AUR helper"),
+    ] {
+        let version = VersionFacts::check(&release_source(&server), None, channel).await;
+        let report = version_report(version);
+
+        let line = line(&report, "Version");
+        assert_eq!(line.status, Status::Warn, "{channel:?}");
+        assert_eq!(line.detail, "lrat 99.0.0 is available", "{channel:?}");
+        assert_eq!(line.fix.as_deref(), Some(upgrade), "{channel:?}");
+    }
+}
+
+#[tokio::test]
+async fn switched_off_the_version_is_not_checked() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    for (off, detail, fix) in [
+        (
+            Off::Config,
+            "not checked: [updates] check is false",
+            "set `check = true` under [updates] in config.toml to check",
+        ),
+        (
+            Off::Env,
+            "not checked: LRAT_NO_UPDATE_CHECK is set",
+            "unset LRAT_NO_UPDATE_CHECK to check",
+        ),
+    ] {
+        let version =
+            VersionFacts::check(&release_source(&server), Some(off), Channel::CargoBin).await;
+        assert_eq!(version.latest, Err(NotChecked::Off(off)));
+        let report = version_report(version);
+
+        let line = line(&report, "Version");
+        assert_eq!(line.status, Status::Warn, "{off:?}");
+        assert_eq!(line.detail, detail, "{off:?}");
+        assert_eq!(line.fix.as_deref(), Some(fix), "{off:?}");
+    }
+}
+
+#[tokio::test]
+async fn offline_the_version_is_not_checked() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(503))
+        .mount(&server)
+        .await;
+
+    let version = VersionFacts::check(&release_source(&server), None, Channel::CargoBin).await;
+    let report = version_report(version);
+
+    let line = line(&report, "Version");
+    assert_eq!(line.status, Status::Warn);
+    assert_eq!(
+        line.detail,
+        "not checked: GitHub answered 503 Service Unavailable"
+    );
+    assert_eq!(
+        line.fix.as_deref(),
+        Some("check the network connection, then run `lrat doctor` again")
+    );
+    assert!(!report.failed());
 }

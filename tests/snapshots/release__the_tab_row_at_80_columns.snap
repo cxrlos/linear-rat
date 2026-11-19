@@ -1,0 +1,5 @@
+---
+source: tests/release.rs
+expression: tab_row(&app)
+---
+ [1] My Issues │ [2] │ [3] │ [4] │ [5]        v99.0.0 available  synced 12s ago

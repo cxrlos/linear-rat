@@ -1,5 +1,6 @@
-//! `lrat doctor`: one line per check of the key, Linear, the terminal and
-//! the config, each warning or failure followed by how to fix it.
+//! `lrat doctor`: one line per check of the key, Linear, the terminal, the
+//! config and the version, each warning or failure followed by how to fix
+//! it.
 //!
 //! [`gather`] collects [`Facts`] through the [`LinearClient`] trait and an
 //! injected environment; [`report`] turns them into checks and is pure.
@@ -9,12 +10,14 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 use jiff::{SignedDuration, Timestamp};
+use semver::Version;
 
 use crate::auth::{self, ApiKey, AuthError, Credentials, KEY_VAR, KeySource, KeyStore};
 use crate::clipboard;
 use crate::config::{self, ConfigError, Loaded};
 use crate::linear::model::{Viewer, Workspace};
 use crate::linear::{ClientError, Diagnostics, LinearClient};
+use crate::release::{self, Channel, Off, ReleaseSource};
 use crate::ui::theme;
 
 /// A clock further than this from Linear's is reported.
@@ -142,6 +145,7 @@ pub struct Facts {
     pub linear: Linear,
     pub terminal: Terminal,
     pub config: ConfigFacts,
+    pub version: VersionFacts,
     /// The local clock right after Linear's dated diagnostics response.
     pub now: Timestamp,
 }
@@ -192,8 +196,44 @@ pub struct ConfigFacts {
     pub loaded: Loaded,
 }
 
+/// The running version and the latest release, asked for live, bypassing
+/// the release cache.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VersionFacts {
+    pub running: Version,
+    pub channel: Channel,
+    pub latest: Result<Version, NotChecked>,
+}
+
+/// Why the latest release is unknown.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NotChecked {
+    Off(Off),
+    /// The check failed, with why.
+    Failed(String),
+}
+
+impl VersionFacts {
+    /// Asks `source` for the latest release, unless `off` turned the check
+    /// off, for an install through `channel`.
+    pub async fn check(source: &ReleaseSource, off: Option<Off>, channel: Channel) -> Self {
+        let latest = match off {
+            Some(off) => Err(NotChecked::Off(off)),
+            None => source
+                .latest()
+                .await
+                .map_err(|error| NotChecked::Failed(format!("{error:#}"))),
+        };
+        Self {
+            running: release::running(),
+            channel,
+            latest,
+        }
+    }
+}
+
 /// Collects the facts: the key from `credentials`, Linear through the client
-/// `connect` makes, the terminal from `var`, and the config. `now` is read
+/// `connect` makes, the terminal from `var`, the config and `version`. `now` is read
 /// right after the diagnostics response, the last request, so the clock
 /// offset leaves out the time spent on the other requests.
 pub async fn gather<S, C>(
@@ -201,6 +241,7 @@ pub async fn gather<S, C>(
     connect: impl FnOnce(&ApiKey) -> Result<C, ClientError>,
     terminal: Terminal,
     config: ConfigFacts,
+    version: VersionFacts,
     now: impl FnOnce() -> Timestamp,
 ) -> Facts
 where
@@ -216,6 +257,7 @@ where
         linear,
         terminal,
         config,
+        version,
         now: now(),
     }
 }
@@ -311,6 +353,7 @@ pub fn report(facts: &Facts) -> Report {
         &facts.config.loaded.config.theme,
     ));
     checks.extend(config_checks(&facts.config));
+    checks.push(version(&facts.version));
     Report { checks }
 }
 
@@ -677,6 +720,33 @@ fn config_checks(config: &ConfigFacts) -> Vec<Check> {
 /// than falling back to defaults: the warnings among its errors.
 fn is_ignored(error: &ConfigError) -> bool {
     error.message.contains("is ignored") || error.message.starts_with("unknown context")
+}
+
+fn version(facts: &VersionFacts) -> Check {
+    const NAME: &str = "Version";
+    match &facts.latest {
+        Ok(latest) if *latest > facts.running => Check::warn(
+            NAME,
+            format!("lrat {latest} is available"),
+            facts.channel.upgrade(),
+        ),
+        Ok(_) => Check::ok(NAME, format!("lrat {} is the latest", facts.running)),
+        Err(NotChecked::Off(Off::Config)) => Check::warn(
+            NAME,
+            "not checked: [updates] check is false",
+            "set `check = true` under [updates] in config.toml to check",
+        ),
+        Err(NotChecked::Off(Off::Env)) => Check::warn(
+            NAME,
+            format!("not checked: {} is set", release::OFF_VAR),
+            format!("unset {} to check", release::OFF_VAR),
+        ),
+        Err(NotChecked::Failed(error)) => Check::warn(
+            NAME,
+            format!("not checked: {error}"),
+            "check the network connection, then run `lrat doctor` again",
+        ),
+    }
 }
 
 /// When `then` is, from `now`, in whole minutes.

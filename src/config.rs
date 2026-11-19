@@ -31,6 +31,9 @@
 //!
 //! [auth]
 //! store = "keyutils"                     # or "os", the default
+//!
+//! [updates]
+//! check = false                          # true by default
 //! ```
 //!
 //! A problem is reported with its file and line, and only the section it is
@@ -76,6 +79,8 @@ pub struct Config {
     pub analytics: AnalyticsSettings,
     /// `[auth]`.
     pub auth: AuthSettings,
+    /// `[updates]`.
+    pub updates: UpdateSettings,
 }
 
 impl Default for Config {
@@ -87,7 +92,21 @@ impl Default for Config {
             sync: SyncSettings::default(),
             analytics: AnalyticsSettings::default(),
             auth: AuthSettings::default(),
+            updates: UpdateSettings::default(),
         }
+    }
+}
+
+/// `[updates]`: whether lrat asks GitHub once a day for a newer release.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UpdateSettings {
+    /// `check`: true by default.
+    pub check: bool,
+}
+
+impl Default for UpdateSettings {
+    fn default() -> Self {
+        Self { check: true }
     }
 }
 
@@ -314,6 +333,7 @@ pub fn parse(text: &str, path: &Path) -> Loaded {
                     config.analytics = reader.section("analytics", value, read_analytics);
                 }
                 "auth" => config.auth = reader.section("auth", value, read_auth),
+                "updates" => config.updates = reader.section("updates", value, read_updates),
                 _ => {
                     let what = match value.get_ref() {
                         DeValue::Table(_) => format!("table `[{name_str}]`"),
@@ -322,7 +342,7 @@ pub fn parse(text: &str, path: &Path) -> Loaded {
                     reader.error_at(
                         name,
                         format!(
-                            "unknown {what} is ignored; lrat reads [ui], [theme], [keys], [sync], [analytics] and [auth]"
+                            "unknown {what} is ignored; lrat reads [ui], [theme], [keys], [sync], [analytics], [auth] and [updates]"
                         ),
                     );
                 }
@@ -351,7 +371,15 @@ pub fn parse(text: &str, path: &Path) -> Loaded {
 }
 
 /// The top-level tables lrat reads.
-const SECTIONS: [&str; 6] = ["ui", "theme", "keys", "sync", "analytics", "auth"];
+const SECTIONS: [&str; 7] = [
+    "ui",
+    "theme",
+    "keys",
+    "sync",
+    "analytics",
+    "auth",
+    "updates",
+];
 
 /// Where each table header starts and the top-level table it opens, in
 /// file order. TOML's own parser finds them, so a header-like line inside a
@@ -553,6 +581,13 @@ fn read_auth(auth: &mut AuthSettings, key: &str, value: &Spanned<DeValue>) -> Se
             None => Err("`auth.store` must be \"os\" or \"keyutils\"".to_owned()),
         },
     )
+}
+
+fn read_updates(updates: &mut UpdateSettings, key: &str, value: &Spanned<DeValue>) -> Setting {
+    if key != "check" {
+        return None;
+    }
+    Some(boolean(value, "updates.check").map(|check| updates.check = check))
 }
 
 fn integer(value: &Spanned<DeValue>, key: &str, range: RangeInclusive<u64>) -> Result<u64, String> {

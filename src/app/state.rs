@@ -8,7 +8,7 @@ use jiff::civil::Date;
 
 use super::{
     AnalyticsScreen, Cycles, Detail, Drafts, ErrorLog, Failure, Load, LoadError, ModalStack,
-    MyIssues, Names, Projects, RelationsInFlight, Results, Store, SyncStatus, TeamIssues,
+    MyIssues, Names, Projects, RelationsInFlight, Release, Results, Store, SyncStatus, TeamIssues,
     WriteClass,
 };
 use crate::auth::KeySource;
@@ -70,6 +70,8 @@ pub struct State {
     pub drafts: Drafts,
     /// The most recent failures, for the messages overlay.
     pub errors: ErrorLog,
+    /// Newer releases and whether this session checks for them.
+    pub release: Release,
 }
 
 impl State {
@@ -285,6 +287,11 @@ impl State {
             .set_arrangement(loaded.config.ui.team_issues);
         state.rebuild_lists();
         state
+    }
+
+    /// This state knowing of newer releases as `release` does.
+    pub fn with_release(self, release: Release) -> Self {
+        Self { release, ..self }
     }
 }
 

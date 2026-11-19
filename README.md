@@ -40,6 +40,8 @@ curl --proto '=https' --tlsv1.2 -LsSf \
 
 Prebuilt binaries cover `x86_64` and `aarch64` on Linux (glibc) and macOS. Every [GitHub release](https://github.com/cxrlos/linear-rat/releases) carries the archives and their checksums if you prefer to install by hand.
 
+Once a day lrat asks GitHub whether a newer release is out (`GET https://api.github.com/repos/cxrlos/linear-rat/releases/latest`, with lrat's version as the User-Agent and nothing else: no API key and no workspace data), and if so shows a muted notice on the tab row. It is the only request lrat makes to anything other than Linear. Turn it off with `check = false` under `[updates]` in `config.toml`, or by setting `LRAT_NO_UPDATE_CHECK=1`. Installs from the AUR or Nix never show the notice.
+
 `lrat completions bash|zsh|fish` prints a completion script for your shell, for example `lrat completions zsh > ~/.zfunc/_lrat`. Each release archive also carries the scripts under `completions/` and the man pages under `man/`.
 
 ## Quick start
@@ -78,7 +80,7 @@ Press `?` anywhere to see the keys for the screen you are on.
 ## Docs
 
 - [Keymap](https://github.com/cxrlos/linear-rat/blob/main/docs/keymap.md): every action with its default keys, generated from the code.
-- [Configuration](https://github.com/cxrlos/linear-rat/blob/main/docs/config.md): `config.toml`, keys, themes, sync and analytics settings.
+- [Configuration](https://github.com/cxrlos/linear-rat/blob/main/docs/config.md): `config.toml`, keys, themes, sync, analytics and release check settings.
 - [Logging in](https://github.com/cxrlos/linear-rat/blob/main/docs/auth.md): API keys and the OS keyring.
 
 ## Contributing and security

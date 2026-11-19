@@ -5,7 +5,7 @@ use super::edit::{self, Editable};
 use super::{
     Action, Copyable, Effect, Event, Load, Modal, Palette, Pane, Purpose, Screen, State,
     analytics_screen, browse, compose, create, detail, issue_picker, lifecycle, links, palette,
-    rearrange, relations, results, search, sync, team_issues,
+    rearrange, relations, release, results, search, sync, team_issues,
 };
 use crate::keys::{self, Key, Resolution};
 use crate::linear::SearchQuery;
@@ -57,7 +57,12 @@ fn apply(state: &mut State, event: Event) -> Update {
             update
         }
         Event::MyIssuesLoaded(Err(error)) => sync::load_failed(state, error),
-        Event::Tick(now) => sync::tick(state, now),
+        Event::Tick(now) => {
+            let mut update = sync::tick(state, now);
+            update.effects.extend(release::tick(state, now));
+            update
+        }
+        Event::ReleaseChecked(latest) => release::checked(state, latest),
         Event::FocusGained => sync::focus(state, true),
         Event::FocusLost => sync::focus(state, false),
         Event::Polled { changes, failure } => sync::polled(state, &changes, failure),
@@ -341,6 +346,8 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             }
         }
         Action::Refresh => sync::refresh(state),
+        Action::SkipRelease => release::skip(state),
+        Action::ShowReleaseNotes => release::show_notes(state),
         Action::ShowCheatsheet => {
             state.modals.push(Modal::Cheatsheet { scroll: 0 });
             Update::redraw()

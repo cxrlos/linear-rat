@@ -145,6 +145,18 @@ lrat takes the API key from `LINEAR_API_KEY` when it is set, otherwise from the 
 
 Changing `store` does not move a stored key: run `lrat auth login` after the change, and `lrat auth logout` before it to remove the key from the old store. `lrat auth login --from-keyring` reads its entry from the Keychain or the Secret Service whatever `store` is.
 
+## `[updates]`
+
+Once a day, in the background after the first frame, lrat asks GitHub for its latest stable release. When one is newer than the version you run, a muted `v0.3.1 available` shows on the tab row, left of the sync indicator, and the cheatsheet (`?`) says how to upgrade the way you installed lrat: `brew upgrade linear-rat` for Homebrew, otherwise a pointer to the install section of the README. Installs from the AUR or Nix never show it, since their packages may follow the release later. The palette's "Skip this release" hides the notice until a newer release ships, and "What's new" opens the release page. `lrat doctor` checks every time it runs and prints the result on its Version line.
+
+The request is an unauthenticated `GET https://api.github.com/repos/cxrlos/linear-rat/releases/latest`. It carries lrat's version in the User-Agent and nothing else: no API key and no workspace data. What it found goes in `release.json` under `$XDG_CACHE_HOME/lrat/`, so lrat asks at most once every 24 hours. A failed check shows nothing and is tried again a day later. `lrat --demo` and the `auth`, `completions` and `open` subcommands never check.
+
+Setting `LRAT_NO_UPDATE_CHECK` to any non-empty value turns the check off too, whatever the file says.
+
+| Key | Values | Default | Effect |
+| --- | --- | --- | --- |
+| `check` | `true`, `false` | `true` | Ask GitHub once a day for a newer lrat release. |
+
 ## Everything at once
 
 ```toml
@@ -172,4 +184,7 @@ stale-days = 14
 
 [auth]
 store = "os"
+
+[updates]
+check = true
 ```

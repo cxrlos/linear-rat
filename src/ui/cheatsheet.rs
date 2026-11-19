@@ -126,6 +126,10 @@ fn panes(state: &State, available: impl Fn(&ActionSpec) -> bool) -> Vec<Pane> {
                 .iter()
                 .map(ToString::to_string)
                 .collect();
+            // An action only the palette runs has no line of keys to show.
+            if keys.is_empty() && spec.default_keys.is_empty() {
+                continue;
+            }
             let action = (keys, available(spec));
             let title = spec.group.title().unwrap_or(context.title());
             let index = match panes.iter().position(|pane| pane.title == title) {
@@ -212,6 +216,16 @@ fn lines(state: &State, area: Rect, available: impl Fn(&ActionSpec) -> bool) -> 
             .into_iter()
             .map(|reason| Line::styled(format!(" {INDENT}Muted: {reason} "), style::muted(theme))),
     );
+    if let Some(version) = state.release.notice() {
+        lines.push(Line::default());
+        lines.push(Line::styled(
+            format!(
+                " {INDENT}lrat v{version} is available: {} ",
+                state.release.upgrade()
+            ),
+            style::muted(theme),
+        ));
+    }
     lines
 }
 
