@@ -7,9 +7,13 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
-use linear_rat::app::{App, Effect, Event, Lifecycle, LifecycleWrite, Modal, Screen, State};
+use linear_rat::app::{
+    App, Effect, Event, Failure, Lifecycle, LifecycleWrite, Modal, Screen, State,
+};
 use linear_rat::linear::model::Issue;
-use linear_rat::linear::{FakeClient, IssueDetail, LinearClient, LiveEvent, TeamChanges};
+use linear_rat::linear::{
+    ErrorKind, FakeClient, IssueDetail, LinearClient, LiveEvent, TeamChanges,
+};
 use ratatui::backend::TestBackend;
 
 /// The issue My Issues focuses first in the demo, which the viewer is
@@ -87,7 +91,7 @@ fn only_change(effects: Vec<Effect>) -> LifecycleWrite {
 fn answered(write: &LifecycleWrite, result: Result<(), &str>) -> Event {
     Event::LifecycleChanged {
         write: write.clone(),
-        result: result.map_err(str::to_owned),
+        result: result.map_err(|message| Failure::new(ErrorKind::Other, "test", message)),
     }
 }
 

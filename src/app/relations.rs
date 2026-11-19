@@ -8,7 +8,7 @@ use super::edit::{self, Edit};
 use super::issue_picker::{self, IssuePicker, IssuePurpose, Mode, PickerScope};
 use super::modal::{Choice, Purpose};
 use super::picker::{Entry, Picker};
-use super::{Effect, Modal, State, Update, detail};
+use super::{Effect, Failure, Modal, State, Update, WriteClass, detail};
 use crate::linear::model::{Issue, IssueRelation, RelationKind, RelationType};
 
 /// A relation on its way to Linear, and the key of the issue the viewer
@@ -367,22 +367,24 @@ fn changed_issue(state: &State, write: &RelationWrite) -> String {
 pub(super) fn created(
     state: &mut State,
     write: &RelationWrite,
-    result: Result<IssueRelation, String>,
+    result: Result<IssueRelation, Failure>,
 ) -> Update {
     state
         .relations_in_flight
         .adding
         .retain(|relation| relation.id != write.relation.id);
     state.store.remove_relation(&write.relation.id);
+    learn(state, write, result.as_ref().map(|_| ()));
     match result {
         Ok(relation) => state.store.add_relation(relation),
-        Err(error) => {
+        Err(failure) => {
             state.notice = Some(format!(
-                "Could not add the relation to {}: {error}",
+                "Could not add the relation to {}: {failure}",
                 write.identifier
             ));
             let issue_id = changed_issue(state, write);
-            state.row_errors.insert(issue_id, error);
+            state.row_errors.insert(issue_id, failure.message.clone());
+            state.record(failure);
         }
     }
     Update::redraw()
@@ -394,20 +396,36 @@ pub(super) fn created(
 pub(super) fn deleted(
     state: &mut State,
     write: &RelationWrite,
-    result: Result<(), String>,
+    result: Result<(), Failure>,
 ) -> Update {
     state
         .relations_in_flight
         .removing
         .retain(|id| *id != write.relation.id);
-    if let Err(error) = result {
+    learn(state, write, result.as_ref().map(|_| ()));
+    if let Err(failure) = result {
         state.store.add_relation(write.relation.clone());
         state.notice = Some(format!(
-            "Could not remove the relation from {}: {error}",
+            "Could not remove the relation from {}: {failure}",
             write.identifier
         ));
         let issue_id = changed_issue(state, write);
-        state.row_errors.insert(issue_id, error);
+        state.row_errors.insert(issue_id, failure.message.clone());
+        state.record(failure);
     }
     Update::redraw()
+}
+
+/// Learns what the API key may do from how Linear answered `write`, in the
+/// team of the issue the relation starts from.
+fn learn(state: &mut State, write: &RelationWrite, outcome: Result<(), &Failure>) {
+    let Some(team_id) = state
+        .store
+        .issue(&write.relation.issue_id)
+        .map(|issue| issue.team_id.clone())
+    else {
+        return;
+    };
+    let outcome = outcome.map_err(|failure| &failure.kind);
+    state.learn_write(&team_id, WriteClass::Relations, outcome);
 }

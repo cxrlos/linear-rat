@@ -7,7 +7,7 @@
 use jiff::Timestamp;
 
 use super::store::Trashed;
-use super::{Effect, Modal, Screen, State, Update};
+use super::{Effect, Failure, Modal, Screen, State, Update, WriteClass};
 
 /// A change to whether an issue is archived, trashed or followed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,7 +22,18 @@ pub enum Lifecycle {
 
 impl Lifecycle {
     /// How a message says it, as `Could not archive ENG-12`.
-    fn verb(self) -> &'static str {
+    /// The kind of write the change is, for what the API key may do.
+    fn class(self) -> WriteClass {
+        match self {
+            Lifecycle::Archive | Lifecycle::Unarchive | Lifecycle::Trash => {
+                WriteClass::ArchiveOrTrash
+            }
+            Lifecycle::Subscribe | Lifecycle::Unsubscribe => WriteClass::UpdateIssue,
+        }
+    }
+
+    /// What the change does, as `archive` or `subscribe to`.
+    pub fn verb(self) -> &'static str {
         match self {
             Lifecycle::Archive => "archive",
             Lifecycle::Unarchive => "unarchive",
@@ -39,6 +50,8 @@ impl Lifecycle {
 pub struct LifecycleWrite {
     pub issue_id: String,
     pub identifier: String,
+    /// The issue's team, where a refusal teaches what the API key may do.
+    pub team_id: String,
     pub change: Lifecycle,
     undo: Undo,
 }
@@ -212,16 +225,12 @@ fn saved_focus(state: &mut State) -> Option<crate::linear::model::Issue> {
 }
 
 fn send(state: &mut State, issue_id: &str, change: Lifecycle, undo: Undo) -> Update {
-    let identifier = undo
+    let (identifier, team_id) = undo
         .trashed
         .as_ref()
-        .map(|trashed| trashed.issue.identifier.clone())
-        .or_else(|| {
-            state
-                .store
-                .issue(issue_id)
-                .map(|issue| issue.identifier.clone())
-        })
+        .map(|trashed| &trashed.issue)
+        .or_else(|| state.store.issue(issue_id))
+        .map(|issue| (issue.identifier.clone(), issue.team_id.clone()))
         .unwrap_or_default();
     state.row_errors.remove(issue_id);
     state.rebuild_lists();
@@ -230,6 +239,7 @@ fn send(state: &mut State, issue_id: &str, change: Lifecycle, undo: Undo) -> Upd
         effects: vec![Effect::ChangeLifecycle(LifecycleWrite {
             issue_id: issue_id.to_owned(),
             identifier,
+            team_id,
             change,
             undo,
         })],
@@ -242,8 +252,10 @@ fn send(state: &mut State, issue_id: &str, change: Lifecycle, undo: Undo) -> Upd
 pub(super) fn finished(
     state: &mut State,
     write: &LifecycleWrite,
-    result: Result<(), String>,
+    result: Result<(), Failure>,
 ) -> Update {
+    let outcome = result.as_ref().map(|_| ()).map_err(|failure| &failure.kind);
+    state.learn_write(&write.team_id, write.change.class(), outcome);
     match result {
         Ok(()) => {
             state.notice = match write.change {
@@ -256,14 +268,17 @@ pub(super) fn finished(
                 Lifecycle::Subscribe | Lifecycle::Unsubscribe => None,
             };
         }
-        Err(error) => {
+        Err(failure) => {
             roll_back(state, write);
             state.notice = Some(format!(
-                "Could not {} {}: {error}",
+                "Could not {} {}: {failure}",
                 write.change.verb(),
                 write.identifier
             ));
-            state.row_errors.insert(write.issue_id.clone(), error);
+            state
+                .row_errors
+                .insert(write.issue_id.clone(), failure.message.clone());
+            state.record(failure);
         }
     }
     state.rebuild_lists();

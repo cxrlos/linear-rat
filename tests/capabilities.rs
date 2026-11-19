@@ -10,11 +10,11 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
 use jiff::{SignedDuration, Timestamp};
 use linear_rat::app::{
-    App, Edit, Effect, Event, Failure, Modal, NewComment, NewIssue, Palette, State, Write,
-    WriteClass,
+    App, Edit, Effect, Event, Failure, Modal, NewComment, NewIssue, Palette, RelationWrite, State,
+    Write, WriteClass,
 };
 use linear_rat::config;
-use linear_rat::linear::model::Priority;
+use linear_rat::linear::model::{IssueRelation, Priority, RelationType};
 use linear_rat::linear::{
     ClientError, ErrorKind, FakeClient, GraphQlError, IssueCreate, LinearClient, demo,
 };
@@ -502,4 +502,107 @@ fn which_key_mutes_denied_continuations_only() {
 
     assert_eq!(fg_at(&app, "p  Change the priority", "p"), muted(&app));
     assert_eq!(fg_at(&app, "g  Move to the top", "g"), accent(&app));
+}
+
+/// The newest failure in the error log.
+fn newest_failure(app: &App<TestBackend>) -> Failure {
+    app.state()
+        .errors
+        .newest_first()
+        .next()
+        .unwrap()
+        .failure
+        .clone()
+}
+
+#[test]
+fn a_forbidden_due_date_denies_every_issue_edit_and_reaches_the_error_log() {
+    let mut app = app();
+    press(&mut app, "d");
+    press(&mut app, "+3d");
+    let write = only_write(app.handle(key(KeyCode::Enter)).unwrap());
+
+    app.handle(Event::IssueUpdated {
+        write,
+        result: Err(forbidden(&format!("edit {FIRST}"))),
+    })
+    .unwrap();
+
+    let failure = newest_failure(&app);
+    assert_eq!(failure.kind, ErrorKind::Forbidden);
+    assert_eq!(failure.action, format!("edit {FIRST}"));
+    for keys in ["C", "P", "H"] {
+        assert_eq!(press(&mut app, keys), Vec::new(), "{keys}");
+        assert_eq!(
+            app.state().notice.as_deref(),
+            Some("this API key cannot edit issues in DES"),
+            "{keys}"
+        );
+    }
+}
+
+#[test]
+fn a_forbidden_archive_denies_archive_and_trash_only() {
+    let mut app = app();
+    let issue = app.state().focused_issue().unwrap().clone();
+    let effects = press(&mut app, "A");
+    let [Effect::ChangeLifecycle(write)] = effects.as_slice() else {
+        panic!("expected one lifecycle change, got {effects:?}");
+    };
+    let action = format!("archive {FIRST}");
+
+    app.handle(Event::LifecycleChanged {
+        write: write.clone(),
+        result: Err(forbidden(&action)),
+    })
+    .unwrap();
+
+    let failure = newest_failure(&app);
+    assert_eq!(failure.kind, ErrorKind::Forbidden);
+    assert_eq!(failure.action, action);
+    let store = &app.state().store;
+    assert!(store.issue(&issue.id).unwrap().archived_at.is_none());
+    let capabilities = store.capabilities();
+    assert!(
+        capabilities
+            .write(&issue.team_id, WriteClass::ArchiveOrTrash)
+            .is_denied()
+    );
+    assert!(
+        !capabilities
+            .write(&issue.team_id, WriteClass::UpdateIssue)
+            .is_denied()
+    );
+}
+
+#[test]
+fn a_forbidden_relation_denies_relation_changes_only() {
+    let mut app = app();
+    let issue_id = app.state().focused_issue().unwrap().id.clone();
+    let write = RelationWrite {
+        relation: IssueRelation {
+            id: "relation-new".to_owned(),
+            kind: RelationType::Blocks,
+            issue_id,
+            related_issue_id: "issue-eng-51".to_owned(),
+        },
+        identifier: FIRST.to_owned(),
+    };
+    let action = format!("add a relation to {FIRST}");
+
+    app.handle(Event::RelationCreated {
+        write,
+        result: Err(forbidden(&action)),
+    })
+    .unwrap();
+
+    let failure = newest_failure(&app);
+    assert_eq!(failure.kind, ErrorKind::Forbidden);
+    assert_eq!(failure.action, action);
+    assert!(app.state().write_denied(WriteClass::UpdateIssue).is_none());
+    assert_eq!(press(&mut app, "R"), Vec::new());
+    assert_eq!(
+        app.state().notice.as_deref(),
+        Some("this API key cannot change issue relations in DES")
+    );
 }

@@ -456,7 +456,7 @@ fn the_milestone_picker_says_when_the_milestones_could_not_load() {
 
     app.handle(Event::ProjectMilestonesLoaded {
         project_id: SHARED_PANTRIES.to_owned(),
-        result: Err("timed out".to_owned()),
+        result: Err(failed("timed out")),
     })
     .unwrap();
 

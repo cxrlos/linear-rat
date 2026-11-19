@@ -153,7 +153,7 @@ pub enum Event {
     /// or why it failed.
     ProjectMilestonesLoaded {
         project_id: String,
-        result: Result<Vec<ProjectMilestone>, String>,
+        result: Result<Vec<ProjectMilestone>, Failure>,
     },
 
     /// Linear's answer to [`Effect::UpdateIssue`](super::Effect::UpdateIssue):
@@ -167,20 +167,20 @@ pub enum Event {
     /// why it was rejected.
     LifecycleChanged {
         write: LifecycleWrite,
-        result: Result<(), String>,
+        result: Result<(), Failure>,
     },
     /// Linear's answer to
     /// [`Effect::CreateRelation`](super::Effect::CreateRelation): the
     /// relation as it stored it, or why it was not created.
     RelationCreated {
         write: RelationWrite,
-        result: Result<IssueRelation, String>,
+        result: Result<IssueRelation, Failure>,
     },
     /// Linear's answer to
     /// [`Effect::DeleteRelation`](super::Effect::DeleteRelation).
     RelationDeleted {
         write: RelationWrite,
-        result: Result<(), String>,
+        result: Result<(), Failure>,
     },
     /// The editor of [`Effect::OpenEditor`](super::Effect::OpenEditor)
     /// closed: what the viewer saved, or why it could not run.

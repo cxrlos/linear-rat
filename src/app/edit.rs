@@ -906,23 +906,25 @@ pub(super) fn options_loaded(state: &mut State, team_id: Option<&str>, failure: 
 pub(super) fn milestones_loaded(
     state: &mut State,
     project_id: &str,
-    failure: Option<String>,
+    failure: Option<Failure>,
 ) -> Update {
-    refill(state, failure.as_deref(), |picker, store| {
+    let message = failure.as_ref().map(|failure| failure.message.as_str());
+    refill(state, message, |picker, store| {
         picker.field == Editable::Milestone
             && store
                 .issue(&picker.issue_id)
                 .is_some_and(|issue| issue.project_id.as_deref() == Some(project_id))
     });
-    if let Some(error) = failure {
+    if let Some(failure) = failure {
         let project = state
             .store
             .project(project_id)
             .map_or(project_id, |project| project.name.as_str())
             .to_owned();
         state.notice = Some(format!(
-            "Could not load the milestones of {project}: {error}"
+            "Could not load the milestones of {project}: {failure}"
         ));
+        state.record(failure);
     }
     Update::redraw()
 }

@@ -377,13 +377,11 @@ where
         Effect::LoadProjectMilestones { project_id } => {
             let client = reach.client;
             in_flight.push(Box::pin(async move {
-                let result = match client {
-                    Some(client) => client
-                        .project_milestones(&project_id)
-                        .await
-                        .map_err(message),
-                    None => Err(NO_CLIENT.to_owned()),
-                };
+                let what = "could not load the project's milestones";
+                let result = ask(client, "load project milestones", what, |c| {
+                    c.project_milestones(&project_id)
+                })
+                .await;
                 Event::ProjectMilestonesLoaded { project_id, result }
             }));
             Ok(())
@@ -672,11 +670,6 @@ async fn reconcile<C: LinearClient>(client: Option<&C>, checked: Vec<String>) ->
 /// Why a request could not go out when there is no usable API key.
 const NO_CLIENT: &str = "there is no API key to reach Linear with";
 
-/// `error` with each of its causes, for the notice.
-fn message(error: ClientError) -> String {
-    format!("{:#}", anyhow::Error::new(error))
-}
-
 /// `action` could not go out for lack of a usable API key.
 fn no_client(action: &str) -> Failure {
     Failure::new(ErrorKind::KeyInvalid, action, NO_CLIENT)
@@ -710,6 +703,7 @@ async fn update_issue<C: LinearClient>(client: Option<&C>, write: Write) -> Even
 }
 
 async fn change_lifecycle<C: LinearClient>(client: Option<&C>, write: LifecycleWrite) -> Event {
+    let action = format!("{} {}", write.change.verb(), write.identifier);
     let result = match client {
         Some(client) => {
             let id = write.issue_id.as_str();
@@ -720,9 +714,9 @@ async fn change_lifecycle<C: LinearClient>(client: Option<&C>, write: LifecycleW
                 Lifecycle::Subscribe => client.subscribe_to_issue(id).await,
                 Lifecycle::Unsubscribe => client.unsubscribe_from_issue(id).await,
             }
-            .map_err(message)
+            .map_err(|error| Failure::from_client(&action, &error))
         }
-        None => Err(NO_CLIENT.to_owned()),
+        None => Err(no_client(&action)),
     };
     match &result {
         Ok(()) => {
@@ -782,9 +776,13 @@ async fn create_relation<C: LinearClient>(client: Option<&C>, write: RelationWri
         related_issue_id: relation.related_issue_id.clone(),
         kind: relation.kind,
     };
+    let action = format!("add a relation to {}", write.identifier);
     let result = match client {
-        Some(client) => client.create_relation(&input).await.map_err(message),
-        None => Err(NO_CLIENT.to_owned()),
+        Some(client) => client
+            .create_relation(&input)
+            .await
+            .map_err(|error| Failure::from_client(&action, &error)),
+        None => Err(no_client(&action)),
     };
     match &result {
         Ok(_) => tracing::info!(issue = %write.identifier, "Linear created a relation"),
@@ -796,12 +794,13 @@ async fn create_relation<C: LinearClient>(client: Option<&C>, write: RelationWri
 }
 
 async fn delete_relation<C: LinearClient>(client: Option<&C>, write: RelationWrite) -> Event {
+    let action = format!("remove a relation from {}", write.identifier);
     let result = match client {
         Some(client) => client
             .delete_relation(&write.relation.id)
             .await
-            .map_err(message),
-        None => Err(NO_CLIENT.to_owned()),
+            .map_err(|error| Failure::from_client(&action, &error)),
+        None => Err(no_client(&action)),
     };
     match &result {
         Ok(()) => tracing::info!(issue = %write.identifier, "Linear deleted a relation"),

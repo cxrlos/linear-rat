@@ -327,7 +327,7 @@ fn a_relation_linear_rejects_goes_away_and_says_why() {
 
     app.handle(Event::RelationCreated {
         write,
-        result: Err(REJECTION.to_owned()),
+        result: Err(Failure::new(ErrorKind::Other, "test", REJECTION)),
     })
     .unwrap();
 
@@ -399,7 +399,7 @@ fn a_removal_linear_rejects_puts_the_relation_back() {
 
     app.handle(Event::RelationDeleted {
         write,
-        result: Err(REJECTION.to_owned()),
+        result: Err(Failure::new(ErrorKind::Other, "test", REJECTION)),
     })
     .unwrap();
 
@@ -440,7 +440,7 @@ fn a_detail_reload_keeps_relation_writes_still_in_flight() {
     .unwrap();
     app.handle(Event::RelationCreated {
         write: addition,
-        result: Err(REJECTION.to_owned()),
+        result: Err(Failure::new(ErrorKind::Other, "test", REJECTION)),
     })
     .unwrap();
     detail_loaded(&mut app, DRY_RUN);
