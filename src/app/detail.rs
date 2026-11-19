@@ -130,6 +130,8 @@ pub(super) fn loaded(state: &mut State, issue_id: String, result: Result<IssueDe
             state.record_problems("load the issue's comments and history", &detail.problems);
             state.store.merge_detail(&issue_id, &detail);
             super::relations::reapply_in_flight(state);
+            // The detail can bring newer copies of related issues.
+            state.rebuild_lists();
             DetailLoad::Loaded
         }
         Err(failure) => {

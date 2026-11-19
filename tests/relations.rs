@@ -901,3 +901,27 @@ fn the_related_issue_picker() {
 
     assert_snapshot!(app.backend());
 }
+
+#[test]
+fn a_newer_copy_a_detail_brings_shows_in_the_list_at_once() {
+    let mut app = sized(120, 30);
+    focus(&mut app, "ENG-51");
+    let id = app.state().focused_issue().unwrap().id.clone();
+    let mut detail = IssueDetail::demo(&id);
+    let sub_issue = detail
+        .related_issues
+        .iter_mut()
+        .find(|issue| issue.identifier == "ENG-60")
+        .unwrap();
+    sub_issue.title = "Name the cheese in every sync error".to_owned();
+    sub_issue.updated_at += jiff::SignedDuration::from_secs(60);
+
+    app.handle(Event::IssueDetailLoaded {
+        issue_id: id,
+        result: Ok(detail),
+    })
+    .unwrap();
+
+    let row = row(&app, "ENG-60").unwrap();
+    assert!(row.contains("ENG-60 Name the cheese"), "{row}");
+}

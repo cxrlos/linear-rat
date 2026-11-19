@@ -225,6 +225,7 @@ pub(super) fn loaded(
             }
             state.record_problems("load analytics", &loaded.problems);
             state.store.merge_analytics(window, &loaded);
+            state.rebuild_lists();
         }
         Err(failure) => {
             screen.error = Some(failure.message.clone());
@@ -252,6 +253,7 @@ pub(super) fn team_loaded(
             }
             state.record_problems("load team analytics", &loaded.problems);
             state.store.merge_team_analytics(window, &loaded);
+            state.rebuild_lists();
         }
         Err(failure) => {
             screen
