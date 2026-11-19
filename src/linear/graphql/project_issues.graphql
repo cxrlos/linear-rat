@@ -1,4 +1,4 @@
-# budget: 550
+# budget: 650
 # One page of a project's issues, closed ones included, with the team,
 # workflow state, people, cycle, project and project milestone each one
 # refers to, so the Projects screen can list them grouped by milestone.
@@ -63,6 +63,12 @@ query ProjectIssues($projectId: String!, $after: String) {
           id
         }
         dueDate
+        archivedAt
+        subscribers(first: 1, filter: { isMe: { eq: true } }) {
+          nodes {
+            id
+          }
+        }
       }
       pageInfo {
         hasNextPage

@@ -1,4 +1,4 @@
-# budget: 970
+# budget: 1200
 # An issue's parent, its first 50 sub-issues and its first 25 relations each
 # way, with every related issue as the assigned issues query has it, so they
 # can be listed, shown and jumped to. `relations` are those the issue is the
@@ -92,4 +92,10 @@ fragment RelatedIssue on Issue {
     id
   }
   dueDate
+  archivedAt
+  subscribers(first: 1, filter: { isMe: { eq: true } }) {
+    nodes {
+      id
+    }
+  }
 }

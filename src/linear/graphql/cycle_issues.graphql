@@ -1,4 +1,4 @@
-# budget: 550
+# budget: 650
 # One page of a cycle's issues, closed ones included, with the team,
 # workflow state, people, cycle and project each one refers to. Pages hold
 # 50 issues; the client follows `endCursor` for at most four pages.
@@ -61,6 +61,12 @@ query CycleIssues($cycleId: String!, $after: String) {
           id
         }
         dueDate
+        archivedAt
+        subscribers(first: 1, filter: { isMe: { eq: true } }) {
+          nodes {
+            id
+          }
+        }
       }
       pageInfo {
         hasNextPage
