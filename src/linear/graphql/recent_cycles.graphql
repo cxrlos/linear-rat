@@ -1,0 +1,32 @@
+# budget: 22
+# A team's cycles for the Cycles screen: those that ended in the last twelve
+# weeks, the active one and the next one, with their daily issue counts. 10
+# is room for six two-week cycles back, the active and the next, even with
+# one-week cycles cut short.
+query RecentCycles($teamId: String!) {
+  team(id: $teamId) {
+    cycles(
+      first: 10
+      filter: {
+        endsAt: { gt: "-P12W" }
+        or: [{ isFuture: { eq: false } }, { isNext: { eq: true } }]
+      }
+    ) {
+      nodes {
+        id
+        number
+        name
+        startsAt
+        endsAt
+        completedAt
+        scopeHistory
+        completedScopeHistory
+        issueCountHistory
+        completedIssueCountHistory
+      }
+      pageInfo {
+        hasNextPage
+      }
+    }
+  }
+}

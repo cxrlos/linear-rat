@@ -6,8 +6,8 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
-use linear_rat::app::{App, Effect, Event, State};
-use linear_rat::linear::{AssignedIssues, IssueDetail, Urgency};
+use linear_rat::app::{App, Effect, Event, Failure, State};
+use linear_rat::linear::{AssignedIssues, ErrorKind, IssueDetail, Urgency};
 use ratatui::backend::TestBackend;
 
 const MARKDOWN: &str = "\
@@ -271,6 +271,93 @@ fn comments_and_history_show_once_loaded_on_a_wide_terminal() {
     assert_snapshot!(app.backend());
 }
 
+/// The demo workspace with the issue `identifier` focused and its detail
+/// opened full width, before its detail load is answered.
+fn detail_of(identifier: &str, rows: u16) -> (App<TestBackend>, Vec<Effect>) {
+    let mut state = State::demo();
+    assert!(
+        state
+            .my_issues
+            .focus_id(&format!("issue-{}", identifier.to_lowercase()))
+    );
+    let mut app = App::new(TestBackend::new(80, rows), state).unwrap();
+    let effects = send(&mut app, [enter()]);
+    (app, effects)
+}
+
+#[test]
+fn attachments_list_pull_requests_first_then_the_rest_with_source_and_url() {
+    let (mut app, effects) = detail_of("DES-34", 40);
+    answer(&mut app, effects);
+
+    send(&mut app, [key('G')]);
+
+    let lines = screen(&app).join("\n");
+    assert!(lines.contains("Attachments (5)"), "{lines}");
+    assert_snapshot!(app.backend());
+}
+
+#[test]
+fn pull_requests_come_first_whatever_order_linear_gives() {
+    let (mut app, effects) = detail_of("DES-34", 40);
+    let [Effect::LoadIssueDetail { issue_id, .. }] = &effects[..] else {
+        panic!("{effects:?}");
+    };
+    let mut detail = IssueDetail::demo(issue_id);
+    detail.attachments.reverse();
+    assert!(!detail.attachments[0].is_pull_request());
+    app.handle(Event::IssueDetailLoaded {
+        issue_id: issue_id.clone(),
+        result: Ok(detail),
+    })
+    .unwrap();
+
+    send(&mut app, [key('G')]);
+
+    let lines = screen(&app).join("\n");
+    let at = |title: &str| {
+        lines
+            .find(title)
+            .unwrap_or_else(|| panic!("no {title}: {lines}"))
+    };
+    let last_pull_request = at("Autumn release spacing fixes").max(at("Tidy the release"));
+    for other in [
+        "Autumn QA board",
+        "Thread in #design",
+        "Screenshots are blurry",
+    ] {
+        assert!(
+            last_pull_request < at(other),
+            "{other} before a pull request: {lines}"
+        );
+    }
+}
+
+#[test]
+fn attachments_say_they_are_loading_until_the_detail_loads() {
+    let (mut app, _) = detail_of("DES-34", 60);
+
+    send(&mut app, [key('G')]);
+
+    let lines = screen(&app);
+    let heading = lines
+        .iter()
+        .position(|line| line.trim_matches(['│', ' ']) == "Attachments")
+        .unwrap_or_else(|| panic!("no Attachments heading: {lines:#?}"));
+    assert_eq!(lines[heading + 1].trim_matches(['│', ' ']), "Loading…");
+}
+
+#[test]
+fn an_issue_without_attachments_shows_no_attachments_section() {
+    let (mut app, effects) = detail_of("DES-40", 60);
+    answer(&mut app, effects);
+
+    send(&mut app, [key('G')]);
+
+    let lines = screen(&app).join("\n");
+    assert!(!lines.contains("Attachments"), "{lines}");
+}
+
 #[test]
 fn a_failed_load_says_why_in_the_detail() {
     let mut app = app(80, 24, &AssignedIssues::demo());
@@ -278,7 +365,7 @@ fn a_failed_load_says_why_in_the_detail() {
 
     for effect in effects {
         if let Effect::LoadIssueDetail { issue_id, .. } = effect {
-            let result = Err("timed out waiting for Linear's answer".to_owned());
+            let result = Err(failed("timed out waiting for Linear's answer"));
             app.handle(Event::IssueDetailLoaded { issue_id, result })
                 .unwrap();
         }
@@ -374,4 +461,9 @@ fn the_detail_keeps_its_scroll_when_its_issue_updates() {
         .collect();
     assert!(before[3].contains("Paragraph 12"), "{scrolled:#?}");
     assert_eq!(detail_top[2..10], before[2..10], "{lines:#?}");
+}
+
+/// A failure with `message`, as the runtime sends one.
+fn failed(message: &str) -> Failure {
+    Failure::new(ErrorKind::Other, "test", message)
 }

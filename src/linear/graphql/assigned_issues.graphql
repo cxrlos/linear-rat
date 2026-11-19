@@ -1,4 +1,4 @@
-# budget: 850
+# budget: 1250
 # One page of the viewer's open assigned issues, with the team, workflow
 # state, people, cycle and project each one refers to. Linear filters out
 # completed, canceled and duplicate issues. Pages hold 100 issues: Linear's
@@ -67,6 +67,19 @@ query AssignedIssues($after: String) {
         }
         project {
           id
+        }
+        projectMilestone {
+          id
+        }
+        parent {
+          id
+        }
+        dueDate
+        archivedAt
+        subscribers(first: 1, filter: { isMe: { eq: true } }) {
+          nodes {
+            id
+          }
         }
       }
       pageInfo {

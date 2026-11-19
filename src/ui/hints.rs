@@ -2,6 +2,7 @@
 //! labelled lines (moves, actions, then the screen's own keys and the issue
 //! edits).
 
+use super::text;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -10,7 +11,7 @@ use ratatui::widgets::Paragraph;
 
 use super::style;
 use crate::app::{Modal, State};
-use crate::keys::{self, ACTIONS, HintRow, KeySequence};
+use crate::keys::{self, ACTIONS, Context, HintRow, KeySequence, OverlayKind};
 
 /// How many rows the bar takes, on every screen, so the layout above it
 /// does not jump.
@@ -41,7 +42,7 @@ pub fn render(state: &State, frame: &mut Frame, area: Rect) {
     let label_width = HintRow::LINES
         .iter()
         .flat_map(|rows| rows.iter())
-        .map(|row| row.label().len())
+        .map(|row| text::width(row.label()))
         .max()
         .unwrap_or(0);
 
@@ -77,10 +78,12 @@ fn line_items(state: &State, rows: &[HintRow]) -> (HintRow, Vec<Item>) {
 
 /// The items of `row` for the active contexts, merged by word in registry
 /// order. Actions without a live key are left out, and so are keys a text
-/// field takes while it has focus.
+/// field takes while it has focus and overlay keys that never apply to the
+/// open kind of overlay.
 fn items(state: &State, row: HintRow) -> Vec<Item> {
     let contexts = keys::active_contexts(state);
     let typing = state.modals.top().is_some_and(Modal::takes_text);
+    let overlay = state.modals.iter().rev().find_map(OverlayKind::of);
     let mut groups: Vec<Group> = Vec::new();
     let mut shown = Vec::new();
     for &context in &contexts {
@@ -89,6 +92,11 @@ fn items(state: &State, row: HintRow) -> Vec<Item> {
                 continue;
             };
             if shown.contains(&spec.action) {
+                continue;
+            }
+            if context == Context::Overlay
+                && overlay.is_some_and(|kind| !spec.overlays.contains(&kind))
+            {
                 continue;
             }
             let Some(key) = state
@@ -102,7 +110,7 @@ fn items(state: &State, row: HintRow) -> Vec<Item> {
                 continue;
             };
             shown.push(spec.action);
-            let available = (spec.available)(state);
+            let available = spec.availability(state).can_run();
             match groups.iter_mut().find(|(word, ..)| *word == hint.word) {
                 Some((_, keys, any_available)) => {
                     keys.push((key, available));
@@ -158,7 +166,7 @@ fn column_widths(rows: &[(HintRow, Vec<Item>)]) -> Vec<usize> {
     let mut widths: Vec<usize> = Vec::new();
     for (_, items) in rows {
         for (index, item) in items.iter().enumerate() {
-            let width = item.text().chars().count();
+            let width = text::width(&item.text());
             match widths.get_mut(index) {
                 Some(widest) => *widest = (*widest).max(width),
                 None => widths.push(width),
@@ -195,7 +203,7 @@ fn line(
     let mut used = 1 + label_width + 3;
     for (index, item) in items.iter().enumerate() {
         let gap = if index > 0 { 2 } else { 0 };
-        used += gap + item.text().chars().count();
+        used += gap + text::width(&item.text());
         if columns.is_none() && used > width {
             break;
         }
@@ -223,7 +231,7 @@ fn line(
         }
         let padding = columns
             .and_then(|widths| widths.get(index))
-            .map_or(0, |width| width.saturating_sub(item.text().chars().count()));
+            .map_or(0, |width| width.saturating_sub(text::width(&item.text())));
         spans.push(Span::styled(
             format!(" {}{}", item.word, " ".repeat(padding)),
             word_style,

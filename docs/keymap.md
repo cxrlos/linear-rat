@@ -4,7 +4,7 @@
 
 These are lrat's default keys. Press `?` in lrat to see the keys of the screen you are on, with the ones that cannot run now muted. Keys are written in the vim notation `config.toml` uses, and each table heading names the config table that rebinds its actions; see [Configuration](https://github.com/cxrlos/linear-rat/blob/main/docs/config.md#keys).
 
-The Team Issues list also takes the Issue list keys. While an overlay has a text field, as the pickers, the palette and the search do, a character typed without Ctrl or Alt goes into the field instead, except a picker's number keys.
+The Team Issues list also takes the Issue list keys, and the Cycles screen the Cycles and Projects keys. While an overlay has a text field, as the pickers, the palette and the search do, a character typed without Ctrl or Alt goes into the field instead, except a picker's number keys.
 
 ## Everywhere (`[keys.global]`)
 
@@ -13,12 +13,17 @@ The Team Issues list also takes the Issue list keys. While an overlay has a text
 | `show-my-issues` | `1` | Show My Issues |
 | `show-team-issues` | `2` | Show Team Issues |
 | `show-analytics` | `3` | Show Analytics |
+| `show-cycles` | `4` | Show Cycles |
+| `show-projects` | `5` | Show Projects |
 | `refresh` | `r` | Refresh now |
 | `show-cheatsheet` | `?` | Show every key for this context |
 | `show-palette` | `:`, `<C-k>` | Find an action or loaded issue |
 | `show-search` | `/` | Search all issues in Linear |
+| `messages` | `!` | Show recent errors |
 | `quit` | `q` | Quit lrat |
 | `suspend` | `<C-z>` | Suspend lrat to the shell |
+| `skip-release` |  | Skip this release |
+| `release-notes` |  | What's new in the latest release |
 
 ## Issue list (`[keys.list]`)
 
@@ -44,9 +49,24 @@ The Team Issues list also takes the Issue list keys. While an overlay has a text
 | `edit-priority` | `p` | Change the priority |
 | `edit-labels` | `L` | Add or remove labels |
 | `edit-estimate` | `e` | Change the estimate |
+| `edit-cycle` | `C` | Change the cycle |
+| `edit-project` | `P` | Change the project |
+| `edit-milestone` | `M` | Change the project milestone |
+| `edit-due-date` | `d` | Set or clear the due date |
 | `edit-text` | `E` | Edit the title and description |
 | `comment` | `c` | Comment in $EDITOR |
+| `archive` | `A` | Archive the issue |
+| `unarchive` | `U` | Unarchive the issue |
+| `trash` | `X` | Move the issue to the trash |
+| `toggle-subscription` | `S` | Subscribe to or unsubscribe from the issue |
 | `create-issue` | `n` | Create an issue |
+| `set-parent` | `H` | Set the parent issue |
+| `clear-parent` | `Dp` | Clear the parent issue |
+| `add-relation` | `R` | Add a relation to other issues |
+| `remove-relation` | `Dr` | Remove relations to other issues |
+| `go-to-related` | `gr` | Go to a related issue |
+| `group-by` | `vg` | Pick how the issue list is grouped |
+| `sort-by` | `vs` | Pick how the issue list is sorted |
 | `close` | `<Esc>` | Close the top overlay or step back |
 
 ## Team Issues (`[keys.team-issues]`)
@@ -59,6 +79,7 @@ The Team Issues list also takes the Issue list keys. While an overlay has a text
 | `filter-by-label` | `fl` | Filter by label |
 | `filter-by-cycle` | `fc` | Filter by cycle |
 | `filter-by-project` | `fp` | Filter by project |
+| `filter-blocked` | `fb` | Show only blocked issues, or all again |
 | `load-more` | `m` | Load the next page of Team Issues |
 
 ## Issue detail (`[keys.detail]`)
@@ -84,9 +105,22 @@ The Team Issues list also takes the Issue list keys. While an overlay has a text
 | `edit-priority` | `p` | Change the priority |
 | `edit-labels` | `L` | Add or remove labels |
 | `edit-estimate` | `e` | Change the estimate |
+| `edit-cycle` | `C` | Change the cycle |
+| `edit-project` | `P` | Change the project |
+| `edit-milestone` | `M` | Change the project milestone |
+| `edit-due-date` | `d` | Set or clear the due date |
 | `edit-text` | `E` | Edit the title and description |
 | `comment` | `c` | Comment in $EDITOR |
+| `archive` | `A` | Archive the issue |
+| `unarchive` | `U` | Unarchive the issue |
+| `trash` | `X` | Move the issue to the trash |
+| `toggle-subscription` | `S` | Subscribe to or unsubscribe from the issue |
 | `create-issue` | `n` | Create an issue |
+| `set-parent` | `H` | Set the parent issue |
+| `clear-parent` | `Dp` | Clear the parent issue |
+| `add-relation` | `R` | Add a relation to other issues |
+| `remove-relation` | `Dr` | Remove relations to other issues |
+| `go-to-related` | `gr` | Go to a related issue |
 | `close` | `<Esc>` | Close the top overlay or step back |
 
 ## Overlays (`[keys.overlay]`)
@@ -105,8 +139,12 @@ The Team Issues list also takes the Issue list keys. While an overlay has a text
 | `scroll-down` | `j`, `<Down>`, `<C-n>` | Scroll down |
 | `scroll-up` | `k`, `<Up>`, `<C-p>` | Scroll up |
 | `accept` | `<Enter>` | Choose the highlighted entry |
-| `toggle-entry` | `<Tab>` | Mark or unmark the highlighted entry |
+| `confirm` | `y` | Confirm the question asked |
+| `decline` | `n` | Cancel the question asked |
+| `toggle-entry` | `<Tab>` | Mark or unmark the highlighted entry, or search comments too |
+| `toggle-search-scope` | `<C-t>` | Search within the Team Issues team and filter, or the whole workspace |
 | `close` | `<Esc>` | Close the top overlay or step back |
+| `copy-link` | `<C-y>` | Copy the highlighted link's URL |
 
 ## Analytics (`[keys.analytics]`)
 
@@ -118,3 +156,21 @@ The Team Issues list also takes the Issue list keys. While an overlay has a text
 | `longer-range` | `]` | Show a longer range |
 | `toggle-analytics-view` | `v` | Show Personal or Team analytics |
 | `switch-analytics-team` | `t` | Pick the team for Team analytics |
+
+## Cycles and Projects (`[keys.browse]`)
+
+| Action | Keys | Description |
+| --- | --- | --- |
+| `move-down` | `j` | Move down |
+| `move-up` | `k` | Move up |
+| `move-to-top` | `gg` | Move to the top |
+| `move-to-bottom` | `G` | Move to the bottom |
+| `half-page-down` | `<C-d>` | Move down half a page |
+| `half-page-up` | `<C-u>` | Move up half a page |
+| `list-issues` | `<Enter>` | List the issues of the focused cycle or project |
+
+## Cycles (`[keys.cycles]`)
+
+| Action | Keys | Description |
+| --- | --- | --- |
+| `switch-cycles-team` | `t` | Switch the team of the Cycles screen |

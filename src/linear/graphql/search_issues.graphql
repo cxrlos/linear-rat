@@ -1,11 +1,18 @@
-# budget: 750
+# budget: 850
 # The best 25 issues anywhere in the workspace that match a term, closed ones
 # included, with what the detail shows about each and the names of their
 # labels. Linear rate-limits this query to 30 a minute on top of the hourly
 # budgets; the client keeps to that with its own bucket. Only the first page
-# is asked for.
-query SearchIssues($term: String!) {
-  searchIssues(term: $term, first: 25) {
+# is asked for. `includeComments` also matches the term in comments, and
+# `filter` keeps the results to a team and its Team Issues filter; both are
+# left out unless the viewer asks for them.
+query SearchIssues($term: String!, $includeComments: Boolean, $filter: IssueFilter) {
+  searchIssues(
+    term: $term
+    first: 25
+    includeComments: $includeComments
+    filter: $filter
+  ) {
     nodes {
       id
       identifier
@@ -54,6 +61,19 @@ query SearchIssues($term: String!) {
       }
       project {
         id
+      }
+      projectMilestone {
+        id
+      }
+      parent {
+        id
+      }
+      dueDate
+      archivedAt
+      subscribers(first: 1, filter: { isMe: { eq: true } }) {
+        nodes {
+          id
+        }
       }
       labels(first: 10) {
         nodes {

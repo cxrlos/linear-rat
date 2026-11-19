@@ -6,22 +6,25 @@ mod error;
 mod governor;
 pub mod http;
 pub mod model;
+pub mod paging;
 pub(crate) mod search_bucket;
 
 use std::cell::RefCell;
 use std::cmp::Reverse;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
 
 use futures_util::Stream;
+use jiff::civil::Date;
 use jiff::{SignedDuration, Timestamp};
 
-pub use error::{ClientError, GraphQlError, Response};
+pub use error::{ClientError, ErrorKind, GraphQlError, Response};
 pub use governor::{SystemTimer, Timer, Urgency};
 pub use http::{ClientConfig, Dial, HttpClient, LIVE_ENDPOINT, LiveConfig, Pipe};
 use model::{
-    Attachment, Comment, Cycle, Issue, Label, Member, Priority, Project, StateSpan, StateType,
-    Team, Viewer, WorkflowState, Workspace,
+    Attachment, Comment, Cycle, Issue, IssueRelation, Label, Member, Priority, Project,
+    ProjectMilestone, ProjectOverview, RelationType, StateSpan, StateType, Team, Viewer,
+    WorkflowState, Workspace,
 };
 
 /// Queries, mutations and live events.
@@ -76,6 +79,41 @@ pub trait LinearClient {
         team_id: &str,
     ) -> impl Future<Output = Result<Vec<Label>, ClientError>> + Send;
 
+    /// Every milestone of the project with id `project_id`, in Linear's
+    /// order.
+    fn project_milestones(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<Vec<ProjectMilestone>, ClientError>> + Send;
+
+    /// Archives the issue with id `issue_id`.
+    fn archive_issue(&self, issue_id: &str)
+    -> impl Future<Output = Result<(), ClientError>> + Send;
+
+    /// Brings the archived issue with id `issue_id` back.
+    fn unarchive_issue(
+        &self,
+        issue_id: &str,
+    ) -> impl Future<Output = Result<(), ClientError>> + Send;
+
+    /// Moves the issue with id `issue_id` and its sub-issues to the trash,
+    /// where Linear keeps them for 30 days. There is no permanent delete.
+    fn trash_issue(&self, issue_id: &str) -> impl Future<Output = Result<(), ClientError>> + Send;
+
+    /// Subscribes the viewer to the notifications of the issue with id
+    /// `issue_id`.
+    fn subscribe_to_issue(
+        &self,
+        issue_id: &str,
+    ) -> impl Future<Output = Result<(), ClientError>> + Send;
+
+    /// Unsubscribes the viewer from the notifications of the issue with id
+    /// `issue_id`.
+    fn unsubscribe_from_issue(
+        &self,
+        issue_id: &str,
+    ) -> impl Future<Output = Result<(), ClientError>> + Send;
+
     /// Sends one `issueUpdate` for the issue with id `issue_id` and returns
     /// the issue as Linear stored it.
     fn update_issue(
@@ -85,20 +123,22 @@ pub trait LinearClient {
     ) -> impl Future<Output = Result<Issue, ClientError>> + Send;
 
     /// What the detail of the issue with id `issue_id` shows beyond what a
-    /// list loads: its comments and its workflow state history. `urgency`
-    /// says whether the viewer opened the detail and waits on it.
+    /// list loads: its comments, its workflow state history, its parent,
+    /// sub-issues and relations. `urgency` says whether the viewer opened
+    /// the detail and waits on it.
     fn issue_detail(
         &self,
         issue_id: &str,
         urgency: Urgency,
     ) -> impl Future<Output = Result<IssueDetail, ClientError>> + Send;
 
-    /// The issues anywhere in the workspace that match `term`, best match
-    /// first, closed ones included. Search has its own budget of 30 a
-    /// minute; a search beyond it waits its turn rather than failing.
+    /// The issues that match `query`'s term, best match first, closed ones
+    /// included: anywhere in the workspace, or only those of its team and
+    /// filter. Search has its own budget of 30 a minute; a search beyond it
+    /// waits its turn rather than failing.
     fn search_issues(
         &self,
-        term: &str,
+        query: &SearchQuery,
     ) -> impl Future<Output = Result<SearchResults, ClientError>> + Send;
 
     /// The teams the viewer is a member of, in the order Linear lists them.
@@ -112,7 +152,7 @@ pub trait LinearClient {
         team_id: &str,
     ) -> impl Future<Output = Result<TeamOptions, ClientError>> + Send;
 
-    /// One page of the issues of `query`, most recently updated first,
+    /// One page of the issues of `query`, newest first by its order,
     /// starting after the cursor `after` (or at the top when `None`).
     fn team_issues(
         &self,
@@ -126,6 +166,33 @@ pub trait LinearClient {
         query: &TeamQuery,
     ) -> impl Future<Output = Result<usize, ClientError>> + Send;
 
+    /// The cycles of team `team_id` that the Cycles screen lists: those
+    /// that ended in the last twelve weeks, the active one and the next
+    /// one, with their daily issue counts.
+    fn recent_cycles(
+        &self,
+        team_id: &str,
+    ) -> impl Future<Output = Result<Vec<Cycle>, ClientError>> + Send;
+
+    /// The projects of the viewer's teams, most recently updated first,
+    /// with their status, target date, lead, progress and milestones.
+    fn viewer_projects(&self) -> impl Future<Output = Result<ProjectList, ClientError>> + Send;
+
+    /// The issues of the cycle with id `cycle_id`, closed ones included, up
+    /// to 200.
+    fn cycle_issues(
+        &self,
+        cycle_id: &str,
+    ) -> impl Future<Output = Result<SearchResults, ClientError>> + Send;
+
+    /// The issues of the project with id `project_id`, closed ones
+    /// included, up to 200, each naming its project milestone so the list
+    /// can be grouped by milestone.
+    fn project_issues(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<SearchResults, ClientError>> + Send;
+
     /// What personal analytics needs for `window`: the issues assigned to
     /// the viewer that were created or completed in it, the viewer's teams
     /// and their cycles that overlap it. A window that reaches now also
@@ -134,6 +201,16 @@ pub trait LinearClient {
         &self,
         window: AnalyticsWindow,
     ) -> impl Future<Output = Result<AnalyticsIssues, ClientError>> + Send;
+
+    /// Sends one `issueRelationCreate` and returns the relation as Linear
+    /// stored it.
+    fn create_relation(
+        &self,
+        input: &RelationCreate,
+    ) -> impl Future<Output = Result<IssueRelation, ClientError>> + Send;
+
+    /// Sends one `issueRelationDelete` for the relation with id `id`.
+    fn delete_relation(&self, id: &str) -> impl Future<Output = Result<(), ClientError>> + Send;
 
     /// Sends one `commentCreate` adding `body` to the issue with id
     /// `issue_id`, and returns the comment as Linear stored it.
@@ -270,6 +347,15 @@ pub struct IssueCreate {
     pub description: String,
 }
 
+/// A relation to create: the issue with id `issue_id` relates to the one
+/// with id `related_issue_id` as `kind` says.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RelationCreate {
+    pub issue_id: String,
+    pub related_issue_id: String,
+    pub kind: RelationType,
+}
+
 /// What changed in one team: its issues updated after a watermark, and the
 /// cycles, labels, members and teams they refer to.
 #[derive(Debug, Clone, PartialEq)]
@@ -311,6 +397,13 @@ pub struct IssueUpdate {
     /// The new Markdown description, or `None` to leave it. An empty one
     /// empties it.
     pub description: Option<String>,
+    pub due_date: Patch<Date>,
+    pub cycle_id: Patch<String>,
+    /// The new project. Linear clears the project milestone when the project
+    /// changes.
+    pub project_id: Patch<String>,
+    pub project_milestone_id: Patch<String>,
+    pub parent_id: Patch<String>,
 }
 
 /// A change to a field that can be empty: leave it, empty it, or set it.
@@ -324,8 +417,8 @@ pub enum Patch<T> {
     Set(T),
 }
 
-/// What a search found: the issues, best match first, and the cycles,
-/// labels, members and teams they refer to.
+/// What a search found, best match first, or the issues of a cycle or
+/// project, and the cycles, labels, members and teams they refer to.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct SearchResults {
     pub issues: Vec<Issue>,
@@ -337,11 +430,52 @@ pub struct SearchResults {
     pub problems: Vec<String>,
 }
 
-/// A team's issues, narrowed by a filter.
+/// What a search asks Linear for: the term, whether comments count as a
+/// match, and the team and filter to keep to, if any.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SearchQuery {
+    pub term: String,
+    pub include_comments: bool,
+    /// The team and Team Issues filter the results must match; `None`
+    /// searches the whole workspace.
+    pub within: Option<TeamQuery>,
+}
+
+impl SearchQuery {
+    /// `term` across the whole workspace, comments left out.
+    pub fn new(term: impl Into<String>) -> Self {
+        Self {
+            term: term.into(),
+            ..Self::default()
+        }
+    }
+}
+
+/// A team's issues, narrowed by a filter, in the order Linear sends them.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TeamQuery {
     pub team_id: String,
     pub filter: TeamFilter,
+    pub order: TeamOrder,
+}
+
+/// The order Linear sends a team's issues in, newest first, as its
+/// `PaginationOrderBy`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TeamOrder {
+    #[default]
+    Updated,
+    Created,
+}
+
+impl TeamOrder {
+    /// Linear's name for it.
+    pub fn as_graphql(self) -> &'static str {
+        match self {
+            TeamOrder::Updated => "updatedAt",
+            TeamOrder::Created => "createdAt",
+        }
+    }
 }
 
 /// One optional value per field; an issue matches when it matches every
@@ -358,6 +492,9 @@ pub struct TeamFilter {
     pub cycle: Option<String>,
     /// A project id.
     pub project: Option<String>,
+    /// Only issues blocked by another issue, as Linear's
+    /// `hasBlockedByRelations`, whatever that issue's state.
+    pub blocked: bool,
 }
 
 impl TeamFilter {
@@ -366,8 +503,9 @@ impl TeamFilter {
         *self == Self::default()
     }
 
-    /// Whether `issue` matches every field that is set.
-    pub fn matches(&self, issue: &Issue) -> bool {
+    /// Whether `issue` matches every field that is set. `blocked` says
+    /// whether another issue blocks it, as far as the caller knows.
+    pub fn matches(&self, issue: &Issue, blocked: bool) -> bool {
         let field = |wanted: &Option<String>, actual: Option<&String>| {
             wanted.as_ref().is_none_or(|wanted| actual == Some(wanted))
         };
@@ -379,7 +517,16 @@ impl TeamFilter {
                 .label
                 .as_ref()
                 .is_none_or(|label| issue.label_ids.contains(label))
+            && (!self.blocked || blocked)
     }
+}
+
+/// The projects the Projects screen lists.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProjectList {
+    pub projects: Vec<ProjectOverview>,
+    /// What Linear could not give, such as a list cut short.
+    pub problems: Vec<String>,
 }
 
 /// What the filters of one team can pick from.
@@ -607,8 +754,8 @@ impl AssignedIssues {
     }
 }
 
-/// One issue's comments and workflow state history, and the people, states
-/// and project they refer to.
+/// One issue's comments, workflow state history, parent, sub-issues and
+/// relations, and the people, states, project and issues they refer to.
 #[derive(Debug, Clone, PartialEq)]
 pub struct IssueDetail {
     /// Oldest first.
@@ -620,8 +767,18 @@ pub struct IssueDetail {
     /// The comment authors.
     pub members: Vec<Member>,
     pub project: Option<Project>,
+    pub milestone: Option<ProjectMilestone>,
     /// The first 50 attachments, oldest first; any more are left out.
     pub attachments: Vec<Attachment>,
+    /// The first 25 relations the issue is the source of and the first 25
+    /// it is the target of.
+    pub relations: Vec<IssueRelation>,
+    /// The parent, the first 50 sub-issues and the issue at the other end of
+    /// each relation.
+    pub related_issues: Vec<Issue>,
+    /// The teams and cycles of `related_issues`.
+    pub teams: Vec<Team>,
+    pub cycles: Vec<Cycle>,
     /// What Linear could not give, as in [`AssignedIssues::problems`].
     pub problems: Vec<String>,
 }
@@ -634,7 +791,33 @@ impl IssueDetail {
         let issue = data.issues.iter().find(|issue| issue.id == issue_id);
         let team_id = issue.map(|issue| issue.team_id.as_str());
         let project_id = issue.and_then(|issue| issue.project_id.as_deref());
+        let milestone_id = issue.and_then(|issue| issue.project_milestone_id.as_deref());
+        let relations: Vec<IssueRelation> = data
+            .relations
+            .iter()
+            .filter(|relation| {
+                relation.issue_id == issue_id || relation.related_issue_id == issue_id
+            })
+            .cloned()
+            .collect();
+        let parent_id = issue.and_then(|issue| issue.parent_id.as_deref());
+        let related_issues: Vec<Issue> = data
+            .issues
+            .iter()
+            .filter(|other| {
+                Some(other.id.as_str()) == parent_id
+                    || other.parent_id.as_deref() == Some(issue_id)
+                    || relations.iter().any(|relation| {
+                        relation.seen_from(issue_id).map(|(_, id)| id) == Some(other.id.as_str())
+                    })
+            })
+            .cloned()
+            .collect();
         Self {
+            relations,
+            related_issues,
+            teams: data.teams.clone(),
+            cycles: data.cycles.clone(),
             comments: data
                 .comments
                 .into_iter()
@@ -653,6 +836,10 @@ impl IssueDetail {
                 .projects
                 .into_iter()
                 .find(|project| Some(project.id.as_str()) == project_id),
+            milestone: data
+                .milestones
+                .into_iter()
+                .find(|milestone| Some(milestone.id.as_str()) == milestone_id),
             attachments: data
                 .attachments
                 .into_iter()
@@ -673,6 +860,55 @@ thread_local! {
     static DEMO_EDITS: RefCell<BTreeMap<String, Issue>> = const { RefCell::new(BTreeMap::new()) };
     static DEMO_COMMENTS: RefCell<Vec<Comment>> = const { RefCell::new(Vec::new()) };
     static DEMO_CREATED: RefCell<u32> = const { RefCell::new(0) };
+    static DEMO_TRASHED: RefCell<BTreeSet<String>> = const { RefCell::new(BTreeSet::new()) };
+    /// Relations created through this client, and the ids of those deleted.
+    static DEMO_RELATIONS: RefCell<(Vec<IssueRelation>, Vec<String>)> =
+        const { RefCell::new((Vec::new(), Vec::new())) };
+}
+
+/// The demo issue with id `issue_id` as edits through the fake client left
+/// it, unless it is in the trash.
+fn demo_issue(data: &demo::DemoWorkspace, issue_id: &str) -> Result<Issue, ClientError> {
+    if DEMO_TRASHED.with_borrow(|trashed| trashed.contains(issue_id)) {
+        return Err(not_found("issue", issue_id));
+    }
+    DEMO_EDITS
+        .with_borrow(|edits| edits.get(issue_id).cloned())
+        .or_else(|| {
+            data.issues
+                .iter()
+                .find(|issue| issue.id == issue_id)
+                .cloned()
+        })
+        .ok_or_else(|| not_found("issue", issue_id))
+}
+
+/// Applies `change` to the demo issue with id `issue_id` and remembers it,
+/// one second newer.
+fn demo_change(issue_id: &str, change: impl FnOnce(&mut Issue)) -> Result<(), ClientError> {
+    let mut issue = demo_issue(&demo::workspace(), issue_id)?;
+    change(&mut issue);
+    issue.updated_at += SignedDuration::from_secs(1);
+    DEMO_EDITS.with_borrow_mut(|edits| edits.insert(issue_id.to_owned(), issue));
+    Ok(())
+}
+
+/// The demo workspace with the relations created and deleted through the
+/// fake client, so the Blocked filter sees them.
+fn demo_workspace_with_relations() -> demo::DemoWorkspace {
+    let mut data = demo::workspace();
+    DEMO_RELATIONS.with_borrow(|(created, deleted)| {
+        data.relations
+            .retain(|relation| !deleted.contains(&relation.id));
+        data.relations.extend(created.iter().cloned());
+    });
+    data
+}
+
+/// Whether the demo has an issue with id `id`, created ones included.
+fn demo_has_issue(data: &demo::DemoWorkspace, id: &str) -> bool {
+    data.issues.iter().any(|issue| issue.id == id)
+        || DEMO_EDITS.with_borrow(|edits| edits.contains_key(id))
 }
 
 /// The issue `input` creates in the demo workspace, numbered after the
@@ -731,6 +967,11 @@ fn demo_create(
         creator_id: Some(data.viewer.id.clone()),
         cycle_id: None,
         project_id: None,
+        project_milestone_id: None,
+        parent_id: None,
+        due_date: None,
+        archived_at: None,
+        subscribed: true,
         label_ids: Vec::new(),
         created_at: demo::NOW,
         updated_at: demo::NOW + SignedDuration::from_secs(1),
@@ -740,6 +981,15 @@ fn demo_create(
         triaged_at: None,
         state_history: Vec::new(),
     })
+}
+
+/// Applies `patch` to `field`, leaving it when unchanged.
+fn apply_patch<T: Clone>(field: &mut Option<T>, patch: &Patch<T>) {
+    match patch {
+        Patch::Unchanged => {}
+        Patch::Clear => *field = None,
+        Patch::Set(value) => *field = Some(value.clone()),
+    }
 }
 
 /// `issue` with `update` applied as Linear would apply it in the demo
@@ -773,6 +1023,17 @@ fn demo_update(
         Patch::Clear => issue.estimate = None,
         Patch::Set(points) => issue.estimate = Some(f64::from(points)),
     }
+    apply_patch(&mut issue.due_date, &update.due_date);
+    apply_patch(&mut issue.cycle_id, &update.cycle_id);
+    if update.project_id != Patch::Unchanged {
+        issue.project_milestone_id = None;
+    }
+    apply_patch(&mut issue.project_id, &update.project_id);
+    apply_patch(
+        &mut issue.project_milestone_id,
+        &update.project_milestone_id,
+    );
+    apply_patch(&mut issue.parent_id, &update.parent_id);
     for id in update
         .added_label_ids
         .iter()
@@ -873,6 +1134,7 @@ impl LinearClient for FakeClient {
                 data.issues.iter().any(|issue| &issue.id == *id)
                     || DEMO_EDITS.with_borrow(|edits| edits.contains_key(id.as_str()))
             })
+            .filter(|id| !DEMO_TRASHED.with_borrow(|trashed| trashed.contains(id.as_str())))
             .cloned()
             .collect())
     }
@@ -898,28 +1160,75 @@ impl LinearClient for FakeClient {
         Ok(demo::team_options(&demo::workspace(), team_id).labels)
     }
 
+    async fn project_milestones(
+        &self,
+        project_id: &str,
+    ) -> Result<Vec<ProjectMilestone>, ClientError> {
+        Ok(demo::workspace()
+            .milestones
+            .into_iter()
+            .filter(|milestone| milestone.project_id == project_id)
+            .collect())
+    }
+
+    async fn archive_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        demo_change(issue_id, |issue| issue.archived_at = Some(demo::NOW))
+    }
+
+    async fn unarchive_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        demo_change(issue_id, |issue| issue.archived_at = None)
+    }
+
+    /// Remembers the issue as trashed: later edits and existence checks no
+    /// longer find it.
+    async fn trash_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        demo_issue(&demo::workspace(), issue_id)?;
+        DEMO_TRASHED.with_borrow_mut(|trashed| trashed.insert(issue_id.to_owned()));
+        Ok(())
+    }
+
+    async fn subscribe_to_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        demo_change(issue_id, |issue| issue.subscribed = true)
+    }
+
+    async fn unsubscribe_from_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        demo_change(issue_id, |issue| issue.subscribed = false)
+    }
+
     async fn update_issue(
         &self,
         issue_id: &str,
         update: &IssueUpdate,
     ) -> Result<Issue, ClientError> {
         let data = demo::workspace();
-        let stored = DEMO_EDITS
-            .with_borrow(|edits| edits.get(issue_id).cloned())
-            .or_else(|| {
-                data.issues
-                    .iter()
-                    .find(|issue| issue.id == issue_id)
-                    .cloned()
-            })
-            .ok_or_else(|| not_found("issue", issue_id))?;
+        let stored = demo_issue(&data, issue_id)?;
         let updated = demo_update(&data, stored, update)?;
         DEMO_EDITS.with_borrow_mut(|edits| edits.insert(issue_id.to_owned(), updated.clone()));
         Ok(updated)
     }
 
+    /// The demo detail, with the relations created and deleted through
+    /// this client and the issues as edits left them.
     async fn issue_detail(&self, issue_id: &str, _: Urgency) -> Result<IssueDetail, ClientError> {
         let mut detail = IssueDetail::demo(issue_id);
+        DEMO_RELATIONS.with_borrow(|(created, deleted)| {
+            detail
+                .relations
+                .retain(|relation| !deleted.contains(&relation.id));
+            detail.relations.extend(
+                created
+                    .iter()
+                    .filter(|relation| relation.seen_from(issue_id).is_some())
+                    .cloned(),
+            );
+        });
+        DEMO_EDITS.with_borrow(|edits| {
+            for issue in &mut detail.related_issues {
+                if let Some(edited) = edits.get(&issue.id) {
+                    issue.clone_from(edited);
+                }
+            }
+        });
         DEMO_COMMENTS.with_borrow(|comments| {
             detail.comments.extend(
                 comments
@@ -931,23 +1240,47 @@ impl LinearClient for FakeClient {
         Ok(detail)
     }
 
-    /// Every demo issue whose identifier, title or description holds each
-    /// word of `term`, ignoring case, in the demo's order.
-    async fn search_issues(&self, term: &str) -> Result<SearchResults, ClientError> {
-        let words: Vec<String> = term.split_whitespace().map(str::to_lowercase).collect();
-        let data = demo::workspace();
+    /// Every demo issue whose identifier, title or description, or with
+    /// `include_comments` one of its comments, holds each word of the term,
+    /// ignoring case, in the demo's order; with `within`, only those of
+    /// that team that match its filter.
+    async fn search_issues(&self, query: &SearchQuery) -> Result<SearchResults, ClientError> {
+        let words: Vec<String> = query
+            .term
+            .split_whitespace()
+            .map(str::to_lowercase)
+            .collect();
+        let data = demo_workspace_with_relations();
+        let holds_every_word = |text: &str| {
+            let text = text.to_lowercase();
+            words.iter().all(|word| text.contains(word.as_str()))
+        };
         let issues = data
             .issues
             .into_iter()
+            .filter(|issue| {
+                query.within.as_ref().is_none_or(|within| {
+                    let blocked = data.relations.iter().any(|relation| {
+                        relation.kind == RelationType::Blocks
+                            && relation.related_issue_id == issue.id
+                    });
+                    issue.team_id == within.team_id && within.filter.matches(issue, blocked)
+                })
+            })
             .filter(|issue| {
                 let text = format!(
                     "{} {} {}",
                     issue.identifier,
                     issue.title,
                     issue.description.as_deref().unwrap_or_default()
-                )
-                .to_lowercase();
-                words.iter().all(|word| text.contains(word.as_str()))
+                );
+                holds_every_word(&text)
+                    || query.include_comments
+                        && data
+                            .comments
+                            .iter()
+                            .filter(|comment| comment.issue_id == issue.id)
+                            .any(|comment| holds_every_word(&comment.body))
             })
             .collect();
         Ok(SearchResults {
@@ -973,7 +1306,7 @@ impl LinearClient for FakeClient {
         query: &TeamQuery,
         after: Option<&str>,
     ) -> Result<TeamIssuesPage, ClientError> {
-        let data = demo::workspace();
+        let data = demo_workspace_with_relations();
         let matching = demo::team_issues(&data, query);
         let start = after.and_then(|cursor| cursor.parse().ok()).unwrap_or(0);
         let end = (start + FAKE_PAGE_SIZE).min(matching.len());
@@ -1008,7 +1341,35 @@ impl LinearClient for FakeClient {
     }
 
     async fn count_team_issues(&self, query: &TeamQuery) -> Result<usize, ClientError> {
-        Ok(demo::team_issues(&demo::workspace(), query).len())
+        Ok(demo::team_issues(&demo_workspace_with_relations(), query).len())
+    }
+
+    async fn recent_cycles(&self, team_id: &str) -> Result<Vec<Cycle>, ClientError> {
+        let since = demo::NOW - SignedDuration::from_hours(12 * 7 * 24);
+        Ok(demo::workspace()
+            .cycles
+            .into_iter()
+            .filter(|cycle| cycle.team_id == team_id && cycle.ends_at > since)
+            .collect())
+    }
+
+    async fn viewer_projects(&self) -> Result<ProjectList, ClientError> {
+        Ok(ProjectList {
+            projects: demo::project_overviews(&demo::workspace()),
+            problems: Vec::new(),
+        })
+    }
+
+    async fn cycle_issues(&self, cycle_id: &str) -> Result<SearchResults, ClientError> {
+        Ok(demo_listed(|issue| {
+            issue.cycle_id.as_deref() == Some(cycle_id)
+        }))
+    }
+
+    async fn project_issues(&self, project_id: &str) -> Result<SearchResults, ClientError> {
+        Ok(demo_listed(|issue| {
+            issue.project_id.as_deref() == Some(project_id)
+        }))
     }
 
     async fn analytics_issues(
@@ -1061,6 +1422,41 @@ impl LinearClient for FakeClient {
 
     async fn administrable_teams(&self) -> Result<Vec<String>, ClientError> {
         Ok(demo::administrable_team_ids())
+    }
+
+    async fn create_relation(&self, input: &RelationCreate) -> Result<IssueRelation, ClientError> {
+        let data = demo::workspace();
+        for id in [&input.issue_id, &input.related_issue_id] {
+            if !demo_has_issue(&data, id) {
+                return Err(not_found("issue", id));
+            }
+        }
+        Ok(DEMO_RELATIONS.with_borrow_mut(|(created, _)| {
+            let relation = IssueRelation {
+                id: format!("demo-relation-new-{}", created.len() + 1),
+                kind: input.kind,
+                issue_id: input.issue_id.clone(),
+                related_issue_id: input.related_issue_id.clone(),
+            };
+            created.push(relation.clone());
+            relation
+        }))
+    }
+
+    async fn delete_relation(&self, id: &str) -> Result<(), ClientError> {
+        let known = demo::workspace()
+            .relations
+            .iter()
+            .any(|relation| relation.id == id)
+            || DEMO_RELATIONS.with_borrow(|(created, _)| created.iter().any(|r| r.id == id));
+        if !known {
+            return Err(not_found("issue relation", id));
+        }
+        DEMO_RELATIONS.with_borrow_mut(|(created, deleted)| {
+            created.retain(|relation| relation.id != id);
+            deleted.push(id.to_owned());
+        });
+        Ok(())
     }
 
     async fn team_analytics(
@@ -1121,6 +1517,26 @@ impl LinearClient for FakeClient {
                     .map(|issue| issue.updated_at)
             })
             .ok_or_else(|| not_found("issue", issue_id))
+    }
+}
+
+/// The demo issues `keep` picks, most recently updated first, with what
+/// they refer to.
+fn demo_listed(keep: impl Fn(&Issue) -> bool) -> SearchResults {
+    let data = demo::workspace();
+    let mut issues: Vec<Issue> = data
+        .issues
+        .into_iter()
+        .filter(|issue| keep(issue))
+        .collect();
+    issues.sort_by_key(|issue| Reverse(issue.updated_at));
+    SearchResults {
+        issues,
+        cycles: data.cycles,
+        labels: data.labels,
+        members: data.members,
+        teams: data.teams,
+        problems: Vec::new(),
     }
 }
 

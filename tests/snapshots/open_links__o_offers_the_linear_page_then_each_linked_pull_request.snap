@@ -2,12 +2,12 @@
 source: tests/open_links.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics                                                    "
+" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects                        "
 "┌My Issues─────────────────────────────────────────────────────────────────────────────────────────┐"
 "│◐ Started (9)                                                                                     │"
-"│▸ DES-34 Design QA for the autumn release                     ◐ In Progress ▮▮▮ High    3 Cycle 7 │"
-"│  ENG-51 Add a dry-run mode to the importer                   ◐ In Progress ▮▮▯ Medium  2 Cycle 7 │"
-"│  OPS-37 Clean up unused API keys                             ◐ In Review   ▮▮▯ Medium    Cycle 7 │"
+"│▸ DES-34 Design QA for the autumn release           due Nov 6 ◐ In Progress ▮▮▮ High    3 Cycle 7 │"
+"│  ENG-51 Add a dry-run mode to the importer        due Oct 30 ◐ In Progress ▮▮▯ Medium  2 Cycle 7 │"
+"│  OPS-37 Clean up unused API keys                  due Nov 20 ◐ In Review   ▮▮▯ Medium    Cycle 7 │"
 "│  ENG-61 Add contract tests for the recipes API               ◐ In Progress ▮▯▯ Low     2 Cycle 7 │"
 "│  OPS-36 Plan the office cheese cave move                     ◐ In Review   ▮▯▯ Low       Cycle 7 │"
 "│  ENG-60 Improv┌ Open DES-34 ─────────────────────────────────────────────────────┐e    5 Cycle 7 │"
@@ -15,7 +15,7 @@ expression: app.backend()
 "│  OPS-15 Tag cl│ 1 Linear: DES-34 Design QA for the autumn release                │ium            │"
 "│  DES-12 Motion│ 2 Pull request nibble#412: Autumn release spacing fixes (merged) │e    3         │"
 "│○ Unstarted (10│ 3 Pull request nibble#418: Tidy the release screenshots (open)   │               │"
-"│  DES-40 Color-└ Down/Up select  Enter choose  Esc close ─────────────────────────┘h    1 Cycle 7 │"
+"│  DES-40 Color-└ Down/Up select  Enter open  C-y copy  Esc close ─────────────────┘h    1 Cycle 7 │"
 "│  ENG-57 Throttle sensor writes during bursts                 ○ Todo        ▮▮▯ Medium  2 Cycle 7 │"
 "│  OPS-38 Add synthetic checks for login                       ○ Todo        ▮▮▯ Medium    Cycle 7 │"
 "│  DES-31 Review copy for permission prompts                   ○ Todo        ▮▯▯ Low     5 Cycle 7 │"
@@ -24,5 +24,5 @@ expression: app.backend()
 "│  ENG-56 Notification settings reset after update             ○ Todo        ▮▮▮ High    2         │"
 "└──────────────────────────────────────────────────────────────────────────────────────────────────┘"
 " Move │ Down/Up move                                                                                "
-" Do   │ Enter pick   │ Tab toggle │ Esc close                                                       "
+" Do   │ Enter choose │ Esc close │ C-y copy                                                         "
 "                                                                                                    "

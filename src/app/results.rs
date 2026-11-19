@@ -1,20 +1,37 @@
-//! Results: what a search found, or the one issue a palette jump went to,
-//! shown in the normal panes so every issue action works on the focused one.
+//! Results: what a search found, the one issue a palette jump went to, or
+//! the issues of a cycle or project, shown in the normal panes so every
+//! issue action works on the focused one.
 //! Esc from the list goes back to the screen they were opened from.
 
-use super::{Action, Names, Pane, Screen, State};
+use super::{Action, Arrangement, IssueList, Names, Pane, Screen, State, arrange};
+use crate::linear::model::Issue;
+use crate::ui;
 
-/// The issues shown, by id in the order they came, with where the focus is
+/// The issues shown, by id in the order they came, as the list shows them,
 /// and the screen to go back to. The issues themselves live in the store.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Results {
     title: String,
     ids: Vec<String>,
-    focused: usize,
-    scroll: usize,
-    pane: Pane,
+    list: IssueList,
+    arrangement: Arrangement,
+    opened_as: Arrangement,
     names: Names,
     back: Screen,
+}
+
+impl Default for Results {
+    fn default() -> Self {
+        Self {
+            title: String::new(),
+            ids: Vec::new(),
+            list: IssueList::default(),
+            arrangement: Arrangement::LINEAR_ORDER,
+            opened_as: Arrangement::LINEAR_ORDER,
+            names: Names::default(),
+            back: Screen::default(),
+        }
+    }
 }
 
 impl Results {
@@ -23,33 +40,38 @@ impl Results {
         &self.title
     }
 
-    /// The ids of the issues shown, in order.
+    /// The ids of the issues shown, in the order they came.
     pub fn ids(&self) -> &[String] {
         &self.ids
     }
 
-    /// Position of the focused issue in the list.
-    pub fn focused_index(&self) -> usize {
-        self.focused
+    /// The issues as they show.
+    pub fn list(&self) -> &IssueList {
+        &self.list
     }
 
     /// The id of the issue the list cursor is on.
     pub fn focused_id(&self) -> Option<&str> {
-        self.ids.get(self.focused).map(String::as_str)
-    }
-
-    /// The first list row on screen.
-    pub fn scroll(&self) -> usize {
-        self.scroll
+        self.list.focused_issue().map(|issue| issue.id.as_str())
     }
 
     pub fn pane(&self) -> Pane {
-        self.pane
+        self.list.pane()
     }
 
     /// The names its rows and detail look up.
     pub fn names(&self) -> &Names {
         &self.names
+    }
+
+    /// How the list was grouped and sorted when it opened.
+    pub fn opened_as(&self) -> Arrangement {
+        self.opened_as
+    }
+
+    /// How the list is grouped and sorted.
+    pub fn arrangement(&self) -> Arrangement {
+        self.arrangement
     }
 
     /// The screen Esc from the list goes back to.
@@ -60,78 +82,87 @@ impl Results {
     /// Carries out a navigation action on a list that shows `rows` rows at
     /// once. Returns whether anything changed.
     pub fn perform(&mut self, action: Action, rows: usize) -> bool {
-        let page = (rows / 2).max(1);
-        let last = self.ids.len().saturating_sub(1);
-        let changed = match (self.pane, action) {
-            (Pane::List, Action::MoveDown) => self.focus(self.focused.saturating_add(1)),
-            (Pane::List, Action::MoveUp) => self.focus(self.focused.saturating_sub(1)),
-            (Pane::List, Action::MoveToTop) => self.focus(0),
-            (Pane::List, Action::MoveToBottom) => self.focus(last),
-            (Pane::List, Action::HalfPageDown) => self.focus(self.focused.saturating_add(page)),
-            (Pane::List, Action::HalfPageUp) => self.focus(self.focused.saturating_sub(page)),
-            (Pane::List, Action::Open | Action::FocusRight) if !self.ids.is_empty() => {
-                self.pane = Pane::Detail;
-                true
-            }
-            (Pane::Detail, Action::Close | Action::FocusLeft) => {
-                self.pane = Pane::List;
-                true
-            }
-            _ => false,
-        };
-        self.scroll_into_view(rows) || changed
+        self.list.perform(action, rows)
     }
 
     /// Scrolls the least that brings the focused issue on screen in a list
     /// of `rows` rows. Returns whether the scroll moved.
     pub fn scroll_into_view(&mut self, rows: usize) -> bool {
-        if rows == 0 {
-            return false;
-        }
-        let scroll = if self.focused < self.scroll {
-            self.focused
-        } else if self.focused >= self.scroll + rows {
-            self.focused + 1 - rows
-        } else {
-            self.scroll
-        };
-        let changed = scroll != self.scroll;
-        self.scroll = scroll;
-        changed
+        self.list.scroll_into_view(rows)
     }
 
-    fn focus(&mut self, index: usize) -> bool {
-        let index = index.min(self.ids.len().saturating_sub(1));
-        let changed = index != self.focused;
-        self.focused = index;
-        changed
+    /// Takes the issue with `id` off the list and returns where it was. The
+    /// list shows it until it is built again.
+    pub(super) fn forget_at(&mut self, id: &str) -> Option<usize> {
+        let position = self.ids.iter().position(|listed| listed == id)?;
+        self.ids.remove(position);
+        Some(position)
+    }
+
+    /// Lists the issue with `id` again at `position`, unless it is listed.
+    pub(super) fn put_back(&mut self, id: &str, position: usize) {
+        if !self.ids.iter().any(|listed| listed == id) {
+            self.ids.insert(position.min(self.ids.len()), id.to_owned());
+        }
+    }
+
+    /// Builds the list again from `store`, keeping the focused issue. An
+    /// issue deleted on Linear since has left the store and the list.
+    pub(super) fn rebuild(&mut self, store: &super::Store, rows: usize) {
+        let issues: Vec<Issue> = self
+            .ids
+            .iter()
+            .filter_map(|id| store.issue(id))
+            .cloned()
+            .collect();
+        let mut list = IssueList::new(arrange(issues, self.arrangement, &self.names));
+        list.keep_place_of(&self.list, rows);
+        self.list = list;
     }
 }
 
-/// Shows `ids` under `title`, the first one focused. Opened from the results
-/// themselves, Esc still goes back to where the first results were opened
-/// from.
+/// Shows `ids` under `title` in the order they came, the first one
+/// focused. Opened from the results themselves, Esc still goes back to
+/// where the first results were opened from.
 pub(super) fn show(state: &mut State, title: String, ids: Vec<String>) {
+    show_arranged(state, title, ids, Arrangement::LINEAR_ORDER);
+}
+
+/// Shows `ids` under `title` as `arrangement` says, as [`show`] does.
+pub(super) fn show_arranged(
+    state: &mut State,
+    title: String,
+    ids: Vec<String>,
+    arrangement: Arrangement,
+) {
     let back = match state.screen {
         Screen::Results => state.results.back,
         screen => screen,
     };
-    let store = &state.store;
-    let names = Names::new(
-        store.cycles(),
-        store.labels(),
-        store.members(),
-        store.teams(),
-        store.as_of().unwrap_or_default(),
-    );
     state.results = Results {
         title,
         ids,
-        names,
+        names: Names::from_store(&state.store),
         back,
-        ..Results::default()
+        arrangement,
+        opened_as: arrangement,
+        list: IssueList::default(),
     };
     state.screen = Screen::Results;
+    rebuild(state);
+}
+
+/// Builds the list again from the store, keeping the focus.
+pub(super) fn rebuild(state: &mut State) {
+    let rows = ui::list_rows(state, state.viewport);
+    state.results.rebuild(&state.store, rows);
+}
+
+/// Groups and sorts the results as `arrangement` says, keeping the focused
+/// issue.
+pub(super) fn rearrange(state: &mut State, arrangement: Arrangement) {
+    state.results.arrangement = arrangement;
+    rebuild(state);
 }
 
 /// Esc from the list: back to the screen the results were opened from,

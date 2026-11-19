@@ -9,10 +9,10 @@ use std::path::Path;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
-use linear_rat::app::{App, Effect, Event, State, Write, Writing};
+use linear_rat::app::{App, Effect, Event, Failure, State, Write, Writing};
 use linear_rat::config;
 use linear_rat::linear::model::Issue;
-use linear_rat::linear::{IssueUpdate, demo};
+use linear_rat::linear::{ErrorKind, IssueUpdate, demo};
 use ratatui::backend::TestBackend;
 
 /// The issue My Issues focuses first in the demo.
@@ -117,7 +117,7 @@ fn changing_only_the_title_sends_only_the_title_and_shows_at_once() {
         }
     );
     assert_eq!(text, buffer);
-    assert!(shows(&app, "Autumn release, take two"));
+    assert!(shows(&app, "Autumn release, take"));
 }
 
 #[test]
@@ -184,15 +184,14 @@ fn a_refused_save_rolls_back_and_names_the_kept_file() {
 
     app.handle(Event::IssueUpdated {
         write,
-        result: Err(
+        result: Err(failed(
             "it changed in Linear while the editor was open, so nothing was sent; your text \
-             is in /tmp/lrat-DES-34-1-0.md"
-                .to_owned(),
-        ),
+             is in /tmp/lrat-DES-34-1-0.md",
+        )),
     })
     .unwrap();
 
-    assert!(!shows(&app, "Autumn release, take two"));
+    assert!(!shows(&app, "Autumn release, take"));
     assert_snapshot!(app.backend());
 }
 
@@ -212,7 +211,7 @@ fn an_accepted_save_keeps_linears_copy() {
         .unwrap();
 
     assert!(effects.is_empty());
-    assert!(shows(&app, "Autumn release, take two"));
+    assert!(shows(&app, "Autumn release, take"));
 }
 
 #[test]
@@ -259,7 +258,7 @@ fn the_editor_does_not_open_while_a_write_to_the_issue_is_in_flight() {
 
     app.handle(Event::IssueUpdated {
         write: write.clone(),
-        result: Err("Linear returned errors".to_owned()),
+        result: Err(failed("Linear returned errors")),
     })
     .unwrap();
     open_editor(&mut app);
@@ -281,4 +280,9 @@ fn a_second_text_edit_waits_for_the_first_save() {
     })
     .unwrap();
     open_editor(&mut app);
+}
+
+/// A failure with `message`, as the runtime sends one.
+fn failed(message: &str) -> Failure {
+    Failure::new(ErrorKind::Other, "test", message)
 }

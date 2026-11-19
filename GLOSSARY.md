@@ -19,6 +19,38 @@ A Linear team inside the workspace; issues, workflow states, labels and cycles b
 A viewer who can administer a team, either as an explicit team owner or as a workspace admin (admins own every team they can access).
 _Avoid_: team admin, manager, lead
 
+**Capability**:
+Whether the API key may do one kind of write (edit issues, create issues, comment, archive or trash, change relations) in one team: allowed, denied or unknown. lrat learns it from Linear's answers, since Linear has no query for a key's limits.
+_Avoid_: permission, role (Linear's own words for what a member is granted)
+
+**Reach**:
+Whether the API key can read a team at all. A team out of reach denies every write there.
+_Avoid_: access (too broad)
+
+## Failures
+
+**Failure**:
+Something lrat tried that did not work, with its error kind, the action it was doing and the full message.
+_Avoid_: exception, crash
+
+**Error kind**:
+The class of a failure, each with a one-line summary and a suggested fix: offline, rate limited, key invalid, forbidden, validation, server error, schema drift or other (shown as `error`).
+
+**Forbidden**:
+The error kind for a request Linear refused because the API key is not allowed to make it.
+_Avoid_: unauthorized (that is a key Linear does not accept, the key invalid kind)
+
+**Schema drift**:
+The error kind for an answer that no longer matches the GraphQL lrat sends: a field Linear dropped or a response lrat cannot read.
+
+**Notice**:
+The one line above the bottom bar that reports the latest failure or result; any key clears it.
+_Avoid_: toast, alert, status message
+
+**Error log**:
+The most recent failures of the session, shown newest first by the messages overlay (`!`).
+_Avoid_: history, console
+
 ## Work
 
 **Issue**:
@@ -32,6 +64,24 @@ _Avoid_: status, column
 **Cycle**:
 A team's fixed time box of committed issues.
 _Avoid_: sprint, iteration
+
+**Project**:
+A body of work with a goal, spanning one or more teams' issues.
+
+**Project status**:
+Where a project stands (for example "In Progress"), always of one type: backlog, planned, started, paused, completed or canceled. It belongs to projects only; an issue has a workflow state.
+_Avoid_: project state (Linear's deprecated field)
+
+**Project milestone**:
+A named stage within one project, in that project's own order; an issue belongs to at most one.
+_Avoid_: milestone on its own when the project is unclear, epic
+
+**Grouping**:
+How a list of issues is split into groups with a header each, such as by workflow state or assignee.
+_Avoid_: view, board
+
+**Sort**:
+The order of issues within each group, such as by priority or due date.
 
 ## Analytics
 
@@ -74,3 +124,9 @@ An open issue with no update for a configured number of days.
 
 **Triage time**:
 Time from an issue's creation to it leaving triage.
+
+## lrat itself
+
+**Release notice**:
+A muted line saying a newer stable lrat release is out, with how to upgrade for the way lrat was installed. It never interrupts.
+_Avoid_: update notification, upgrade prompt

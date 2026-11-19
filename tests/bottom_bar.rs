@@ -155,14 +155,43 @@ fn edits_are_muted_without_an_issue_and_accented_with_one() {
 }
 
 #[test]
-fn a_single_choice_picker_offers_enter_and_mutes_the_toggle() {
+fn a_single_choice_picker_offers_enter_and_hides_the_toggle() {
     let app = priority_picker((80, 24));
 
     let bar = bar(&app);
-    assert!(bar.contains("Enter pick"), "{bar}");
-    assert!(bar.contains("Tab toggle"), "{bar}");
+    assert!(bar.contains("Enter choose"), "{bar}");
+    assert!(!bar.contains("Tab"), "{bar}");
     assert_eq!(fg_of(&app, 22, "Enter"), Some(Color::Cyan));
-    assert_eq!(fg_of(&app, 22, "Tab"), Some(Color::DarkGray));
+}
+
+#[test]
+fn a_multi_select_picker_offers_the_toggle() {
+    let mut app = sized((80, 24));
+    press(&mut app, "L");
+
+    let bar = bar(&app);
+    assert!(bar.contains("Enter choose"), "{bar}");
+    assert!(bar.contains("Tab toggle"), "{bar}");
+}
+
+#[test]
+fn a_key_that_applies_but_cannot_run_now_stays_muted() {
+    let mut app = priority_picker((80, 24));
+    press(&mut app, "zzz");
+
+    let bar = bar(&app);
+    assert!(bar.contains("Enter choose"), "{bar}");
+    assert_eq!(fg_of(&app, 22, "Enter"), Some(Color::DarkGray));
+}
+
+#[test]
+fn the_search_overlay_shows_no_moves_it_cannot_make() {
+    let mut app = sized((80, 24));
+    press(&mut app, "/");
+
+    let bar = bar(&app);
+    assert!(!bar.contains("move"), "{bar}");
+    assert!(bar.contains("Esc close"), "{bar}");
 }
 
 #[test]

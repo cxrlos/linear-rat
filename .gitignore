@@ -6,3 +6,5 @@
 !/.claude/settings.json
 /.gemini/
 /result
+*.snap.new
+*.pending-snap

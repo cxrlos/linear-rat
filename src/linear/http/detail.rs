@@ -1,15 +1,15 @@
 //! Loading what an issue's detail shows beyond the list: every page of its
-//! comments and of its workflow state history, both at once, and its first
-//! attachments.
+//! comments and of its workflow state history, its first attachments, and
+//! its parent, sub-issues and relations, all at once.
 
 use jiff::Timestamp;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::assigned::{optional_timestamp, state_type, timestamp};
-use super::{HttpClient, PageInfo, Urgency};
+use super::{HttpClient, PageInfo, Urgency, relations};
 use crate::linear::model::{
-    Attachment, Comment, Member, Project, StateSpan, StateType, WorkflowState,
+    Attachment, Comment, Member, Project, ProjectMilestone, StateSpan, StateType, WorkflowState,
 };
 use crate::linear::{ClientError, IssueDetail, Response};
 
@@ -22,7 +22,7 @@ pub(super) async fn load(
     urgency: Urgency,
 ) -> Result<IssueDetail, ClientError> {
     let variables = json!({ "id": issue_id });
-    let (comments, history) = futures_util::future::try_join(
+    let (comments, history, related) = futures_util::future::try_join3(
         client.all_pages(
             COMMENTS,
             variables.clone(),
@@ -32,6 +32,7 @@ pub(super) async fn load(
         client.all_pages(STATE_HISTORY, variables, urgency, |page: &HistoryPage| {
             &page.issue.state_history.page_info
         }),
+        relations::load(client, issue_id, urgency),
     )
     .await?;
     let Response {
@@ -49,13 +50,24 @@ pub(super) async fn load(
         workflow_states: Vec::new(),
         members: Vec::new(),
         project: None,
+        milestone: None,
         attachments: Vec::new(),
         problems: comment_errors
             .iter()
             .chain(&history_errors)
+            .chain(&related.errors)
             .map(|error| format!("Linear left something out: {error}"))
             .collect(),
+        relations: related.relations,
+        related_issues: related.issues.issues,
+        teams: related.issues.teams,
+        cycles: related.issues.cycles,
     };
+    for member in related.issues.members {
+        if !detail.members.iter().any(|known| known.id == member.id) {
+            detail.members.push(member);
+        }
+    }
     for node in comment_pages
         .into_iter()
         .flat_map(|page| page.issue.comments.nodes)
@@ -91,6 +103,13 @@ pub(super) async fn load(
             detail.project = Some(Project {
                 id: project.id,
                 name: project.name,
+            });
+        }
+        if let Some(milestone) = page.issue.project_milestone {
+            detail.milestone = Some(ProjectMilestone {
+                id: milestone.id,
+                name: milestone.name,
+                project_id: milestone.project.id,
             });
         }
         for node in page.issue.state_history.nodes {
@@ -144,8 +163,22 @@ struct HistoryPage {
 #[serde(rename_all = "camelCase")]
 struct IssueHistory {
     project: Option<ProjectNode>,
+    #[serde(default)]
+    project_milestone: Option<MilestoneNode>,
     state_history: Connection<SpanNode>,
     attachments: Nodes<AttachmentNode>,
+}
+
+#[derive(Deserialize)]
+struct MilestoneNode {
+    id: String,
+    name: String,
+    project: IdNode,
+}
+
+#[derive(Deserialize)]
+struct IdNode {
+    id: String,
 }
 
 #[derive(Deserialize)]

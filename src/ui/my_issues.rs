@@ -1,6 +1,9 @@
 //! My Issues: the grouped list and the focused issue's detail.
 
+use super::text;
 use std::collections::BTreeMap;
+
+use jiff::civil::Date;
 
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
@@ -10,7 +13,7 @@ use ratatui::widgets::{Block, BorderType, Paragraph};
 
 use super::theme::Theme;
 use super::{detail, icons, style};
-use crate::app::{Group, Names, Pane, State};
+use crate::app::{Arrangement, Group, GroupKey, IssueList, Names, Pane, Sort, State, Store};
 use crate::linear::model::{Issue, Priority, StateType, WorkflowState};
 
 /// From `ui.wide-layout-columns` columns on, the detail shows beside the
@@ -67,6 +70,10 @@ pub(super) struct View<'a> {
     icons: icons::IconSet,
     /// Why the last edit of an issue failed, by issue id.
     row_errors: &'a BTreeMap<String, String>,
+    /// The viewer's day, which due dates are overdue after.
+    today: Date,
+    /// Which issues an open issue blocks.
+    store: &'a Store,
 }
 
 impl<'a> View<'a> {
@@ -76,6 +83,8 @@ impl<'a> View<'a> {
             theme: &state.theme,
             icons: state.ui.icons,
             row_errors: &state.row_errors,
+            today: state.today(),
+            store: &state.store,
         }
     }
 }
@@ -89,12 +98,15 @@ pub(super) enum Focus {
     Unfocused,
 }
 
+/// A bordered pane drawn in `area`, its title cut with `…` to fit.
 pub(super) fn pane_block(
     title: impl Into<Line<'static>>,
+    area: Rect,
     focus: Focus,
     theme: &Theme,
 ) -> Block<'static> {
-    let block = Block::bordered().title(title);
+    let room = usize::from(area.width.saturating_sub(2));
+    let block = Block::bordered().title(text::fit_line(title.into(), room));
     match focus {
         Focus::Alone => block.border_style(style::border(theme)),
         Focus::Focused => block
@@ -111,44 +123,124 @@ enum Row<'a> {
 
 fn render_list(view: &View, state: &State, frame: &mut Frame, area: Rect, focus: Focus) {
     let my_issues = &state.my_issues;
-    let theme = view.theme;
-    let block = pane_block("My Issues", focus, theme);
+    let title = list_title(
+        "My Issues",
+        my_issues.arrangement(),
+        state.ui.my_issues,
+        "active cycle, then priority",
+    );
+    let block = pane_block(title, area, focus, view.theme);
     let inner = block.inner(area);
     frame.render_widget(block, area);
-    if my_issues.groups().is_empty() {
-        let empty = Paragraph::new("No open issues are assigned to you.").fg(theme.muted);
+    if my_issues.is_empty() {
+        let empty = Paragraph::new("No open issues are assigned to you.").fg(view.theme.muted);
         frame.render_widget(empty, inner);
         return;
     }
+    render_groups(view, frame, inner, my_issues, focus);
+}
 
+/// `My Issues · group: workflow state · sort: priority, urgent first`, with
+/// `own` naming the list's own order. Just `title` while the list is
+/// arranged as it starts out.
+pub(super) fn list_title(
+    title: &str,
+    arrangement: Arrangement,
+    default: Arrangement,
+    own: &str,
+) -> String {
+    if arrangement == default {
+        return title.to_owned();
+    }
+    let sort = arrangement.sort.map_or_else(|| own.to_owned(), Sort::label);
+    format!(
+        "{title} · group: {} · sort: {sort}",
+        arrangement.group.label()
+    )
+}
+
+/// The rows of `list` in `inner`: each group's header, when it has one,
+/// over its issues, scrolled so the focused issue shows.
+pub(super) fn render_groups(
+    view: &View,
+    frame: &mut Frame,
+    inner: Rect,
+    list: &IssueList,
+    focus: Focus,
+) {
     let mut rows = Vec::new();
     let mut index = 0;
-    for group in my_issues.groups() {
-        rows.push(Row::Header(group));
+    for group in list.groups() {
+        if group.key.has_header() {
+            rows.push(Row::Header(group));
+        }
         for issue in &group.issues {
             rows.push(Row::Issue(index, issue));
             index += 1;
         }
     }
-    let offset = visible_offset(my_issues.scroll(), my_issues.focused_line(), inner);
-    let cells = row_cells(my_issues.groups().iter().flat_map(|group| &group.issues));
+    let offset = visible_offset(list.scroll(), list.focused_line(), inner);
+    let cells = row_cells(list.issues());
 
     for (line_area, row) in inner.rows().zip(rows.iter().skip(offset)) {
         match row {
             Row::Header(group) => {
-                let header = Line::from(vec![
-                    state_glyph(view, group.state_type),
-                    Span::raw(" "),
-                    Span::raw(icons::state_type_name(group.state_type)).bold(),
-                    Span::raw(format!(" ({})", group.issues.len())),
-                ]);
+                let mut header = group_name(view, &group.key);
+                header.push_span(Span::raw(format!(" ({})", group.issues.len())));
                 frame.render_widget(header, line_area);
             }
             Row::Issue(index, issue) => {
-                let is_focused = *index == my_issues.focused_index();
+                let is_focused = *index == list.focused_index();
                 render_row(view, frame, line_area, &cells, issue, is_focused, focus);
             }
         }
+    }
+}
+
+/// What a group header calls its group, with the glyph of a state type or
+/// priority.
+fn group_name(view: &View, key: &GroupKey) -> Line<'static> {
+    let names = view.names;
+    let named = |id: &Option<String>, name: Option<&str>, none: &str| {
+        let text = match (id, name) {
+            (None, _) => none.to_owned(),
+            (Some(_), Some(name)) => name.to_owned(),
+            (Some(id), None) => id.clone(),
+        };
+        Line::from(Span::raw(text).bold())
+    };
+    match key {
+        GroupKey::State(state_type) => Line::from(vec![
+            state_glyph(view, *state_type),
+            Span::raw(" "),
+            Span::raw(icons::state_type_name(*state_type)).bold(),
+        ]),
+        GroupKey::Priority(priority) => Line::from(vec![
+            Span::raw(view.icons.priority(*priority)).fg(view.theme.priority(*priority)),
+            Span::raw(" "),
+            Span::raw(icons::priority_name(*priority)).bold(),
+        ]),
+        GroupKey::Project(id) => named(
+            id,
+            id.as_deref().and_then(|id| names.project_name(id)),
+            "No project",
+        ),
+        GroupKey::Milestone(id) => named(
+            id,
+            id.as_deref().and_then(|id| names.milestone_name(id)),
+            "No milestone",
+        ),
+        GroupKey::Cycle(id) => named(
+            id,
+            id.as_deref().and_then(|id| names.cycle_name(id)),
+            "No cycle",
+        ),
+        GroupKey::Assignee(id) => named(
+            id,
+            id.as_deref().and_then(|id| names.member_name(id)),
+            "Unassigned",
+        ),
+        GroupKey::All => Line::default(),
     }
 }
 
@@ -166,7 +258,7 @@ pub(super) fn visible_offset(scroll: usize, focused_line: usize, inner: Rect) ->
 /// of `issues`.
 pub(super) fn row_cells<'a>(issues: impl Iterator<Item = &'a Issue>) -> Layout {
     let id_width = issues
-        .map(|issue| issue.identifier.chars().count())
+        .map(|issue| text::width(&issue.identifier))
         .max()
         .unwrap_or(0);
     Layout::horizontal([
@@ -181,8 +273,12 @@ pub(super) fn row_cells<'a>(issues: impl Iterator<Item = &'a Issue>) -> Layout {
     .spacing(1)
 }
 
-/// One issue row: marker, identifier, title, state, priority, estimate and
-/// cycle, highlighted when it is the focused issue.
+/// The columns a row's title keeps before its due date is shown beside it.
+const TITLE_BESIDE_DUE: u16 = 30;
+
+/// One issue row: marker, identifier, title with its due date when there is
+/// room, state, priority, estimate and cycle, highlighted when it is the
+/// focused issue.
 pub(super) fn render_row(
     view: &View,
     frame: &mut Frame,
@@ -197,17 +293,47 @@ pub(super) fn render_row(
     if is_focused {
         frame.render_widget("▸", marker);
     }
-    frame.render_widget(Span::raw(&issue.identifier).fg(theme.muted), identifier);
-    let title_line = if view.row_errors.contains_key(&issue.id) {
-        Line::from(vec![
-            Span::styled("✘ ", style::error(theme)),
-            Span::styled(issue.title.as_str(), style::error(theme)),
-        ])
-    } else {
-        Line::from(issue.title.as_str())
+    text::draw(
+        frame,
+        Span::raw(&issue.identifier).fg(theme.muted),
+        identifier,
+    );
+    let due = issue
+        .due_date
+        .map(|date| due_span(view, issue, date))
+        .map(|due| (u16::try_from(due.width()).unwrap_or(u16::MAX), due))
+        .filter(|(width, _)| {
+            title.width >= width.saturating_add(1).saturating_add(TITLE_BESIDE_DUE)
+        });
+    let title = match due {
+        Some((width, due)) => {
+            let [title, due_area] =
+                Layout::horizontal([Constraint::Fill(1), Constraint::Length(width)])
+                    .spacing(1)
+                    .areas(title);
+            frame.render_widget(due, due_area);
+            title
+        }
+        None => title,
     };
-    frame.render_widget(title_line, title);
-    frame.render_widget(state_line(view, &issue.state), state);
+    let mut title_spans = Vec::new();
+    let failed = view.row_errors.contains_key(&issue.id);
+    if failed {
+        title_spans.push(Span::styled("✘ ", style::error(theme)));
+    }
+    if view.store.is_blocked(&issue.id) {
+        title_spans.push(Span::styled(
+            format!("{} ", view.icons.blocked()),
+            style::error(theme),
+        ));
+    }
+    title_spans.push(if failed {
+        Span::styled(issue.title.as_str(), style::error(theme))
+    } else {
+        Span::raw(issue.title.as_str())
+    });
+    text::draw(frame, title_spans, title);
+    text::draw(frame, state_line(view, &issue.state), state);
     frame.render_widget(priority_line(view, issue.priority), priority);
     frame.render_widget(
         Line::from(
@@ -220,7 +346,7 @@ pub(super) fn render_row(
         .alignment(Alignment::Right),
         estimate,
     );
-    frame.render_widget(cycle_span(view, issue), cycle);
+    text::draw(frame, cycle_span(view, issue), cycle);
     if is_focused {
         let highlight = if focus == Focus::Unfocused {
             Style::new().add_modifier(Modifier::BOLD)
@@ -242,10 +368,10 @@ pub(super) fn render_detail(
 ) {
     let theme = &state.theme;
     let Some(issue) = issue else {
-        frame.render_widget(pane_block("Detail", focus, theme), area);
+        frame.render_widget(pane_block("Detail", area, focus, theme), area);
         return;
     };
-    let block = pane_block(issue.identifier.clone(), focus, theme);
+    let block = pane_block(issue.identifier.clone(), area, focus, theme);
     let inner = block.inner(area);
     let lines = detail::lines(state, issue, inner.width);
     // The kept scroll may be past the end after the detail got shorter.
@@ -273,6 +399,21 @@ fn priority_line(view: &View, priority: Priority) -> Line<'static> {
         Span::raw(" "),
         Span::raw(icons::priority_name(priority)),
     ])
+}
+
+/// When `issue` is due, as `due Nov 6`, in the alert style once it is
+/// overdue and still open.
+fn due_span(view: &View, issue: &Issue, date: Date) -> Span<'static> {
+    let text = if date.year() == view.today.year() {
+        date.strftime("due %b %-d").to_string()
+    } else {
+        date.strftime("due %b %-d %Y").to_string()
+    };
+    if detail::is_overdue(issue, date, view.today) {
+        Span::styled(text, style::error(view.theme))
+    } else {
+        Span::styled(text, style::muted(view.theme))
+    }
 }
 
 fn cycle_span<'a>(view: &View<'a>, issue: &'a Issue) -> Span<'a> {

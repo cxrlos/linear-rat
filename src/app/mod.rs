@@ -2,13 +2,21 @@
 
 mod action;
 mod analytics_screen;
+mod arrange;
+mod browse;
+mod capabilities;
 mod compose;
 mod create;
 mod detail;
+mod due_date;
 mod edit;
 mod edit_text;
 mod effect;
 mod event;
+mod failure;
+mod issue_list;
+mod issue_picker;
+mod lifecycle;
 mod links;
 mod load;
 mod modal;
@@ -16,6 +24,9 @@ mod my_issues;
 mod names;
 mod palette;
 mod picker;
+mod rearrange;
+mod relations;
+mod release;
 mod results;
 mod search;
 mod state;
@@ -30,24 +41,40 @@ use ratatui::layout::Rect;
 
 pub use action::{Action, Copyable};
 pub use analytics_screen::{AnalyticsScreen, AnalyticsView};
+pub use arrange::{Arrangement, Group, GroupKey, Grouping, Sort, SortKey, arrange, linear_order};
+pub use browse::{Cycles, Projects, cycle_counts, cycle_title};
+pub use capabilities::{Capabilities, Capability, WriteClass};
 pub use compose::{Drafts, IssueDraft, NewComment, NewIssue, Writing, is_local};
 pub use create::{CreateForm, Step};
 pub use detail::{Detail, DetailLoad};
-pub use edit::{Edit, EditPicker, Editable, Write, estimate_scale, focused_team_estimates};
+pub use due_date::{FORMS as DUE_DATE_FORMS, parse_due_date};
+pub use edit::{
+    DuePrompt, Edit, EditPicker, Editable, Write, estimate_scale, focused_has_project,
+    focused_team_estimates,
+};
 pub use edit_text::TextOpened;
 pub use effect::Effect;
 pub use event::Event;
+pub use failure::{ERROR_LOG_CAP, ErrorLog, Failure, LoggedFailure};
+pub use issue_list::{IssueList, Pane};
+pub use issue_picker::{
+    IssuePicker, IssuePurpose, Mode, PickerScope, SEARCH_PAUSE, open as open_issue_picker,
+};
+pub use lifecycle::{Confirm, Lifecycle, LifecycleWrite, OnConfirm, focused_is_archived};
 pub use links::{Link, LinkSet, Links};
 pub use load::{Load, LoadError};
 pub use modal::{Choice, Modal, ModalStack, Purpose};
-pub use my_issues::{Group, MyIssues, Pane};
+pub use my_issues::MyIssues;
 pub use names::Names;
 pub use palette::{Palette, PaletteEntry, palette_matches};
 pub use picker::{Entry, Note, Picker};
+pub use rearrange::{can_rearrange, own_order};
+pub use relations::{RelationWrite, RelationsInFlight};
+pub use release::Release;
 pub use results::Results;
-pub use search::{Phase, Search};
+pub use search::{Phase, Scope, Search};
 pub use state::{Screen, State};
-pub use store::Store;
+pub use store::{Store, Trashed};
 pub use sync::{
     IDLE_AFTER, Indicator, LIVE_POLL_AFTER, OVERLAP, RECONCILE_EVERY, SyncFailure, SyncStatus,
     TeamPoll,

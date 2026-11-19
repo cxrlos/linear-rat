@@ -1,8 +1,10 @@
-//! An issue's detail: its title and state, the description as Markdown, the
-//! comments, the workflow state history and the rest of what it refers to.
+//! An issue's detail: its title and state, the description as Markdown, its
+//! parent, sub-issues and relations, the comments, the workflow state
+//! history and the rest of what it refers to.
 //! Built as lines already wrapped to the pane, so scrolling counts real rows.
 
 use jiff::Timestamp;
+use jiff::civil::Date;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use unicode_width::UnicodeWidthStr;
@@ -10,7 +12,7 @@ use unicode_width::UnicodeWidthStr;
 use super::theme::Theme;
 use super::{icons, markdown, style};
 use crate::app::{DetailLoad, State};
-use crate::linear::model::{Estimation, Issue, StateSpan};
+use crate::linear::model::{Attachment, Estimation, Issue, StateSpan};
 
 const FIELD_WIDTH: usize = 10;
 
@@ -72,6 +74,7 @@ pub(super) fn lines(state: &State, issue: &Issue, width: u16) -> Vec<Line<'stati
         }
         _ => lines.push(Line::styled("No description.", muted)),
     }
+    lines.extend(relations(state, issue, width));
 
     let load = state.detail.load(&issue.id);
     let comments = store.comments(&issue.id);
@@ -124,9 +127,88 @@ pub(super) fn lines(state: &State, issue: &Issue, width: u16) -> Vec<Line<'stati
         None => {}
     }
 
+    lines.extend(attachment_lines(state, issue, width));
+
     lines.push(Line::default());
     lines.push(Line::styled("Details", bold));
     lines.extend(details(state, issue, now, width));
+    lines
+}
+
+/// The Relations section: the parent, the sub-issues with how many are
+/// done, then the related issues by kind, each with its state glyph. Left
+/// out when the issue has none of them. The sub-issues wait on the detail's
+/// load, since the store may hold only some of them before it.
+fn relations(state: &State, issue: &Issue, width: u16) -> Vec<Line<'static>> {
+    const NAME_WIDTH: usize = 14;
+    let theme = &state.theme;
+    let store = &state.store;
+    let muted = style::muted(theme);
+    let children = if state.detail.load(&issue.id) == Some(&DetailLoad::Loaded) {
+        store.children(&issue.id)
+    } else {
+        Vec::new()
+    };
+    let related = store.relations(&issue.id);
+    if issue.parent_id.is_none() && children.is_empty() && related.is_empty() {
+        return Vec::new();
+    }
+    let issue_pieces = |id: &str| -> Pieces {
+        match store.issue(id) {
+            Some(other) => {
+                let state_type = other.state.state_type;
+                vec![
+                    (
+                        state.ui.icons.state(state_type).to_owned(),
+                        Style::new().fg(theme.state(state_type)),
+                    ),
+                    (format!(" {} ", other.identifier), muted),
+                    (other.title.clone(), Style::new()),
+                ]
+            }
+            None => vec![(id.to_owned(), muted)],
+        }
+    };
+    let mut rows: Vec<(String, Pieces)> = Vec::new();
+    if let Some(parent) = &issue.parent_id {
+        rows.push(("Parent".to_owned(), issue_pieces(parent)));
+    }
+    if !children.is_empty() {
+        let done = children
+            .iter()
+            .filter(|child| !child.state.state_type.is_open())
+            .count();
+        rows.push((
+            "Sub-issues".to_owned(),
+            plain(format!("{done}/{} done", children.len())),
+        ));
+        for child in &children {
+            rows.push((String::new(), issue_pieces(&child.id)));
+        }
+    }
+    let mut last_kind = None;
+    for (kind, _, other) in related {
+        let name = if last_kind == Some(kind) {
+            String::new()
+        } else {
+            kind.name().to_owned()
+        };
+        last_kind = Some(kind);
+        rows.push((name, issue_pieces(other)));
+    }
+
+    let mut lines = vec![
+        Line::default(),
+        Line::styled("Relations", Style::new().add_modifier(Modifier::BOLD)),
+    ];
+    for (name, value) in rows {
+        lines.extend(markdown::wrap(
+            &value,
+            width,
+            &[(format!("{name:NAME_WIDTH$}"), muted)],
+            &[(" ".repeat(NAME_WIDTH), Style::new())],
+        ));
+    }
     lines
 }
 
@@ -147,6 +229,73 @@ fn load_note(
         ),
         _ if has_data => Vec::new(),
         _ => vec![Line::styled("Loading…", style::muted(theme))],
+    }
+}
+
+/// The Attachments section: pull requests first, each attachment's title,
+/// source and status, then its URL. A loading line until the detail brings
+/// them, and nothing at all when there are none or the load failed, since
+/// the comments already say why.
+fn attachment_lines(state: &State, issue: &Issue, width: u16) -> Vec<Line<'static>> {
+    let theme = &state.theme;
+    let muted = style::muted(theme);
+    let heading = |text: String| {
+        vec![
+            Line::default(),
+            Line::styled(text, Style::new().add_modifier(Modifier::BOLD)),
+        ]
+    };
+    let attachments = match state.store.attachments(&issue.id) {
+        Some([]) => return Vec::new(),
+        Some(attachments) => attachments,
+        None => {
+            return match state.detail.load(&issue.id) {
+                None | Some(DetailLoad::Loading) => {
+                    let mut lines = heading("Attachments".to_owned());
+                    lines.push(Line::styled("Loading…", muted));
+                    lines
+                }
+                Some(DetailLoad::Loaded | DetailLoad::Failed(_)) => Vec::new(),
+            };
+        }
+    };
+    let mut ordered: Vec<&Attachment> = attachments.iter().collect();
+    ordered.sort_by_key(|attachment| !attachment.is_pull_request());
+
+    let mut lines = heading(format!("Attachments ({})", attachments.len()));
+    for attachment in ordered {
+        let mut about = vec![(attachment.title.clone(), Style::new())];
+        about.push((format!(" · {}", attachment_source(attachment)), muted));
+        if let Some(status) = &attachment.status {
+            about.push((format!(" · {status}"), muted));
+        }
+        let indent = [("  ".to_owned(), Style::new())];
+        lines.extend(markdown::wrap(&about, width, &[], &indent));
+        lines.extend(markdown::wrap(
+            &[(attachment.url.clone(), muted)],
+            width,
+            &indent,
+            &indent,
+        ));
+    }
+    lines
+}
+
+/// Where an attachment came from, as `GitHub pull request`, `Slack` or
+/// `attachment` when Linear does not say.
+fn attachment_source(attachment: &Attachment) -> String {
+    if attachment.is_pull_request() {
+        return "GitHub pull request".to_owned();
+    }
+    match attachment.source_type.as_deref() {
+        None | Some("" | "unknown") => "attachment".to_owned(),
+        Some(source) if source.eq_ignore_ascii_case("github") => "GitHub".to_owned(),
+        Some(source) => {
+            let mut chars = source.chars();
+            chars.next().map_or_else(String::new, |first| {
+                first.to_uppercase().chain(chars).collect()
+            })
+        }
     }
 }
 
@@ -218,6 +367,22 @@ fn details(state: &State, issue: &Issue, now: Timestamp, width: u16) -> Vec<Line
             (None, Some(_)) => plain(id.clone()),
         },
     };
+    let milestone = match &issue.project_milestone_id {
+        None => plain("None"),
+        Some(id) => match (store.milestone(id), state.detail.load(&issue.id)) {
+            (Some(milestone), _) => plain(milestone.name.clone()),
+            (None, None | Some(DetailLoad::Loading)) => vec![("Loading…".to_owned(), muted)],
+            (None, Some(_)) => plain(id.clone()),
+        },
+    };
+    let due = match issue.due_date {
+        None => plain("None"),
+        Some(date) if is_overdue(issue, date, state.today()) => vec![
+            (date.to_string(), style::error(theme)),
+            (" (overdue)".to_owned(), style::error(theme)),
+        ],
+        Some(date) => plain(date.to_string()),
+    };
     let cycle = match issue.cycle_id.as_deref() {
         None => plain("None"),
         Some(id) => match store.cycle(id) {
@@ -257,7 +422,9 @@ fn details(state: &State, issue: &Issue, now: Timestamp, width: u16) -> Vec<Line
     for (name, value) in [
         ("Team", plain(team)),
         ("Project", project),
+        ("Milestone", milestone),
         ("Cycle", cycle),
+        ("Due", due),
         ("Labels", plain(labels)),
         (
             "Assignee",
@@ -272,7 +439,26 @@ fn details(state: &State, issue: &Issue, now: Timestamp, width: u16) -> Vec<Line
     ] {
         lines.extend(field(theme, name, value, width));
     }
+    if let Some(archived_at) = issue.archived_at {
+        lines.extend(field(
+            theme,
+            "Archived",
+            plain(when(archived_at, now)),
+            width,
+        ));
+    }
+    let subscription = if issue.subscribed {
+        vec![("Subscribed".to_owned(), style::accent(theme))]
+    } else {
+        vec![("Not subscribed".to_owned(), muted)]
+    };
+    lines.extend(field(theme, "Updates", subscription, width));
     lines
+}
+
+/// Whether `issue`, due on `date`, is still open past it on `today`.
+pub(super) fn is_overdue(issue: &Issue, date: Date, today: Date) -> bool {
+    date < today && issue.state.state_type.is_open()
 }
 
 fn state_pieces(state: &State, issue: &Issue) -> Pieces {

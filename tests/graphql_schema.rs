@@ -325,3 +325,41 @@ fn a_schema_without_a_field_a_document_uses_names_that_document() {
     assert!(failures.contains("assigned_issues.graphql:"), "{failures}");
     assert!(!failures.contains("viewer.graphql:"), "{failures}");
 }
+
+/// Every query that reads a whole issue (the ones asking for `branchName`)
+/// asks for the fields the store keeps, as often as it asks for an issue. A
+/// query that left one out would overwrite the stored value with nothing.
+#[test]
+fn every_whole_issue_projection_asks_for_every_stored_field() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/linear/graphql");
+    let mut missing = Vec::new();
+    for entry in fs::read_dir(&dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path
+            .extension()
+            .is_none_or(|extension| extension != "graphql")
+        {
+            continue;
+        }
+        let text = fs::read_to_string(&path).unwrap();
+        let issues = text.matches("branchName").count();
+        if issues == 0 {
+            continue;
+        }
+        for field in [
+            "archivedAt",
+            "subscribers(",
+            "dueDate",
+            "projectMilestone {",
+        ] {
+            let found = text.matches(field).count();
+            if found < issues {
+                missing.push(format!(
+                    "{}: {field} {found} of {issues} times",
+                    path.file_name().unwrap().to_string_lossy()
+                ));
+            }
+        }
+    }
+    assert!(missing.is_empty(), "{missing:#?}");
+}

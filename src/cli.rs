@@ -95,7 +95,7 @@ pub enum Command {
         /// The issue key, such as ENG-123, in any case
         key: IssueKey,
     },
-    /// Check the API key, Linear, the terminal and the config
+    /// Check the API key, Linear, the terminal, the config and the version
     ///
     /// Prints one line per check, marked ● (ok), ▲ (warning) or ✘ (failure),
     /// each warning or failure followed by how to fix it. Never prints the

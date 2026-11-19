@@ -7,8 +7,10 @@
 use std::time::Duration;
 
 use linear_rat::auth::ApiKey;
-use linear_rat::linear::model::{Priority, StateType};
-use linear_rat::linear::{ClientConfig, ClientError, HttpClient, IssueUpdate, LinearClient, Patch};
+use linear_rat::linear::model::{IssueRelation, Priority, RelationType, StateType};
+use linear_rat::linear::{
+    ClientConfig, ClientError, HttpClient, IssueUpdate, LinearClient, Patch, RelationCreate,
+};
 use serde_json::{Value, json};
 use wiremock::matchers::method;
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -391,4 +393,276 @@ async fn the_updated_at_is_read_afresh_for_the_issue_asked_for() {
             .contains("query IssueUpdatedAt")
     );
     assert_eq!(body["variables"], json!({ "id": "issue-1" }));
+}
+
+#[tokio::test]
+async fn due_date_cycle_project_milestone_and_parent_are_sent_by_value_and_cleared_as_null() {
+    let server = server_answering(updated()).await;
+    let client = client_for(&server);
+    let set = IssueUpdate {
+        due_date: Patch::Set(jiff::civil::date(2026, 11, 20)),
+        cycle_id: Patch::Set("cycle-7".to_owned()),
+        project_id: Patch::Set("project-1".to_owned()),
+        project_milestone_id: Patch::Set("milestone-2".to_owned()),
+        parent_id: Patch::Set("issue-9".to_owned()),
+        ..IssueUpdate::default()
+    };
+    let clear = IssueUpdate {
+        due_date: Patch::Clear,
+        cycle_id: Patch::Clear,
+        project_id: Patch::Clear,
+        project_milestone_id: Patch::Clear,
+        parent_id: Patch::Clear,
+        ..IssueUpdate::default()
+    };
+    client.update_issue("issue-1", &set).await.unwrap();
+    client.update_issue("issue-1", &clear).await.unwrap();
+
+    let requests = server.received_requests().await.unwrap();
+    let inputs: Vec<Value> = requests
+        .iter()
+        .map(|request| request.body_json::<Value>().unwrap()["variables"]["input"].clone())
+        .collect();
+    assert_eq!(
+        inputs,
+        [
+            json!({
+                "dueDate": "2026-11-20",
+                "cycleId": "cycle-7",
+                "projectId": "project-1",
+                "projectMilestoneId": "milestone-2",
+                "parentId": "issue-9",
+            }),
+            json!({
+                "dueDate": null,
+                "cycleId": null,
+                "projectId": null,
+                "projectMilestoneId": null,
+                "parentId": null,
+            }),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn an_updated_issue_carries_its_due_date_milestone_and_parent() {
+    let mut node = issue_node();
+    node["dueDate"] = json!("2026-11-20");
+    node["projectMilestone"] = json!({ "id": "milestone-2" });
+    node["parent"] = json!({ "id": "issue-9" });
+    let server =
+        server_answering(json!({ "data": { "issueUpdate": { "success": true, "issue": node } } }))
+            .await;
+
+    let issue = client_for(&server)
+        .update_issue("issue-1", &IssueUpdate::default())
+        .await
+        .unwrap();
+
+    assert_eq!(issue.due_date, Some(jiff::civil::date(2026, 11, 20)));
+    assert_eq!(issue.project_milestone_id.as_deref(), Some("milestone-2"));
+    assert_eq!(issue.parent_id.as_deref(), Some("issue-9"));
+}
+
+#[tokio::test]
+async fn project_milestones_follow_every_page_of_the_project_asked_for() {
+    let server = MockServer::start().await;
+    let page = |id: &str, name: &str, sort_order: f64, next: Option<&str>| {
+        json!({ "data": { "project": { "projectMilestones": {
+            "nodes": [{ "id": id, "name": name, "sortOrder": sort_order }],
+            "pageInfo": { "hasNextPage": next.is_some(), "endCursor": next }
+        } } } })
+    };
+    Mock::given(method("POST"))
+        .and(wiremock::matchers::body_partial_json(
+            json!({ "variables": { "after": null, "projectId": "project-1" } }),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(page(
+            "milestone-1",
+            "Beta",
+            1.0,
+            Some("c1"),
+        )))
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(wiremock::matchers::body_partial_json(
+            json!({ "variables": { "after": "c1" } }),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(page(
+            "milestone-2",
+            "Launch",
+            2.0,
+            None,
+        )))
+        .mount(&server)
+        .await;
+
+    let milestones = client_for(&server)
+        .project_milestones("project-1")
+        .await
+        .unwrap();
+
+    let milestones: Vec<(&str, &str, &str)> = milestones
+        .iter()
+        .map(|milestone| {
+            (
+                milestone.id.as_str(),
+                milestone.name.as_str(),
+                milestone.project_id.as_str(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        milestones,
+        [
+            ("milestone-1", "Beta", "project-1"),
+            ("milestone-2", "Launch", "project-1")
+        ]
+    );
+    let requests = server.received_requests().await.unwrap();
+    let body: Value = requests[0].body_json().unwrap();
+    assert!(
+        body["query"]
+            .as_str()
+            .unwrap()
+            .contains("query ProjectMilestones")
+    );
+}
+
+#[tokio::test]
+async fn setting_and_clearing_the_parent_send_parent_id() {
+    for (parent_id, sent) in [
+        (Patch::Set("issue-top".to_owned()), json!("issue-top")),
+        (Patch::Clear, json!(null)),
+    ] {
+        let server = server_answering(updated()).await;
+        let update = IssueUpdate {
+            parent_id,
+            ..IssueUpdate::default()
+        };
+
+        client_for(&server)
+            .update_issue("issue-1", &update)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            sent_variables(&server).await,
+            json!({ "id": "issue-1", "input": { "parentId": sent } })
+        );
+    }
+}
+
+/// The only request `server` received.
+async fn only_request(server: &MockServer) -> Value {
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(requests.len(), 1, "expected exactly one request");
+    requests[0].body_json().unwrap()
+}
+
+#[tokio::test]
+async fn creating_a_relation_sends_its_type_and_returns_it_as_stored() {
+    let server = server_answering(json!({ "data": { "issueRelationCreate": {
+        "success": true,
+        "issueRelation": {
+            "id": "rel-1", "type": "blocks",
+            "issue": { "id": "issue-1" }, "relatedIssue": { "id": "issue-2" }
+        }
+    } } }))
+    .await;
+    let input = RelationCreate {
+        issue_id: "issue-1".to_owned(),
+        related_issue_id: "issue-2".to_owned(),
+        kind: RelationType::Blocks,
+    };
+
+    let relation = client_for(&server).create_relation(&input).await.unwrap();
+
+    assert_eq!(
+        relation,
+        IssueRelation {
+            id: "rel-1".to_owned(),
+            kind: RelationType::Blocks,
+            issue_id: "issue-1".to_owned(),
+            related_issue_id: "issue-2".to_owned(),
+        }
+    );
+    let body = only_request(&server).await;
+    assert!(
+        body["query"]
+            .as_str()
+            .unwrap()
+            .contains("mutation IssueRelationCreate")
+    );
+    assert_eq!(
+        body["variables"],
+        json!({ "input": {
+            "issueId": "issue-1", "relatedIssueId": "issue-2", "type": "blocks"
+        } })
+    );
+}
+
+#[tokio::test]
+async fn a_relation_linear_does_not_confirm_says_so() {
+    let server = server_answering(json!({ "data": { "issueRelationCreate": {
+        "success": false,
+        "issueRelation": null
+    } } }))
+    .await;
+    let input = RelationCreate {
+        issue_id: "issue-1".to_owned(),
+        related_issue_id: "issue-2".to_owned(),
+        kind: RelationType::Related,
+    };
+
+    let error = client_for(&server)
+        .create_relation(&input)
+        .await
+        .unwrap_err();
+
+    assert!(
+        error
+            .to_string()
+            .contains("Linear did not confirm the relation"),
+        "{error:?}"
+    );
+}
+
+#[tokio::test]
+async fn deleting_a_relation_sends_its_id() {
+    let server =
+        server_answering(json!({ "data": { "issueRelationDelete": { "success": true } } })).await;
+
+    client_for(&server).delete_relation("rel-1").await.unwrap();
+
+    let body = only_request(&server).await;
+    assert!(
+        body["query"]
+            .as_str()
+            .unwrap()
+            .contains("mutation IssueRelationDelete")
+    );
+    assert_eq!(body["variables"], json!({ "id": "rel-1" }));
+}
+
+#[tokio::test]
+async fn a_relation_linear_refuses_is_an_error() {
+    let server = server_answering(json!({
+        "data": null,
+        "errors": [{ "message": "Entity not found: Issue" }]
+    }))
+    .await;
+    let input = RelationCreate {
+        issue_id: "issue-1".to_owned(),
+        related_issue_id: "issue-gone".to_owned(),
+        kind: RelationType::Related,
+    };
+
+    let error = client_for(&server)
+        .create_relation(&input)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, ClientError::GraphQl(_)), "{error:?}");
 }

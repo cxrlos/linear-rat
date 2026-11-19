@@ -4,15 +4,18 @@ use std::fmt::Display;
 use ratatui::layout::Size;
 
 use jiff::Timestamp;
+use jiff::civil::Date;
 
 use super::{
-    AnalyticsScreen, Detail, Drafts, Load, LoadError, ModalStack, MyIssues, Results, Store,
-    SyncStatus, TeamIssues,
+    AnalyticsScreen, Cycles, Detail, Drafts, ErrorLog, Failure, Load, LoadError, ModalStack,
+    MyIssues, Names, Projects, RelationsInFlight, Release, Results, Store, SyncStatus, TeamIssues,
+    WriteClass,
 };
 use crate::auth::KeySource;
 use crate::config::{AnalyticsSettings, Loaded, SyncSettings, UiSettings};
 use crate::keys::Keymap;
 use crate::linear::AssignedIssues;
+use crate::linear::ErrorKind;
 use crate::linear::model::Issue;
 use crate::ui;
 use crate::ui::theme::Theme;
@@ -33,6 +36,8 @@ pub struct State {
     pub row_errors: BTreeMap<String, String>,
     /// How many edits sent to Linear are still unanswered, by issue id.
     pub writes_in_flight: BTreeMap<String, usize>,
+    /// Relation writes Linear has not answered yet.
+    pub relations_in_flight: RelationsInFlight,
     pub my_issues: MyIssues,
     /// The focused issue's detail: its scroll and which details have loaded.
     pub detail: Detail,
@@ -57,8 +62,16 @@ pub struct State {
     /// `[analytics]`: the range the Analytics screen opens on.
     pub analytics: AnalyticsSettings,
     pub analytics_screen: AnalyticsScreen,
+    /// The Cycles screen: a team's recent cycles.
+    pub cycles: Cycles,
+    /// The Projects screen: the projects of the viewer's teams.
+    pub projects: Projects,
     /// Comments and descriptions Linear did not take, to write again.
     pub drafts: Drafts,
+    /// The most recent failures, for the messages overlay.
+    pub errors: ErrorLog,
+    /// Newer releases and whether this session checks for them.
+    pub release: Release,
 }
 
 impl State {
@@ -87,6 +100,70 @@ impl State {
         }
     }
 
+    /// Adds `failure` to the error log, stamped with the latest tick.
+    pub fn record(&mut self, failure: Failure) {
+        self.errors.record(self.sync_status.now(), failure);
+    }
+
+    /// Shows `failure` as the notice and adds it to the error log.
+    pub fn fail(&mut self, failure: Failure) {
+        self.notice = Some(failure.to_string());
+        self.record(failure);
+    }
+
+    /// Learns what the API key may do from a write of `class` in team
+    /// `team_id` that ended `outcome`.
+    pub fn learn_write(
+        &mut self,
+        team_id: &str,
+        class: WriteClass,
+        outcome: Result<(), &ErrorKind>,
+    ) {
+        let now = self.sync_status.now();
+        self.store
+            .capabilities_mut()
+            .learn_write(team_id, class, outcome, now);
+    }
+
+    /// Learns whether the API key can reach team `team_id` from a read
+    /// there that ended `outcome`. Being a member of the team counts as a
+    /// read that worked.
+    pub fn learn_reach(&mut self, team_id: &str, outcome: Result<(), &ErrorKind>) {
+        let now = self.sync_status.now();
+        self.store
+            .capabilities_mut()
+            .learn_reach(team_id, outcome, now);
+    }
+
+    /// Why the API key cannot do `class` to the focused issue, as `this API
+    /// key cannot edit issues in ENG`, or `None` when it is not known to be
+    /// denied or the denial no longer holds.
+    pub fn write_denied(&self, class: WriteClass) -> Option<String> {
+        let team_id = &self.focused_issue()?.team_id;
+        let capabilities = self.store.capabilities();
+        let now = self.sync_status.now();
+        let team = self
+            .store
+            .teams()
+            .find(|team| &team.id == team_id)
+            .map_or(team_id.as_str(), |team| team.key.as_str());
+        if capabilities.reach(team_id).holds_at(now) {
+            return Some(format!("this API key cannot reach {team}"));
+        }
+        capabilities
+            .write(team_id, class)
+            .holds_at(now)
+            .then(|| format!("this API key cannot {} in {team}", class.verb()))
+    }
+
+    /// Adds each of `problems`, what Linear could not give while `action`
+    /// otherwise worked, to the error log.
+    pub fn record_problems(&mut self, action: &str, problems: &[String]) {
+        for problem in problems {
+            self.record(Failure::new(ErrorKind::Other, action, problem.clone()));
+        }
+    }
+
     /// Fills My Issues with `loaded`, grouped as of when it was loaded. What
     /// Linear could not give becomes the notice, unless one is already
     /// showing.
@@ -94,6 +171,7 @@ impl State {
         if self.notice.is_none() {
             self.notice = summary(&loaded.problems);
         }
+        self.record_problems("load My Issues", &loaded.problems);
         // A store from another workspace or viewer, as a snapshot of the
         // last session can be, is thrown away rather than mixed in.
         let other_viewer = self
@@ -109,7 +187,7 @@ impl State {
             self.sync_status.forget_syncs();
         }
         self.store.merge(loaded);
-        self.rebuild_my_issues();
+        self.rebuild_lists();
         self.load = Load::Loaded;
     }
 
@@ -133,27 +211,45 @@ impl State {
             sync_status: SyncStatus::from_snapshot(synced_at),
             ..self
         };
-        state.rebuild_my_issues();
+        state.rebuild_lists();
         state
     }
 
-    /// Builds My Issues again from the store, for example after a merge,
-    /// keeping the focused issue, the pane and the scroll. When the focused
-    /// issue left, the focus stays at its place in the list.
-    pub fn rebuild_my_issues(&mut self) {
+    /// Builds the issue lists again from the store, for example after a
+    /// merge, keeping each one's focused issue, pane and scroll. When the
+    /// focused issue left My Issues, the focus stays at its place in the
+    /// list.
+    pub fn rebuild_lists(&mut self) {
+        super::team_issues::rebuild(self);
+        super::results::rebuild(self);
         let Some(viewer) = self.store.viewer() else {
             return;
         };
-        let as_of = self.store.as_of().unwrap_or_default();
         let issues: Vec<_> = self.store.issues().cloned().collect();
-        let cycles: Vec<_> = self.store.cycles().cloned().collect();
-        let labels: Vec<_> = self.store.labels().cloned().collect();
-        let members: Vec<_> = self.store.members().cloned().collect();
-        let teams: Vec<_> = self.store.teams().cloned().collect();
-        let mut rebuilt = MyIssues::new(viewer, &issues, &cycles, &labels, &members, &teams, as_of);
+        let names = Names::from_store(&self.store);
+        let mut rebuilt = MyIssues::arranged(viewer, &issues, names, self.my_issues.arrangement());
         let rows = ui::list_rows(self, self.viewport);
         rebuilt.keep_place_of(&self.my_issues, rows);
         self.my_issues = rebuilt;
+    }
+
+    /// The time now as the state knows it: the latest tick, else when the
+    /// store last loaded, else the epoch. It never reads the clock, so
+    /// rendering stays a pure function of the state.
+    pub fn now(&self) -> Timestamp {
+        self.sync_status
+            .now()
+            .or(self.store.as_of())
+            .unwrap_or_default()
+    }
+
+    /// The viewer's day [`now`](Self::now), in the time zone analytics
+    /// counts days in. Due dates are compared with it and relative due
+    /// dates count from it.
+    pub fn today(&self) -> Date {
+        self.now()
+            .to_zoned(self.analytics_screen.time_zone().clone())
+            .date()
     }
 
     /// The issue the current screen has focused, if it shows issues and has
@@ -169,14 +265,14 @@ impl State {
                 .results
                 .focused_id()
                 .and_then(|id| self.store.issue(id)),
-            Screen::Analytics => None,
+            Screen::Analytics | Screen::Cycles | Screen::Projects => None,
         }
     }
 
     /// This state with the keymap, theme and settings from `loaded`, and its
     /// first error, if any, as the notice.
     pub fn with_config(self, loaded: &Loaded) -> Self {
-        Self {
+        let mut state = Self {
             keymap: Keymap::new(&loaded.config.keys),
             notice: summary(&loaded.errors),
             theme: loaded.theme.clone(),
@@ -184,7 +280,18 @@ impl State {
             sync: loaded.config.sync,
             analytics: loaded.config.analytics,
             ..self
-        }
+        };
+        state.my_issues.arrangement = loaded.config.ui.my_issues;
+        state
+            .team_issues
+            .set_arrangement(loaded.config.ui.team_issues);
+        state.rebuild_lists();
+        state
+    }
+
+    /// This state knowing of newer releases as `release` does.
+    pub fn with_release(self, release: Release) -> Self {
+        Self { release, ..self }
     }
 }
 
@@ -205,19 +312,29 @@ pub enum Screen {
     MyIssues,
     TeamIssues,
     Analytics,
-    /// Search results or a palette jump, opened over another screen and
-    /// left with Esc. It has no tab.
+    Cycles,
+    Projects,
+    /// Search results, a palette jump, or the issues of a cycle or project,
+    /// opened over another screen and left with Esc. It has no tab.
     Results,
 }
 
 impl Screen {
-    pub const ALL: [Screen; 3] = [Screen::MyIssues, Screen::TeamIssues, Screen::Analytics];
+    pub const ALL: [Screen; 5] = [
+        Screen::MyIssues,
+        Screen::TeamIssues,
+        Screen::Analytics,
+        Screen::Cycles,
+        Screen::Projects,
+    ];
 
     pub fn title(self) -> &'static str {
         match self {
             Screen::MyIssues => "My Issues",
             Screen::TeamIssues => "Team Issues",
             Screen::Analytics => "Analytics",
+            Screen::Cycles => "Cycles",
+            Screen::Projects => "Projects",
             Screen::Results => "Results",
         }
     }

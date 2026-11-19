@@ -1,4 +1,4 @@
-# budget: 10
+# budget: 15
 # Every update to an issue of team `teamId`, with the fields the delta poll
 # reads, for live updates.
 subscription IssueUpdatedLive($teamId: ID!) {
@@ -51,6 +51,19 @@ subscription IssueUpdatedLive($teamId: ID!) {
     }
     project {
       id
+    }
+    projectMilestone {
+      id
+    }
+    parent {
+      id
+    }
+    dueDate
+    archivedAt
+    subscribers(first: 1, filter: { isMe: { eq: true } }) {
+      nodes {
+        id
+      }
     }
   }
 }

@@ -9,7 +9,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
 use linear_rat::app::{App, Effect, Event, State};
 use linear_rat::linear::model::Issue;
-use linear_rat::linear::{FakeClient, LinearClient, SearchResults, Urgency};
+use linear_rat::linear::{FakeClient, LinearClient, SearchQuery, SearchResults, Urgency};
 use ratatui::backend::TestBackend;
 
 fn app() -> App<TestBackend> {
@@ -49,7 +49,10 @@ fn shows(app: &App<TestBackend>, text: &str) -> bool {
 }
 
 async fn found(term: &str) -> SearchResults {
-    FakeClient.search_issues(term).await.unwrap()
+    FakeClient
+        .search_issues(&SearchQuery::new(term))
+        .await
+        .unwrap()
 }
 
 /// Searches for `term` and hands the app what the fake client finds,
@@ -60,7 +63,7 @@ async fn searched(app: &mut App<TestBackend>, term: &str) -> Vec<Effect> {
     app.handle(press(KeyCode::Enter)).unwrap();
     let result = Ok(found(term).await);
     app.handle(Event::SearchDone {
-        term: term.to_owned(),
+        query: SearchQuery::new(term),
         result,
     })
     .unwrap()

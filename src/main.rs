@@ -6,12 +6,13 @@ use clap::Parser;
 use crossterm::event::EventStream;
 use futures_util::Stream;
 use jiff::tz::TimeZone;
-use linear_rat::app::{App, Load, LoadError, State};
+use linear_rat::app::{App, Load, LoadError, Release, State};
 use linear_rat::auth::{self, Credentials, KeyringStore, OsKeyring, WorkspaceFile};
 use linear_rat::cli::{AuthCommand, Cli, Command};
 use linear_rat::config::{self, Loaded};
 use linear_rat::linear::{FakeClient, HttpClient, LinearClient};
 use linear_rat::open::{self, IssueKey};
+use linear_rat::release::{self, Channel, ReleaseCache, ReleaseCheck, ReleaseSource};
 use linear_rat::snapshot::SnapshotCache;
 use linear_rat::terminal::{self, JobControl, TerminalGuard};
 use linear_rat::ui::theme;
@@ -64,7 +65,7 @@ async fn main() -> anyhow::Result<()> {
         let state = State::loading(None)
             .with_config(&loaded)
             .with_time_zone(TimeZone::system());
-        run_tui(state, Some(&FakeClient), None, shutdown, job_control).await
+        run_tui(state, Some(&FakeClient), None, None, shutdown, job_control).await
     } else {
         let (state, client) = connect(loaded.config.auth.store);
         let snapshots = snapshot_cache();
@@ -72,10 +73,26 @@ async fn main() -> anyhow::Result<()> {
             .with_config(&loaded)
             .with_time_zone(TimeZone::system());
         let state = from_snapshot(state, snapshots.as_ref());
+        let off = release::off_switch(
+            &loaded.config.updates,
+            std::env::var_os(release::OFF_VAR).as_deref(),
+        );
+        let releases = release::checks_in_background(&cli, off)
+            .then(release_check)
+            .flatten();
+        let state = match &releases {
+            Some(releases) => state.with_release(Release::new(
+                true,
+                Channel::of_running(),
+                releases.cache.load(),
+            )),
+            None => state,
+        };
         run_tui(
             state,
             client.as_ref(),
             snapshots.as_ref(),
+            releases.as_ref(),
             shutdown,
             job_control,
         )
@@ -145,6 +162,20 @@ fn snapshot_cache() -> Option<SnapshotCache> {
         .ok()
 }
 
+/// The release source and its cache under the XDG cache dir, or `None`,
+/// logged, when there is no home directory or no HTTP client for it.
+fn release_check() -> Option<ReleaseCheck> {
+    let check = ReleaseCache::in_cache_dir().and_then(|cache| {
+        Ok(ReleaseCheck {
+            source: ReleaseSource::github()?,
+            cache,
+        })
+    });
+    check
+        .inspect_err(|error| tracing::warn!("no release check: {error:#}"))
+        .ok()
+}
+
 /// `state`, painting the last session's snapshot while it waits for its own
 /// load. A state that cannot load, for want of a usable key, stays as it is.
 fn from_snapshot(state: State, snapshots: Option<&SnapshotCache>) -> State {
@@ -164,6 +195,7 @@ async fn run_tui<C: LinearClient>(
     state: State,
     client: Option<&C>,
     snapshots: Option<&SnapshotCache>,
+    releases: Option<&ReleaseCheck>,
     shutdown: impl Future<Output = ()>,
     job_control: impl Stream<Item = JobControl>,
 ) -> anyhow::Result<()> {
@@ -174,6 +206,7 @@ async fn run_tui<C: LinearClient>(
                 &mut app,
                 client,
                 snapshots,
+                releases,
                 EventStream::new(),
                 shutdown,
                 job_control,
@@ -240,11 +273,24 @@ async fn run_doctor() -> anyhow::Result<bool> {
         std::env::var(auth::KEY_VAR).ok(),
     );
     let var = |name: &str| std::env::var(name).ok();
+    let off = release::off_switch(
+        &config.loaded.config.updates,
+        std::env::var_os(release::OFF_VAR).as_deref(),
+    );
+    let version = match ReleaseSource::github() {
+        Ok(source) => doctor::VersionFacts::check(&source, off, Channel::of_running()).await,
+        Err(error) => doctor::VersionFacts::unchecked(
+            off,
+            Channel::of_running(),
+            format!("building the HTTP client: {error:#}"),
+        ),
+    };
     let facts = doctor::gather(
         &credentials,
         HttpClient::new,
         doctor::Terminal::from_env(var),
         config,
+        version,
         jiff::Timestamp::now,
     )
     .await;

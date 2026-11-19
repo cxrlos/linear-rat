@@ -2,6 +2,7 @@
 //! many match, and the filters, over the list and the focused issue's
 //! detail.
 
+use super::text;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Stylize;
@@ -120,10 +121,14 @@ fn header(state: &State, width: u16) -> Line<'static> {
     spans.push(separator());
     spans.extend(filter_prefix(state));
     spans.push(Span::styled("Filters ", style::muted(theme)));
-    let filters: Vec<(FilterField, String)> = FilterField::ALL
+    // Each filter's name and, but for Blocked, its value.
+    let mut filters: Vec<(&str, Option<String>)> = FilterField::ALL
         .into_iter()
-        .filter_map(|field| filter_label(state, field).map(|value| (field, value)))
+        .filter_map(|field| filter_label(state, field).map(|value| (field.name(), Some(value))))
         .collect();
+    if query.filter.blocked {
+        filters.push(("Blocked", None));
+    }
     if filters.is_empty() {
         spans.push(Span::raw("none"));
         return Line::from(spans);
@@ -131,26 +136,52 @@ fn header(state: &State, width: u16) -> Line<'static> {
     let room = usize::from(width).saturating_sub(Line::from(spans.clone()).width());
     let named = filters
         .iter()
-        .map(|(field, value)| format!("{} {value}", field.name()))
+        .map(|(name, value)| match value {
+            Some(value) => format!("{name} {value}"),
+            None => (*name).to_owned(),
+        })
         .collect::<Vec<_>>()
         .join(", ");
     let fields = filters
         .iter()
-        .map(|(field, _)| field.name())
+        .map(|(name, _)| *name)
         .collect::<Vec<_>>()
         .join(", ");
     let text = [named, fields]
         .into_iter()
-        .find(|text| Span::raw(text.as_str()).width() <= room)
+        .find(|candidate| text::width(candidate) <= room)
         .unwrap_or_else(|| filters.len().to_string());
     spans.push(Span::raw(text));
     Line::from(spans)
 }
 
+/// `Team Issues · group: none · sort: priority, urgent first`. When the
+/// sort orders only the loaded issues, `sorted: loaded 50 of 70` follows
+/// the name, ahead of what a narrow pane cuts off.
+fn list_title(state: &State) -> String {
+    let team_issues = &state.team_issues;
+    if team_issues.sort_covers_all() {
+        return my_issues::list_title(
+            "Team Issues",
+            team_issues.arrangement(),
+            state.ui.team_issues,
+            "",
+        );
+    }
+    let total = team_issues
+        .total()
+        .map_or("…".to_owned(), |total| total.to_string());
+    let name = format!(
+        "Team Issues · sorted: loaded {} of {total}",
+        team_issues.ids().len()
+    );
+    my_issues::list_title(&name, team_issues.arrangement(), state.ui.team_issues, "")
+}
+
 fn render_list(view: &View, state: &State, frame: &mut Frame, area: Rect, focus: Focus) {
     let theme = &state.theme;
     let team_issues = &state.team_issues;
-    let block = my_issues::pane_block("Team Issues", focus, theme);
+    let block = my_issues::pane_block(list_title(state), area, focus, theme);
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
@@ -162,6 +193,14 @@ fn render_list(view: &View, state: &State, frame: &mut Frame, area: Rect, focus:
         (Progress::Failed(error), _) => Some(message(error.clone()).style(style::error(theme))),
         _ if team_issues.query().is_none() => {
             Some(message("You are not a member of any team.".to_owned()).fg(theme.muted))
+        }
+        (_, Progress::Failed(_))
+            if team_issues.ids().is_empty()
+                && team_issues.query().is_some_and(|query| {
+                    state.store.capabilities().reach(&query.team_id).is_denied()
+                }) =>
+        {
+            Some(message("Not accessible with this key".to_owned()).fg(theme.muted))
         }
         (_, Progress::Failed(error)) if team_issues.ids().is_empty() => {
             Some(message(error.clone()).style(style::error(theme)))
@@ -187,16 +226,5 @@ fn render_list(view: &View, state: &State, frame: &mut Frame, area: Rect, focus:
         return;
     }
 
-    let issues: Vec<_> = team_issues
-        .ids()
-        .iter()
-        .filter_map(|id| state.store.issue(id))
-        .collect();
-    let offset =
-        my_issues::visible_offset(team_issues.scroll(), team_issues.focused_index(), inner);
-    let cells = my_issues::row_cells(issues.iter().copied());
-    for (line_area, (index, issue)) in inner.rows().zip(issues.iter().enumerate().skip(offset)) {
-        let is_focused = index == team_issues.focused_index();
-        my_issues::render_row(view, frame, line_area, &cells, issue, is_focused, focus);
-    }
+    my_issues::render_groups(view, frame, inner, team_issues.list(), focus);
 }

@@ -216,6 +216,13 @@ impl IssueNode {
             creator_id: self.creator.map(|person| person.id),
             cycle_id: self.cycle.map(|cycle| cycle.id),
             project_id: self.project.map(|project| project.id),
+            project_milestone_id: self.project_milestone.map(|milestone| milestone.id),
+            parent_id: self.parent.map(|parent| parent.id),
+            due_date: self.due_date,
+            archived_at: self.archived_at,
+            subscribed: self
+                .subscribers
+                .is_some_and(|subscribers| !subscribers.nodes.is_empty()),
             label_ids: self.label_ids,
             created_at: self.created_at,
             updated_at: self.updated_at,
@@ -324,6 +331,22 @@ pub(super) struct IssueNode {
     pub(super) creator: Option<PersonNode>,
     pub(super) cycle: Option<CycleNode>,
     pub(super) project: Option<IdNode>,
+    #[serde(default)]
+    pub(super) project_milestone: Option<IdNode>,
+    #[serde(default)]
+    pub(super) parent: Option<IdNode>,
+    #[serde(default)]
+    pub(super) due_date: Option<jiff::civil::Date>,
+    #[serde(default, deserialize_with = "optional_timestamp")]
+    pub(super) archived_at: Option<Timestamp>,
+    /// The viewer among the subscribers, or no one.
+    #[serde(default)]
+    pub(super) subscribers: Option<IdNodes>,
+}
+
+#[derive(Deserialize)]
+pub(super) struct IdNodes {
+    pub(super) nodes: Vec<IdNode>,
 }
 
 #[derive(Deserialize)]

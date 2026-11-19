@@ -14,8 +14,18 @@ A problem in the file shows as a notice above the bottom bar, naming the file an
 
 | Key | Values | Default | Effect |
 | --- | --- | --- | --- |
-| `icons` | `"unicode"`, `"nerd"` | `"unicode"` | The glyphs for workflow state types and priorities. `"nerd"` needs a patched [Nerd Font](https://www.nerdfonts.com/). |
+| `icons` | `"unicode"`, `"nerd"` | `"unicode"` | The glyphs for workflow state types, priorities and blocked issues. `"nerd"` needs a patched [Nerd Font](https://www.nerdfonts.com/). |
 | `wide-layout-columns` | 0 to 65535 | `120` | From this terminal width on, My Issues shows the focused issue's detail beside the list. Below it, the focused pane fills the screen. |
+| `my-issues-group` | a grouping (below) | `"state"` | How My Issues starts out grouped. |
+| `my-issues-sort` | a sort (below), or `"default"` | `"default"` | How My Issues starts out sorted. `"default"` puts issues in the active cycle first, then goes by priority. |
+| `team-issues-group` | a grouping (below) | `"none"` | How Team Issues starts out grouped. |
+| `team-issues-sort` | a sort (below) | `"updated"` | How Team Issues starts out sorted. |
+
+A grouping is `"state"` (workflow state type: started, unstarted, backlog, triage, completed, canceled), `"priority"`, `"project"`, `"milestone"` (project milestone, in each project's own order), `"cycle"` (newest first), `"assignee"` or `"none"`. Groups of named things go by name, and the group of issues with no project, milestone, cycle or assignee comes last. The issues of a cycle open grouped by `"state"`, and those of a project by `"milestone"`.
+
+A sort is `"updated"`, `"created"`, `"priority"`, `"due-date"` or `"estimate"`. On its own each sorts the way you usually want it: newest, most urgent, soonest due and largest estimate first. Add `-asc` or `-desc` to choose: ascending is oldest, urgent, soonest and smallest first. Issues missing the field go last either way, and issues that tie keep the list's own order.
+
+`vg` and `vs` change the grouping and sort of the list on screen for the rest of the session, and the list's title says which are in force. Team Issues sorts what it has loaded: sorted by `"updated"` or `"created"` newest first, Linear sends its pages in that order, so the sort covers every issue. A change between these sorts loads the pages again in the new order: the focus stays on the issue it was on if that issue is on the first page, and otherwise starts at the top and goes back to it when `m` loads its page, unless you have moved since. Any other sort covers only the pages loaded so far, and the title says so right after its name, as `Team Issues · sorted: loaded 50 of 70`.
 
 In both icon sets every workflow state type and every priority has its own glyph, so none is told apart by color alone:
 
@@ -32,6 +42,7 @@ In both icon sets every workflow state type and every priority has its own glyph
 | Medium | `▮▮▯` | `angle_up` |
 | Low | `▮▯▯` | `angle_down` |
 | No priority | `···` | `minus` |
+| Blocked by an open issue | `▲` | `lock` |
 
 ## `[theme]`
 
@@ -83,9 +94,9 @@ Every Base16 built-in theme keeps a contrast ratio of at least 4.5:1 for text an
 
 ## `[keys]`
 
-One table per context: `global`, `list`, `team-issues` (the Team Issues list, which also takes the `list` keys), `detail`, `overlay` and `analytics`. In each, an action's id maps to its keys in vim notation (`"j"`, `"gg"`, `"<C-d>"`, `"<S-Tab>"`, `"<F1>"`). The `?` cheatsheet lists every action.
+One table per context: `global`, `list`, `team-issues` (the Team Issues list, which also takes the `list` keys), `detail`, `overlay`, `analytics`, `browse` (the Cycles and Projects lists) and `cycles` (the Cycles screen, which also takes the `browse` keys). In each, an action's id maps to its keys in vim notation (`"j"`, `"gg"`, `"<C-d>"`, `"<S-Tab>"`, `"<F1>"`). The `?` cheatsheet lists every action.
 
-While an overlay has a text field, as the pickers, the palette and the search query do, a character typed without Ctrl or Alt goes into the field and Backspace deletes, whatever they are bound to. The one exception is a picker's number keys (`pick-1` to `pick-9`), which pick an entry while the filter leaves that many (in the label picker, which marks several entries, they toggle it, as `toggle-entry` (`<Tab>`) does, and `accept` saves the marked labels). Keys with Ctrl or Alt and named keys such as `<Enter>`, `<Down>` and `<Esc>` still run their `overlay` actions.
+While an overlay has a text field, as the pickers, the due-date prompt, the palette and the search query do, a character typed without Ctrl or Alt goes into the field and Backspace deletes, whatever they are bound to. The one exception is a picker's number keys (`pick-1` to `pick-9`), which pick an entry while the filter leaves that many (in the label picker, which marks several entries, they toggle it, as `toggle-entry` (`<Tab>`) does, and `accept` saves the marked labels). Keys with Ctrl or Alt and named keys such as `<Enter>`, `<Down>` and `<Esc>` still run their `overlay` actions. The confirmation that trash asks for has no text field: `confirm` (`y`) or `accept` (`<Enter>`) goes ahead, and `decline` (`n`) or `close` (`<Esc>`) cancels.
 
 ```toml
 [keys.global]
@@ -134,12 +145,26 @@ lrat takes the API key from `LINEAR_API_KEY` when it is set, otherwise from the 
 
 Changing `store` does not move a stored key: run `lrat auth login` after the change, and `lrat auth logout` before it to remove the key from the old store. `lrat auth login --from-keyring` reads its entry from the Keychain or the Secret Service whatever `store` is.
 
+## `[updates]`
+
+Once a day, in the background after the first frame, lrat asks GitHub for its latest stable release. When one is newer than the version you run, a muted `v0.3.1 available` shows on the tab row, left of the sync indicator, and the cheatsheet (`?`) says how to upgrade the way you installed lrat: `brew upgrade linear-rat` for Homebrew, otherwise a pointer to the install section of the README. Installs from the AUR or Nix never show it, since their packages may follow the release later. The palette's "Skip this release" hides the notice until a newer release ships, and "What's new" opens the release page. `lrat doctor` checks every time it runs and prints the result on its Version line.
+
+The request is an unauthenticated `GET https://api.github.com/repos/cxrlos/linear-rat/releases/latest`. It carries lrat's version in the User-Agent and nothing else: no API key and no workspace data. What it found goes in `release.json` under `$XDG_CACHE_HOME/lrat/`, so lrat asks at most once every 24 hours. A failed check shows nothing and is tried again a day later. `lrat --demo` and the `auth`, `completions` and `open` subcommands never check.
+
+Setting `LRAT_NO_UPDATE_CHECK` to any non-empty value turns the check off too, whatever the file says.
+
+| Key | Values | Default | Effect |
+| --- | --- | --- | --- |
+| `check` | `true`, `false` | `true` | Ask GitHub once a day for a newer lrat release. |
+
 ## Everything at once
 
 ```toml
 [ui]
 icons = "nerd"
 wide-layout-columns = 140
+my-issues-group = "state"
+team-issues-sort = "priority"
 
 [theme]
 name = "nord"
@@ -159,4 +184,7 @@ stale-days = 14
 
 [auth]
 store = "os"
+
+[updates]
+check = true
 ```

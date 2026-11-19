@@ -2,7 +2,7 @@
 source: tests/keys.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    "
 "┌My Issues─────────────────────────────────────────────────────────────────────┐"
 "│No open issues are assigned to you.                                           │"
 "│                                                                              │"
@@ -18,10 +18,10 @@ expression: app.backend()
 "│                                                                              │"
 "│                                                                              │"
 "│                                                                              │"
-"│                                                                              │"
-"│                                                        ┌ g ─────────────────┐│"
-"│                                                        │ g  Move to the top ││"
-"│                                                        └ Esc close ─────────┘│"
+"│                                                  ┌ g ───────────────────────┐│"
+"│                                                  │ g  Move to the top       ││"
+"│                                                  │ r  Go to a related issue ││"
+"│                                                  └ Esc close ───────────────┘│"
 "└──────────────────────────────────────────────────────────────────────────────┘"
 " Move │ j down  k up  gg top  G bottom  C-d/C-u page  h/l pane  / search        "
 " Do   │ Enter open  y yank  o links  Esc close  ? keys  : palette  q quit       "

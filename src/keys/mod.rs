@@ -10,7 +10,9 @@ mod registry;
 pub use key::{Key, KeySequence, ParseKeyError};
 pub use keymap::{Change, Keymap, Override, Resolution, Target};
 pub use reference::keymap_reference;
-pub use registry::{ACTIONS, ActionSpec, Group, Hint, HintRow, by_id, spec};
+pub use registry::{
+    ACTIONS, ActionSpec, Availability, Group, Hint, HintRow, OverlayKind, by_id, spec,
+};
 
 use crate::app::{Load, Modal, Pane, Screen, State};
 
@@ -30,16 +32,22 @@ pub enum Context {
     Overlay,
     /// The Analytics screen.
     Analytics,
+    /// The Cycles and Projects screens.
+    Browse,
+    /// The Cycles screen, ahead of [`Context::Browse`] there.
+    Cycles,
 }
 
 impl Context {
-    pub const ALL: [Context; 6] = [
+    pub const ALL: [Context; 8] = [
         Context::Global,
         Context::List,
         Context::TeamIssues,
         Context::Detail,
         Context::Overlay,
         Context::Analytics,
+        Context::Browse,
+        Context::Cycles,
     ];
 
     /// The name of its table in `config.toml`, as in `[keys.list]`.
@@ -51,6 +59,8 @@ impl Context {
             Context::Detail => "detail",
             Context::Overlay => "overlay",
             Context::Analytics => "analytics",
+            Context::Browse => "browse",
+            Context::Cycles => "cycles",
         }
     }
 
@@ -68,6 +78,8 @@ impl Context {
             Context::Detail => "Issue detail",
             Context::Overlay => "Overlays",
             Context::Analytics => "Analytics",
+            Context::Browse => "Cycles and Projects",
+            Context::Cycles => "Cycles",
         }
     }
 }
@@ -104,5 +116,7 @@ pub fn screen_contexts(state: &State) -> Vec<Context> {
         Screen::Results => vec![Context::List, Context::Global],
         Screen::MyIssues => vec![Context::List, Context::Global],
         Screen::Analytics => vec![Context::Analytics, Context::Global],
+        Screen::Cycles => vec![Context::Cycles, Context::Browse, Context::Global],
+        Screen::Projects => vec![Context::Browse, Context::Global],
     }
 }

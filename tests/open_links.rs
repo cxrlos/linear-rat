@@ -8,8 +8,8 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
-use linear_rat::app::{App, Effect, Event, Modal, State};
-use linear_rat::linear::{FakeClient, IssueDetail, LinearClient, Urgency};
+use linear_rat::app::{App, Effect, Event, Failure, Modal, State};
+use linear_rat::linear::{ErrorKind, FakeClient, IssueDetail, LinearClient, Urgency};
 use ratatui::backend::TestBackend;
 
 const DES_34: &str = "https://linear.app/squeakworks/issue/DES-34";
@@ -153,7 +153,7 @@ fn a_failed_load_says_why_in_the_picker_and_the_next_o_tries_again() {
 
     app.handle(Event::IssueDetailLoaded {
         issue_id: "issue-des-34".to_owned(),
-        result: Err("Linear could not be reached".to_owned()),
+        result: Err(failed("Linear could not be reached")),
     })
     .unwrap();
 
@@ -352,4 +352,103 @@ fn nothing_opens_without_a_focused_issue() {
 
     assert!(effects.is_empty(), "{effects:?}");
     assert!(app.state().modals.top().is_none());
+}
+
+fn ctrl(c: char) -> Event {
+    Event::Key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::CONTROL))
+}
+
+fn down() -> Event {
+    Event::Key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE))
+}
+
+#[test]
+fn ctrl_y_in_the_issue_picker_copies_the_selected_url_and_closes_it() {
+    let mut app = focused_on("DES-34");
+    open(&mut app, "o");
+    app.handle(down()).unwrap();
+
+    let effects = app.handle(ctrl('y')).unwrap();
+
+    assert_eq!(
+        effects,
+        [Effect::Copy(
+            "https://github.com/squeakworks/nibble/pull/412".to_owned()
+        )]
+    );
+    assert!(app.state().modals.top().is_none());
+    assert_eq!(notice(&app), "Copied the URL of nibble#412");
+}
+
+#[test]
+fn ctrl_y_in_the_other_links_picker_copies_the_selected_url() {
+    let mut app = focused_on("DES-34");
+    open(&mut app, "O");
+
+    let effects = app.handle(ctrl('y')).unwrap();
+
+    assert_eq!(
+        effects,
+        [Effect::Copy(
+            "https://www.figma.com/file/nibble-autumn-qa".to_owned()
+        )]
+    );
+    assert!(app.state().modals.top().is_none());
+    assert_eq!(
+        notice(&app),
+        "Copied https://www.figma.com/file/nibble-autumn-qa"
+    );
+}
+
+#[test]
+fn ctrl_y_copies_nothing_when_the_filter_leaves_no_entry() {
+    let mut app = focused_on("DES-34");
+    open(&mut app, "o");
+    press(&mut app, "zzzz");
+
+    let effects = app.handle(ctrl('y')).unwrap();
+
+    assert!(effects.is_empty(), "{effects:?}");
+    assert!(matches!(app.state().modals.top(), Some(Modal::Links(_))));
+}
+
+#[test]
+fn the_links_picker_footer_names_the_copy_key() {
+    let mut app = focused_on("DES-34");
+
+    open(&mut app, "o");
+
+    let shown = format!("{:?}", app.backend());
+    assert!(shown.contains("C-y copy"), "{shown}");
+}
+
+/// A failure with `message`, as the runtime sends one.
+fn failed(message: &str) -> Failure {
+    Failure::new(ErrorKind::Other, "test", message)
+}
+
+#[test]
+fn on_a_narrow_terminal_a_link_too_long_for_the_picker_ends_in_an_ellipsis() {
+    let mut app = focused_on("DES-34");
+    app.backend_mut().resize(40, 24);
+    app.handle(Event::Resize {
+        columns: 40,
+        rows: 24,
+    })
+    .unwrap();
+
+    open(&mut app, "o");
+
+    let buffer = app.backend().buffer();
+    let rows: Vec<String> = buffer
+        .content()
+        .chunks(usize::from(buffer.area.width))
+        .map(|row| row.iter().map(|cell| cell.symbol()).collect())
+        .collect();
+    let pull_request = rows
+        .iter()
+        .find(|row| row.contains("Pull request nibble#412"))
+        .unwrap_or_else(|| panic!("{rows:#?}"));
+    assert!(pull_request.contains("…"), "{rows:#?}");
+    assert!(!pull_request.contains("(merged)"), "{rows:#?}");
 }

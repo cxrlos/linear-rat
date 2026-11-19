@@ -6,9 +6,9 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
-use linear_rat::app::{App, Effect, Event, LoadError, State};
+use linear_rat::app::{App, Effect, Event, Failure, LoadError, State};
 use linear_rat::auth::{KeySource, KeyringStore};
-use linear_rat::linear::{FakeClient, LinearClient};
+use linear_rat::linear::{ErrorKind, FakeClient, LinearClient};
 use ratatui::backend::TestBackend;
 
 fn screen(app: &App<TestBackend>) -> String {
@@ -135,9 +135,9 @@ fn an_unavailable_kernel_keyring_is_not_called_the_os_keyring() {
 fn a_network_failure_says_what_to_try() {
     let mut app = loading(Some(KeySource::Env));
 
-    app.handle(Event::MyIssuesLoaded(Err(LoadError::Unreachable(
-        "timed out connecting to Linear".to_owned(),
-    ))))
+    app.handle(Event::MyIssuesLoaded(Err(LoadError::Unreachable(offline(
+        "timed out connecting to Linear",
+    )))))
     .unwrap();
 
     let screen = screen(&app);
@@ -193,4 +193,9 @@ async fn issues_that_loaded_with_problems_show_and_say_what_is_missing() {
         screen.contains("label names did not load: Linear answered with HTTP 503 (and 1 more;"),
         "{screen}"
     );
+}
+
+/// An offline failure with `message`, as the runtime sends one.
+fn offline(message: &str) -> Failure {
+    Failure::new(ErrorKind::Offline, "test", message)
 }

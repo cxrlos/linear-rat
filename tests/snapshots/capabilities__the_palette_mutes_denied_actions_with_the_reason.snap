@@ -1,0 +1,28 @@
+---
+source: tests/capabilities.rs
+expression: app.backend()
+---
+" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    "
+"┌My Issues─────────────────────────────────────────────────────────────────────┐"
+"│◐┌ Palette ─────────────────────────────────────────────────────────────────┐ │"
+"│▸│ : change                                                                 │ │"
+"│ │──────────────────────────────────────────────────────────────────────────│ │"
+"│ │ Change the workflow state · this API key cannot edit issues in DES     s │ │"
+"│ │ Change the assignee · this API key cannot edit issues in DES           a │ │"
+"│ │ Change the priority · this API key cannot edit issues in DES           p │ │"
+"│ │ Change the estimate · this API key cannot edit issues in DES           e │ │"
+"│ │ Change the cycle · this API key cannot edit issues in DES              C │ │"
+"│ │ Change the project · this API key cannot edit issues in DES            P │ │"
+"│ │ Change the project milestone                                           M │ │"
+"│○│ OPS-26 Archive the old marketing site                             ○ Todo │ │"
+"│ │                                                                          │ │"
+"│ │                                                                          │ │"
+"│ │                                                                          │ │"
+"│ │                                                                          │ │"
+"│ └ Esc close ───────────────────────────────────────────────────────────────┘ │"
+"│  DES-16 Accessible focus rings across w… ○ Todo        ▮▮▮ High    5         │"
+"│  ENG-56 Notification settings reset aft… ○ Todo        ▮▮▮ High    2         │"
+"└──────────────────────────────────────────────────────────────────────────────┘"
+" Move │ Down/Up move                                                            "
+" Do   │ Enter choose │ Esc close                                                "
+"                                                                                "

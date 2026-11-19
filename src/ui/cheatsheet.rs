@@ -2,6 +2,7 @@
 //! flowing into as many columns as the width allows, or one scrolling
 //! column on a narrow terminal.
 
+use super::text;
 use ratatui::Frame;
 use ratatui::layout::{Margin, Rect};
 use ratatui::style::Style;
@@ -27,12 +28,17 @@ const DIVIDER: &str = " │ ";
 /// Draws inside `area`'s border, scrolled down by `scroll` rows (no further
 /// than its last row).
 pub fn render(state: &State, scroll: u16, frame: &mut Frame, area: Rect) {
-    let lines = lines(state, area, |spec| (spec.available)(state));
+    let lines = lines(state, area, |spec| spec.availability(state).can_run());
     let popup = popup(area, &lines);
     let scroll = scroll.min(hidden_rows(popup, &lines));
+    let edge = usize::from(popup.width.saturating_sub(2));
     let block = super::popup_block(state)
         .title(" Keys ")
-        .title_bottom(super::close_hint(state));
+        .title_bottom(text::fit_line(super::close_hint(state), edge));
+    let lines: Vec<Line> = lines
+        .into_iter()
+        .map(|line| text::fit_line(line, edge))
+        .collect();
     frame.render_widget(Clear, popup);
     frame.render_widget(
         Paragraph::new(lines).block(block).scroll((scroll, 0)),
@@ -88,7 +94,10 @@ impl Entry {
     fn keys_width(&self) -> usize {
         let keys = self.keys();
         let separators = keys.len().saturating_sub(1);
-        keys.iter().map(|(keys, _)| text_width(keys)).sum::<usize>() + separators
+        keys.iter()
+            .map(|(keys, _)| text::width(keys))
+            .sum::<usize>()
+            + separators
     }
 }
 
@@ -117,6 +126,10 @@ fn panes(state: &State, available: impl Fn(&ActionSpec) -> bool) -> Vec<Pane> {
                 .iter()
                 .map(ToString::to_string)
                 .collect();
+            // An action only the palette runs has no line of keys to show.
+            if keys.is_empty() && spec.default_keys.is_empty() {
+                continue;
+            }
             let action = (keys, available(spec));
             let title = spec.group.title().unwrap_or(context.title());
             let index = match panes.iter().position(|pane| pane.title == title) {
@@ -153,7 +166,7 @@ fn lines(state: &State, area: Rect, available: impl Fn(&ActionSpec) -> bool) -> 
     // The margin around the popup, its border and a space inside each side.
     let room = usize::from(area.width).saturating_sub(6);
     let natural = panes.iter().map(natural_width).max().unwrap_or(0);
-    let fits = |columns: usize| columns * natural + DIVIDER.len() * (columns - 1) <= room;
+    let fits = |columns: usize| columns * natural + text::width(DIVIDER) * (columns - 1) <= room;
     let columns = (1..=MAX_COLUMNS.min(panes.len()).max(1))
         .rev()
         .find(|&columns| fits(columns))
@@ -161,7 +174,7 @@ fn lines(state: &State, area: Rect, available: impl Fn(&ActionSpec) -> bool) -> 
     let column_width = if columns == 1 {
         natural
     } else {
-        ((room - DIVIDER.chars().count() * (columns - 1)) / columns)
+        ((room - text::width(DIVIDER) * (columns - 1)) / columns)
             .min(MAX_COLUMN_WIDTH)
             .max(natural)
     };
@@ -178,7 +191,7 @@ fn lines(state: &State, area: Rect, available: impl Fn(&ActionSpec) -> bool) -> 
     }
 
     let height = stacks.iter().map(Vec::len).max().unwrap_or(0);
-    (0..height)
+    let mut lines: Vec<Line<'static>> = (0..height)
         .map(|y| {
             let mut spans = vec![Span::raw(" ")];
             for (index, stack) in stacks.iter().enumerate() {
@@ -193,12 +206,53 @@ fn lines(state: &State, area: Rect, available: impl Fn(&ActionSpec) -> bool) -> 
             spans.push(Span::raw(" "));
             Line::from(spans)
         })
-        .collect()
+        .collect();
+    let reasons = denials(state);
+    if !reasons.is_empty() {
+        lines.push(Line::default());
+    }
+    lines.extend(
+        reasons
+            .into_iter()
+            .map(|reason| Line::styled(format!(" {INDENT}Muted: {reason} "), style::muted(theme))),
+    );
+    if let Some(version) = state.release.notice() {
+        lines.push(Line::default());
+        lines.push(Line::styled(
+            format!(
+                " {INDENT}lrat v{version} is available: {} ",
+                state.release.upgrade()
+            ),
+            style::muted(theme),
+        ));
+    }
+    lines
+}
+
+/// Why the API key is not allowed the listed actions it is known not to be
+/// allowed, each reason once.
+fn denials(state: &State) -> Vec<String> {
+    let contexts = keys::screen_contexts(state);
+    let mut reasons: Vec<String> = Vec::new();
+    // Only write actions can be denied, and their availability never asks
+    // for the cheatsheet's size, so this cannot recurse into it.
+    let writes = ACTIONS
+        .iter()
+        .filter(|spec| spec.writes.is_some())
+        .filter(|spec| spec.contexts.iter().any(|c| contexts.contains(c)));
+    for spec in writes {
+        if let Some(reason) = spec.availability(state).reason()
+            && !reasons.iter().any(|known| known == reason)
+        {
+            reasons.push(reason.to_owned());
+        }
+    }
+    reasons
 }
 
 /// How wide `pane` is with one entry per line.
 fn natural_width(pane: &Pane) -> usize {
-    text_width(pane.title).max(packed_width(&pane.entries, 1))
+    text::width(pane.title).max(packed_width(&pane.entries, 1))
 }
 
 /// For each of `per_line` slots, the width of its keys and of the whole
@@ -209,7 +263,7 @@ fn slots(entries: &[Entry], per_line: usize) -> Vec<(usize, usize)> {
             let in_slot = || entries.iter().skip(slot).step_by(per_line);
             let keys = in_slot().map(Entry::keys_width).max().unwrap_or(0);
             let label = in_slot()
-                .map(|entry| text_width(entry.label))
+                .map(|entry| text::width(entry.label))
                 .max()
                 .unwrap_or(0);
             (keys, keys + KEY_GAP + label)
@@ -221,7 +275,7 @@ fn packed_width(entries: &[Entry], per_line: usize) -> usize {
     let slots = slots(entries, per_line);
     INDENT.len()
         + slots.iter().map(|(_, width)| width).sum::<usize>()
-        + ENTRY_GAP.len() * per_line.saturating_sub(1)
+        + text::width(ENTRY_GAP) * per_line.saturating_sub(1)
 }
 
 /// A pane's title, then its entries, as many to a line as fit in `width`.
@@ -241,7 +295,7 @@ fn pane_rows(pane: &Pane, theme: &Theme, width: usize) -> Vec<Vec<Span<'static>>
             }
             spans.extend(entry_spans(entry, theme, keys_width));
             let last = slot + 1 == line.len();
-            let used = keys_width + KEY_GAP + text_width(entry.label);
+            let used = keys_width + KEY_GAP + text::width(entry.label);
             if !last {
                 spans.push(Span::raw(" ".repeat(slot_width.saturating_sub(used))));
             }
@@ -275,8 +329,4 @@ fn entry_spans(entry: &Entry, theme: &Theme, keys_width: usize) -> Vec<Span<'sta
     };
     spans.push(Span::styled(entry.label, label_style));
     spans
-}
-
-fn text_width(text: &str) -> usize {
-    Span::raw(text).width()
 }

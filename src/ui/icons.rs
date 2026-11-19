@@ -51,6 +51,15 @@ impl IconSet {
         }
     }
 
+    /// The mark of an issue an open issue blocks.
+    pub fn blocked(self) -> &'static str {
+        match self {
+            IconSet::Unicode => "▲",
+            // nf-fa-lock
+            IconSet::Nerd => "\u{f023}",
+        }
+    }
+
     /// The glyph for `priority`.
     pub fn priority(self, priority: Priority) -> &'static str {
         match (self, priority) {

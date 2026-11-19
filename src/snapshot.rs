@@ -198,7 +198,7 @@ fn file_name(workspace_id: &str, viewer_id: &str) -> anyhow::Result<String> {
 /// Writes `contents` to a temporary file with mode 0600 next to `path`, then
 /// renames it over `path`, so a reader sees the old file or the new one and
 /// never half of one.
-fn write_atomically(path: &Path, contents: &[u8]) -> anyhow::Result<()> {
+pub(crate) fn write_atomically(path: &Path, contents: &[u8]) -> anyhow::Result<()> {
     let mut temporary = path.as_os_str().to_owned();
     temporary.push(format!(".tmp-{}", std::process::id()));
     let temporary = PathBuf::from(temporary);

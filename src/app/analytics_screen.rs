@@ -9,7 +9,7 @@ use jiff::Timestamp;
 use jiff::tz::TimeZone;
 
 use super::modal::{Choice, Purpose};
-use super::{Effect, Modal, State, Update};
+use super::{Effect, Failure, Modal, State, Update};
 use crate::analytics::{Period, WeekRange};
 use crate::linear::model::Team;
 use crate::linear::{AnalyticsIssues, AnalyticsWindow, TeamAnalyticsIssues};
@@ -213,7 +213,7 @@ fn missing(since: Timestamp, covered: Option<Timestamp>) -> Option<AnalyticsWind
 pub(super) fn loaded(
     state: &mut State,
     window: AnalyticsWindow,
-    result: Result<AnalyticsIssues, String>,
+    result: Result<AnalyticsIssues, Failure>,
 ) {
     let screen = &mut state.analytics_screen;
     screen.in_flight = screen.in_flight.saturating_sub(1);
@@ -223,11 +223,14 @@ pub(super) fn loaded(
             if state.notice.is_none() {
                 state.notice = loaded.problems.first().cloned();
             }
+            state.record_problems("load analytics", &loaded.problems);
             state.store.merge_analytics(window, &loaded);
+            state.rebuild_lists();
         }
-        Err(error) => {
-            screen.error = Some(error);
+        Err(failure) => {
+            screen.error = Some(failure.message.clone());
             screen.requested_since = state.store.analytics_since();
+            state.record(failure);
         }
     }
 }
@@ -238,7 +241,7 @@ pub(super) fn team_loaded(
     state: &mut State,
     team_id: &str,
     window: AnalyticsWindow,
-    result: Result<TeamAnalyticsIssues, String>,
+    result: Result<TeamAnalyticsIssues, Failure>,
 ) {
     let screen = &mut state.analytics_screen;
     screen.team_in_flight = screen.team_in_flight.saturating_sub(1);
@@ -248,28 +251,33 @@ pub(super) fn team_loaded(
             if state.notice.is_none() {
                 state.notice = loaded.problems.first().cloned();
             }
+            state.record_problems("load team analytics", &loaded.problems);
             state.store.merge_team_analytics(window, &loaded);
+            state.rebuild_lists();
         }
-        Err(error) => {
-            screen.team_errors.insert(team_id.to_owned(), error);
+        Err(failure) => {
+            screen
+                .team_errors
+                .insert(team_id.to_owned(), failure.message.clone());
             match state.store.team_analytics_since(team_id) {
                 Some(since) => screen
                     .team_requested_since
                     .insert(team_id.to_owned(), since),
                 None => screen.team_requested_since.remove(team_id),
             };
+            state.record(failure);
         }
     }
 }
 
 /// Takes in the teams the viewer administers. A failure leaves the
 /// per-person breakdown out and lets the next request ask again.
-pub(super) fn administrable_loaded(state: &mut State, result: Result<Vec<String>, String>) {
+pub(super) fn administrable_loaded(state: &mut State, result: Result<Vec<String>, Failure>) {
     match result {
         Ok(team_ids) => state.store.set_administrable_teams(team_ids),
-        Err(error) => {
+        Err(failure) => {
             state.analytics_screen.administrable_asked = false;
-            state.notice = Some(error);
+            state.fail(failure);
         }
     }
 }

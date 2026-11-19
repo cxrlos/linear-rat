@@ -148,6 +148,7 @@ pub(super) async fn issues(
         "teamId": query.team_id,
         "filter": issue_filter(&query.filter),
         "after": after,
+        "orderBy": query.order.as_graphql(),
     });
     let response: Response<IssuesData<IssueNode>> = client
         .send(TEAM_ISSUES, &variables, Urgency::Urgent)
@@ -204,7 +205,7 @@ pub(super) async fn count(client: &HttpClient, query: &TeamQuery) -> Result<usiz
 
 /// Linear's `IssueFilter` for `filter`, with only the fields that are set.
 /// `null` when none is, which leaves the issues unfiltered.
-fn issue_filter(filter: &TeamFilter) -> Value {
+pub(super) fn issue_filter(filter: &TeamFilter) -> Value {
     let by_id = |id: &String| json!({ "id": { "eq": id } });
     let mut fields = Map::new();
     let set = [
@@ -224,6 +225,9 @@ fn issue_filter(filter: &TeamFilter) -> Value {
         if let Some(value) = value {
             fields.insert(name.to_owned(), value);
         }
+    }
+    if filter.blocked {
+        fields.insert("hasBlockedByRelations".to_owned(), json!({ "eq": true }));
     }
     if fields.is_empty() {
         Value::Null

@@ -5,13 +5,15 @@
 //! Everything is derived from [`NOW`] and a fixed seed, so every call returns
 //! the same data on every machine.
 
+use jiff::civil::{Date, date};
 use jiff::{SignedDuration, Timestamp};
 
 use super::model::{
-    Attachment, Comment, Cycle, Estimation, Issue, Label, Member, Priority, Project, StateSpan,
+    Attachment, Comment, Cycle, Estimation, Issue, IssueRelation, Label, Member, Priority, Project,
+    ProjectMilestone, ProjectOverview, ProjectStatus, ProjectStatusType, RelationType, StateSpan,
     StateType, Team, Viewer, WorkflowState, Workspace,
 };
-use super::{TeamOptions, TeamQuery};
+use super::{TeamOptions, TeamOrder, TeamQuery};
 
 /// The demo's "now": every date in the demo workspace is anchored to it.
 pub const NOW: Timestamp = Timestamp::constant(1_793_631_600, 0); // 2026-11-02T15:00:00Z
@@ -35,10 +37,12 @@ pub struct DemoWorkspace {
     pub workflow_states: Vec<WorkflowState>,
     pub labels: Vec<Label>,
     pub projects: Vec<Project>,
+    pub milestones: Vec<ProjectMilestone>,
     pub cycles: Vec<Cycle>,
     pub issues: Vec<Issue>,
     pub comments: Vec<Comment>,
     pub attachments: Vec<Attachment>,
+    pub relations: Vec<IssueRelation>,
 }
 
 /// Builds the demo workspace. Deterministic: no clock, no OS randomness.
@@ -77,16 +81,197 @@ pub fn workspace() -> DemoWorkspace {
                 name: (*name).to_owned(),
             })
             .collect(),
+        milestones: PROJECTS
+            .iter()
+            .enumerate()
+            .flat_map(|(index, _)| {
+                MILESTONES
+                    .iter()
+                    .enumerate()
+                    .map(move |(n, name)| ProjectMilestone {
+                        id: milestone_id(index, n),
+                        name: (*name).to_owned(),
+                        project_id: format!("project-{}", index + 1),
+                    })
+            })
+            .collect(),
         cycles: Vec::new(),
         issues: Vec::new(),
         comments: Vec::new(),
         attachments: Vec::new(),
+        relations: Vec::new(),
     };
     for spec in &TEAMS {
         add_team(&mut data, spec, &mut rng);
     }
     add_links(&mut data);
+    add_milestones(&mut data);
+    add_schedule(&mut data);
+    add_relations(&mut data);
     data
+}
+
+/// Due dates and project milestones on some of the viewer's open issues,
+/// one of them overdue: (identifier, due date, milestone id).
+const SCHEDULE: &[(&str, Option<Date>, Option<&str>)] = &[
+    ("DES-34", Some(date(2026, 11, 6)), None),
+    ("ENG-51", Some(date(2026, 10, 30)), None),
+    ("DES-40", Some(date(2026, 11, 13)), Some("milestone-4-2")),
+    ("ENG-60", None, Some("milestone-4-1")),
+    ("ENG-65", None, Some("milestone-1-2")),
+    ("OPS-37", Some(date(2026, 11, 20)), Some("milestone-2-3")),
+];
+
+/// Gives the issues in [`SCHEDULE`] their due dates and milestones. Added
+/// after the generated data, so the seed's draws stay as they were.
+fn add_schedule(data: &mut DemoWorkspace) {
+    for &(identifier, due_date, milestone) in SCHEDULE {
+        if let Some(issue) = data
+            .issues
+            .iter_mut()
+            .find(|issue| issue.identifier == identifier)
+        {
+            issue.due_date = due_date;
+            issue.project_milestone_id = milestone.map(str::to_owned);
+        }
+    }
+}
+
+/// A demo project's status name and type, target date (year, month, day)
+/// and lead's handle.
+type ProjectDetails = (
+    &'static str,
+    ProjectStatusType,
+    Option<(i16, i8, i8)>,
+    Option<&'static str>,
+);
+
+/// Each demo project's details, as `PROJECTS` lists the projects.
+const PROJECT_DETAILS: [ProjectDetails; 4] = [
+    (
+        "In Progress",
+        ProjectStatusType::Started,
+        Some((2026, 12, 15)),
+        Some("mira"),
+    ),
+    (
+        "In Progress",
+        ProjectStatusType::Started,
+        Some((2027, 1, 31)),
+        Some("ada"),
+    ),
+    ("Planned", ProjectStatusType::Planned, None, Some("jun")),
+    (
+        "Paused",
+        ProjectStatusType::Paused,
+        Some((2026, 11, 30)),
+        None,
+    ),
+];
+
+fn milestone_id(project_index: usize, milestone_index: usize) -> String {
+    format!("milestone-{}-{}", project_index + 1, milestone_index + 1)
+}
+
+/// Puts the issues of each project with milestones in one of them, or in
+/// none, by issue number. Added after the generated data, so the seed's
+/// draws stay as they were.
+fn add_milestones(data: &mut DemoWorkspace) {
+    for issue in &mut data.issues {
+        let Some(project_index) = issue
+            .project_id
+            .as_deref()
+            .and_then(|id| id.strip_prefix("project-"))
+            .and_then(|n| n.parse::<usize>().ok())
+            .and_then(|n| n.checked_sub(1))
+        else {
+            continue;
+        };
+        let number: usize = issue
+            .identifier
+            .rsplit('-')
+            .next()
+            .and_then(|n| n.parse().ok())
+            .unwrap_or(0);
+        let slot = number % (MILESTONES.len() + 1);
+        issue.project_milestone_id =
+            (slot < MILESTONES.len()).then(|| milestone_id(project_index, slot));
+    }
+}
+
+/// The demo projects as the Projects screen shows them, each with its
+/// progress the share of its issues that are completed.
+pub fn project_overviews(data: &DemoWorkspace) -> Vec<ProjectOverview> {
+    data.projects
+        .iter()
+        .enumerate()
+        .map(|(index, project)| {
+            let (name, status_type, target, lead) = PROJECT_DETAILS[index % PROJECT_DETAILS.len()];
+            let issues: Vec<&Issue> = data
+                .issues
+                .iter()
+                .filter(|issue| issue.project_id.as_ref() == Some(&project.id))
+                .collect();
+            let done = issues
+                .iter()
+                .filter(|issue| issue.state.state_type == StateType::Completed)
+                .count();
+            let progress = if issues.is_empty() {
+                0.0
+            } else {
+                f64::from(count(done)) / f64::from(count(issues.len()))
+            };
+            ProjectOverview {
+                project: project.clone(),
+                status: ProjectStatus {
+                    name: name.to_owned(),
+                    status_type,
+                },
+                target_date: target.map(|(year, month, day)| jiff::civil::date(year, month, day)),
+                lead: lead.and_then(|handle| {
+                    data.members
+                        .iter()
+                        .find(|member| member.id == member_id(handle))
+                        .cloned()
+                }),
+                progress,
+                milestones_complete: true,
+                milestones: data
+                    .milestones
+                    .iter()
+                    .filter(|milestone| milestone.project_id == project.id)
+                    .cloned()
+                    .collect(),
+            }
+        })
+        .collect()
+}
+
+/// ENG-51, the importer's dry run, is the parent of four importer issues,
+/// is blocked by the storage migration, blocks the catalog cleanup and is
+/// related to the CSV export.
+fn add_relations(data: &mut DemoWorkspace) {
+    let id = |identifier: &str| format!("issue-{}", identifier.to_lowercase());
+    for child in ["ENG-17", "ENG-29", "ENG-60", "ENG-69"] {
+        if let Some(issue) = data.issues.iter_mut().find(|issue| issue.id == id(child)) {
+            issue.parent_id = Some(id("ENG-51"));
+        }
+    }
+    for (n, (from, kind, to)) in [
+        ("ENG-6", RelationType::Blocks, "ENG-51"),
+        ("ENG-51", RelationType::Blocks, "ENG-27"),
+        ("ENG-51", RelationType::Related, "ENG-8"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        data.relations.push(IssueRelation {
+            id: format!("relation-{}", n + 1),
+            kind,
+            issue_id: id(from),
+            related_issue_id: id(to),
+        });
+    }
 }
 
 /// The issue DES-34's pull requests and other attachments.
@@ -210,19 +395,26 @@ pub fn administrable_team_ids() -> Vec<String> {
     vec!["team-eng".to_owned(), "team-ops".to_owned()]
 }
 
-/// The issues of `query` in `data`, most recently updated first, as the fake
+/// The issues of `query` in `data`, newest first by its order, as the fake
 /// client pages through them.
 pub fn team_issues(data: &DemoWorkspace, query: &TeamQuery) -> Vec<Issue> {
     let mut issues: Vec<Issue> = data
         .issues
         .iter()
-        .filter(|issue| issue.team_id == query.team_id && query.filter.matches(issue))
+        .filter(|issue| {
+            let blocked = data.relations.iter().any(|relation| {
+                relation.kind == RelationType::Blocks && relation.related_issue_id == issue.id
+            });
+            issue.team_id == query.team_id && query.filter.matches(issue, blocked)
+        })
         .cloned()
         .collect();
     issues.sort_by(|a, b| {
-        b.updated_at
-            .cmp(&a.updated_at)
-            .then_with(|| a.id.cmp(&b.id))
+        let (a_at, b_at) = match query.order {
+            TeamOrder::Updated => (a.updated_at, b.updated_at),
+            TeamOrder::Created => (a.created_at, b.created_at),
+        };
+        b_at.cmp(&a_at).then_with(|| a.id.cmp(&b.id))
     });
     issues
 }
@@ -664,6 +856,9 @@ fn finish(
         })
         .collect();
     let title = spec.titles.get(number - 1).copied().unwrap_or("Untitled");
+    // Linear subscribes an issue's creator and assignee.
+    let viewer = member_id(VIEWER);
+    let subscribed = draft.creator == viewer || draft.assignee.as_ref() == Some(&viewer);
     let issue = Issue {
         id: issue_id,
         url: format!("https://linear.app/{URL_KEY}/issue/{identifier}"),
@@ -679,6 +874,11 @@ fn finish(
         creator_id: Some(draft.creator),
         cycle_id: draft.cycle_id,
         project_id: draft.project_id,
+        project_milestone_id: None,
+        parent_id: None,
+        due_date: None,
+        archived_at: None,
+        subscribed,
         label_ids: draft.label_ids,
         created_at: ts(draft.created),
         updated_at: ts(last_change.max(last_comment)),
@@ -827,6 +1027,9 @@ const PROJECTS: [&str; 4] = [
     "Cellar sensors",
     "Cheese cave move",
 ];
+
+/// The milestones of every demo project, in order.
+const MILESTONES: [&str; 3] = ["Design review", "Beta", "Launch"];
 
 const COMMENTS: &[&str] = &[
     "I can reproduce this on the staging pantry.",

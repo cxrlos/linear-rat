@@ -4,6 +4,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use insta::assert_snapshot;
 use linear_rat::app::{App, Effect, Event, State};
 use linear_rat::config;
+use linear_rat::keys::{ACTIONS, Context, Key};
 use ratatui::backend::TestBackend;
 use ratatui::style::Color;
 
@@ -154,7 +155,7 @@ fn each_tab_shows_the_key_that_opens_it() {
 
     assert_eq!(
         row(&app, 0).trim_end(),
-        " [1] My Issues │ [2] Team Issues │ [3] Analytics"
+        " [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects"
     );
 }
 
@@ -170,7 +171,7 @@ noop = ["3"]
 
     assert_eq!(
         row(&app, 0).trim_end(),
-        " [1] My Issues │ [t] Team Issues │ Analytics"
+        " [1] My Issues │ [t] Team Issues │ Analytics │ [4] Cycles │ [5] Projects"
     );
 }
 
@@ -185,7 +186,7 @@ move-down = "2"
 
     assert_eq!(
         row(&app, 0).trim_end(),
-        " [1] My Issues │ Team Issues │ [3] Analytics"
+        " [1] My Issues │ Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects"
     );
 }
 
@@ -235,11 +236,7 @@ fn a_narrow_cheatsheet_fits_inside_the_frame_and_scrolls_to_the_rest() {
     let mut app = sized_app(50);
 
     press(&mut app, "?");
-    assert!(
-        row(&app, 1).starts_with("┌My Issues───"),
-        "{}",
-        screen(&app)
-    );
+    assert!(row(&app, 1).starts_with("┌My Issues─"), "{}", screen(&app));
     assert!(row(&app, 3).contains("Move"), "{}", screen(&app));
     assert!(!screen(&app).contains("suspend"));
 
@@ -517,4 +514,34 @@ fn suspend_can_be_rebound() {
 
     assert!(app.handle(ctrl('z')).unwrap().is_empty());
     assert_eq!(app.handle(ctrl('s')).unwrap(), vec![Effect::Suspend]);
+}
+
+/// Each set of contexts that takes keys together, most specific first.
+const STACKS: &[&[Context]] = &[
+    &[Context::TeamIssues, Context::List, Context::Global],
+    &[Context::List, Context::Global],
+    &[Context::Detail, Context::Global],
+    &[Context::Analytics, Context::Global],
+    &[Context::Overlay],
+];
+
+#[test]
+fn no_two_default_bindings_clash_where_they_take_keys_together() {
+    for stack in STACKS {
+        let bound: Vec<(&str, &[Key])> = ACTIONS
+            .iter()
+            .filter(|spec| spec.contexts.iter().any(|context| stack.contains(context)))
+            .flat_map(|spec| spec.default_keys.iter().map(move |keys| (spec.id, *keys)))
+            .collect();
+        for (index, (id, keys)) in bound.iter().enumerate() {
+            for (other, other_keys) in &bound[index + 1..] {
+                let shorter = keys.len().min(other_keys.len());
+                assert_ne!(
+                    keys[..shorter],
+                    other_keys[..shorter],
+                    "{id} and {other} clash in {stack:?}"
+                );
+            }
+        }
+    }
 }

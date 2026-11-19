@@ -9,11 +9,11 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
 use linear_rat::app::{
-    Action, App, Edit, Editable, Effect, Event, Modal, State, Write, estimate_scale,
+    Action, App, Edit, Editable, Effect, Event, Failure, Modal, State, Write, estimate_scale,
 };
 use linear_rat::keys;
 use linear_rat::linear::model::{Estimation, Issue, Label};
-use linear_rat::linear::{AssignedIssues, FakeClient, LinearClient, Patch, demo};
+use linear_rat::linear::{AssignedIssues, ErrorKind, FakeClient, LinearClient, Patch, demo};
 use ratatui::backend::TestBackend;
 
 /// The issue My Issues focuses first in the demo, in team DES.
@@ -141,7 +141,9 @@ fn accepted(write: &Write) -> Event {
 fn rejected(write: &Write) -> Event {
     Event::IssueUpdated {
         write: write.clone(),
-        result: Err("Linear returned errors: Entity not found (INVALID_INPUT)".to_owned()),
+        result: Err(failed(
+            "Linear returned errors: Entity not found (INVALID_INPUT)",
+        )),
     }
 }
 
@@ -361,7 +363,7 @@ fn the_label_picker_says_when_the_labels_could_not_load() {
 
     app.handle(Event::TeamLabelsLoaded {
         team_id: DES.to_owned(),
-        result: Err("the network is down".to_owned()),
+        result: Err(failed("the network is down")),
     })
     .unwrap();
 
@@ -505,9 +507,9 @@ fn the_cheatsheet_mutes_the_estimate_action_without_estimates() {
         let rows: Vec<String> = screen(&app);
         let row = rows
             .iter()
-            .position(|line| line.contains("e  estimate"))
+            .position(|line| line.contains("e          estimate"))
             .unwrap();
-        let column = rows[row].find("e  estimate").unwrap() + "e  ".len();
+        let column = rows[row].find("e          estimate").unwrap() + "e          ".len();
         let column = rows[row][..column].chars().count();
         (
             buffer.content()[row * width + column].style(),
@@ -560,4 +562,9 @@ fn a_rejected_estimate_edit_restores_the_estimate_with_the_error() {
 
     assert_eq!(issue(&app, FIRST).estimate, before);
     assert!(shows(&app, "Could not change the estimate of DES-34"));
+}
+
+/// A failure with `message`, as the runtime sends one.
+fn failed(message: &str) -> Failure {
+    Failure::new(ErrorKind::Other, "test", message)
 }

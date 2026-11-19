@@ -1,0 +1,28 @@
+---
+source: tests/browse.rs
+expression: app.backend()
+---
+" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects                        "
+"t ENG Engineering                                                                                   "
+"┌Cycles────────────────────────────────────────────────────────────────────────────────────────────┐"
+"│▸ Cycle 7                                                      Oct 26 – Nov 9  active 4 of 12 done│"
+"│  Cycle 6                                                      Oct 12 – Oct 26         6 of 6 done│"
+"│  Cycle 5                                                      Sep 28 – Oct 12         7 of 7 done│"
+"│  Cycle 4                                                      Sep 14 – Sep 28         6 of 6 done│"
+"│  Cycle 3                                                      Aug 31 – Sep 14         6 of 6 done│"
+"│  Cycle 2                                                      Aug 17 – Aug 31         6 of 6 done│"
+"│  Cycle 1                                                      Aug 3 – Aug 17          7 of 7 done│"
+"│                                                                                                  │"
+"│                                                                                                  │"
+"│                                                                                                  │"
+"│                                                                                                  │"
+"│                                                                                                  │"
+"│                                                                                                  │"
+"│                                                                                                  │"
+"│                                                                                                  │"
+"│                                                                                                  │"
+"│                                                                                                  │"
+"└──────────────────────────────────────────────────────────────────────────────────────────────────┘"
+" Move │ j down       │ k up   │ gg top    │ G bottom │ C-d/C-u page │ / search                      "
+" Do   │ Enter issues │ ? keys │ : palette │ q quit                                                  "
+" View │ t team                                                                                      "

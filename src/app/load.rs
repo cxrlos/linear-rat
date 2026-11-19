@@ -1,5 +1,6 @@
 use std::error::Error;
 
+use super::Failure;
 use crate::auth::AuthError;
 use crate::linear::ClientError;
 
@@ -27,9 +28,9 @@ pub enum LoadError {
     /// `LINEAR_API_KEY`.
     KeyUnusable(String),
     /// Linear could not be reached in time.
-    Unreachable(String),
+    Unreachable(Failure),
     /// Linear answered, but not with the issues.
-    Failed(String),
+    Failed(Failure),
 }
 
 impl From<&AuthError> for LoadError {
@@ -52,19 +53,23 @@ impl From<&AuthError> for LoadError {
     }
 }
 
+/// What loading My Issues is called in the error log.
+const LOAD_MY_ISSUES: &str = "load My Issues";
+
 impl From<&ClientError> for LoadError {
     fn from(error: &ClientError) -> Self {
+        let failure = || Failure::from_client(LOAD_MY_ISSUES, error);
         match error {
             ClientError::InvalidKey => Self::KeyRejected,
             ClientError::KeyNotAHeader => Self::KeyUnusable(chain(error)),
             ClientError::ConnectTimeout
             | ClientError::RequestTimeout
-            | ClientError::Transport(_) => Self::Unreachable(chain(error)),
+            | ClientError::Transport(_) => Self::Unreachable(failure()),
             ClientError::Setup(_)
             | ClientError::Status(_)
-            | ClientError::RateLimited
+            | ClientError::RateLimited { .. }
             | ClientError::GraphQl(_)
-            | ClientError::Decode(_) => Self::Failed(chain(error)),
+            | ClientError::Decode(_) => Self::Failed(failure()),
         }
     }
 }
@@ -87,6 +92,7 @@ mod tests {
 
     use super::*;
     use crate::auth::{KeySource, KeyringError};
+    use crate::linear::ErrorKind;
 
     #[test]
     fn auth_problems_map_to_their_own_screens() {
@@ -130,11 +136,19 @@ mod tests {
         );
         assert_eq!(
             LoadError::from(&ClientError::ConnectTimeout),
-            LoadError::Unreachable("timed out connecting to Linear".to_owned())
+            LoadError::Unreachable(Failure::new(
+                ErrorKind::Offline,
+                "load My Issues",
+                "timed out connecting to Linear"
+            ))
         );
         assert_eq!(
             LoadError::from(&ClientError::Status(503)),
-            LoadError::Failed("Linear answered with HTTP 503".to_owned())
+            LoadError::Failed(Failure::new(
+                ErrorKind::ServerError,
+                "load My Issues",
+                "Linear answered with HTTP 503"
+            ))
         );
     }
 }

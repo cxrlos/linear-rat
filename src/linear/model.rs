@@ -3,6 +3,7 @@
 //! share these types.
 
 use jiff::Timestamp;
+use jiff::civil::Date;
 use serde::{Deserialize, Serialize};
 
 /// The person running lrat, identified by the API key in use.
@@ -104,6 +105,50 @@ pub struct Project {
     pub name: String,
 }
 
+/// Where a project stands, as Linear's `ProjectStatus`: the workspace's
+/// name for it and the type it belongs to.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectStatus {
+    pub name: String,
+    pub status_type: ProjectStatusType,
+}
+
+/// Every project status belongs to one of these, as Linear's
+/// `ProjectStatusType`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ProjectStatusType {
+    Backlog,
+    Planned,
+    Started,
+    Paused,
+    Completed,
+    Canceled,
+}
+
+/// A project as the Projects screen shows it: its status, target date,
+/// lead and progress, and its milestones in Linear's order.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProjectOverview {
+    pub project: Project,
+    pub status: ProjectStatus,
+    pub target_date: Option<Date>,
+    pub lead: Option<Member>,
+    /// From 0 to 1, as Linear's `Project.progress`.
+    pub progress: f64,
+    pub milestones: Vec<ProjectMilestone>,
+    /// Whether `milestones` holds every milestone, not a first page.
+    pub milestones_complete: bool,
+}
+
+/// A stage inside a project that issues can be grouped under.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectMilestone {
+    pub id: String,
+    pub name: String,
+    pub project_id: String,
+}
+
 /// A team's fixed time box of committed issues.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Cycle {
@@ -144,6 +189,20 @@ pub struct Issue {
     pub creator_id: Option<String>,
     pub cycle_id: Option<String>,
     pub project_id: Option<String>,
+    #[serde(default)]
+    pub project_milestone_id: Option<String>,
+    /// The issue this one is a sub-issue of.
+    #[serde(default)]
+    pub parent_id: Option<String>,
+    /// The day the issue is due, with no time of day or time zone.
+    #[serde(default)]
+    pub due_date: Option<Date>,
+    /// When the issue was archived, or `None` while it is not.
+    #[serde(default)]
+    pub archived_at: Option<Timestamp>,
+    /// Whether the viewer is subscribed to the issue's notifications.
+    #[serde(default)]
+    pub subscribed: bool,
     pub label_ids: Vec<String>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
@@ -202,5 +261,88 @@ impl Attachment {
             .as_deref()
             .is_some_and(|source| source.eq_ignore_ascii_case("github"))
             && self.url.contains("/pull/")
+    }
+}
+
+/// A link between two issues, as Linear's `IssueRelation`: the issue with id
+/// `issue_id` relates to the one with id `related_issue_id` as `kind` says,
+/// for example it blocks it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IssueRelation {
+    pub id: String,
+    pub kind: RelationType,
+    pub issue_id: String,
+    pub related_issue_id: String,
+}
+
+/// Linear's `IssueRelationType`, read from the source issue.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RelationType {
+    Blocks,
+    /// The source issue is a duplicate of the related one.
+    Duplicate,
+    Related,
+    /// Suggested by Linear as alike; lrat does not show it.
+    Similar,
+}
+
+/// How a relation reads from one of its two issues.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RelationKind {
+    Blocks,
+    BlockedBy,
+    Related,
+    DuplicateOf,
+    DuplicatedBy,
+}
+
+impl RelationKind {
+    /// In the order the detail lists them.
+    pub const ALL: [RelationKind; 5] = [
+        RelationKind::Blocks,
+        RelationKind::BlockedBy,
+        RelationKind::Related,
+        RelationKind::DuplicateOf,
+        RelationKind::DuplicatedBy,
+    ];
+
+    /// What the detail and the pickers call it.
+    pub fn name(self) -> &'static str {
+        match self {
+            RelationKind::Blocks => "Blocks",
+            RelationKind::BlockedBy => "Blocked by",
+            RelationKind::Related => "Related",
+            RelationKind::DuplicateOf => "Duplicate of",
+            RelationKind::DuplicatedBy => "Duplicated by",
+        }
+    }
+}
+
+impl IssueRelation {
+    /// How this relation reads from the issue with id `issue_id`, and the
+    /// id of the issue at its other end. `None` when `issue_id` is at
+    /// neither end, or for a relation lrat does not show.
+    pub fn seen_from(&self, issue_id: &str) -> Option<(RelationKind, &str)> {
+        let outgoing = if self.issue_id == issue_id {
+            true
+        } else if self.related_issue_id == issue_id {
+            false
+        } else {
+            return None;
+        };
+        let other = if outgoing {
+            &self.related_issue_id
+        } else {
+            &self.issue_id
+        };
+        let kind = match (self.kind, outgoing) {
+            (RelationType::Blocks, true) => RelationKind::Blocks,
+            (RelationType::Blocks, false) => RelationKind::BlockedBy,
+            (RelationType::Related, _) => RelationKind::Related,
+            (RelationType::Duplicate, true) => RelationKind::DuplicateOf,
+            (RelationType::Duplicate, false) => RelationKind::DuplicatedBy,
+            (RelationType::Similar, _) => return None,
+        };
+        Some((kind, other))
     }
 }

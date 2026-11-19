@@ -2,7 +2,7 @@
 source: tests/palette.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    "
 "┌My Issues─────────────────────────────────────────────────────────────────────┐"
 "│◐┌ Palette ─────────────────────────────────────────────────────────────────┐ │"
 "│▸│ :                                                                        │ │"
@@ -16,13 +16,13 @@ expression: app.backend()
 "│ │ Focus the pane on the left                                             h │ │"
 "│○│ Focus the pane on the right                                            l │ │"
 "│ │ Open the focused issue                                             Enter │ │"
+"│ │ List the issues of the focused cycle or project                    Enter │ │"
 "│ │ Copy the identifier                                                   yi │ │"
 "│ │ Copy the URL                                                          yu │ │"
-"│ │ Copy the branch name                                                  yb │ │"
 "│ └ Esc close ───────────────────────────────────────────────────────────────┘ │"
-"│  DES-16 Accessible focus rings across wh ○ Todo        ▮▮▮ High    5         │"
-"│  ENG-56 Notification settings reset afte ○ Todo        ▮▮▮ High    2         │"
+"│  DES-16 Accessible focus rings across w… ○ Todo        ▮▮▮ High    5         │"
+"│  ENG-56 Notification settings reset aft… ○ Todo        ▮▮▮ High    2         │"
 "└──────────────────────────────────────────────────────────────────────────────┘"
 " Move │ Down/Up move                                                            "
-" Do   │ Enter pick   │ Tab toggle │ Esc close                                   "
+" Do   │ Enter choose │ Esc close                                                "
 "                                                                                "

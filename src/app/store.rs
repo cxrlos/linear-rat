@@ -7,15 +7,16 @@ use std::collections::{BTreeMap, HashSet};
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
+use super::capabilities::Capabilities;
 use super::edit::{Edit, Write};
 use crate::analytics::AdministrableTeams;
 use crate::linear::model::{
-    Attachment, Comment, Cycle, Issue, Label, Member, Project, StateSpan, Team, Viewer,
-    WorkflowState, Workspace,
+    Attachment, Comment, Cycle, Issue, IssueRelation, Label, Member, Project, ProjectMilestone,
+    RelationKind, StateSpan, Team, Viewer, WorkflowState, Workspace,
 };
 use crate::linear::{
-    AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, PostedComment, SearchResults,
-    TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions,
+    AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, PostedComment, ProjectList,
+    SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions,
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
@@ -51,6 +52,10 @@ pub struct Store {
     /// missing, so a snapshot written before they were kept still loads.
     #[serde(default)]
     attachments: BTreeMap<String, Vec<Attachment>>,
+    /// Relations between issues by relation id, as details loaded them and
+    /// edits made them. Defaults when missing, as `attachments` does.
+    #[serde(default)]
+    relations: BTreeMap<String, IssueRelation>,
     /// When the newest data was loaded, which decides the active cycle.
     as_of: Option<Timestamp>,
     /// The ids of the teams the viewer is a member of, in the order Linear
@@ -60,6 +65,14 @@ pub struct Store {
     /// Project ids by team id, for the teams whose filter options have
     /// loaded.
     team_projects: BTreeMap<String, Vec<String>>,
+    /// Project milestones by id, from the detail, the milestone picker and
+    /// the Projects screen.
+    #[serde(default)]
+    milestones: BTreeMap<String, ProjectMilestone>,
+    /// The ids of a project's milestones, in Linear's order, by project id,
+    /// once loaded for a milestone picker or the Projects screen.
+    #[serde(default)]
+    project_milestones: BTreeMap<String, Vec<String>>,
     /// The windows analytics loads have covered in this session. Left out
     /// of the snapshot, so a new session loads analytics afresh rather than
     /// trusting cycle histories from the last one.
@@ -74,9 +87,22 @@ pub struct Store {
     /// next launch.
     #[serde(skip)]
     administrable_teams: Option<Vec<String>>,
+    /// What the API key may do in each team, as learned from Linear's
+    /// answers. Defaults when missing, so an older snapshot still loads.
+    #[serde(default)]
+    capabilities: Capabilities,
 }
 
 impl Store {
+    /// What the API key may do in each team.
+    pub fn capabilities(&self) -> &Capabilities {
+        &self.capabilities
+    }
+
+    pub fn capabilities_mut(&mut self) -> &mut Capabilities {
+        &mut self.capabilities
+    }
+
     /// Stores `issue` unless the stored copy is newer, so updates can arrive
     /// in any order. Returns whether it replaced or added anything.
     pub fn upsert_issue(&mut self, issue: Issue) -> bool {
@@ -223,6 +249,49 @@ impl Store {
         self.issues.remove(id).is_some()
     }
 
+    /// Changes the stored issue with id `id` in place. The issue keeps its
+    /// `updated_at`, so Linear's next copy replaces it. Returns whether it
+    /// is stored.
+    pub fn change_issue(&mut self, id: &str, change: impl FnOnce(&mut Issue)) -> bool {
+        let issue = self.issues.get_mut(id);
+        let stored = issue.is_some();
+        if let Some(issue) = issue {
+            change(issue);
+        }
+        stored
+    }
+
+    /// Takes the issue with id `id` out with everything stored about it,
+    /// so [`Store::put_back`] can restore it.
+    pub fn take_issue(&mut self, id: &str) -> Option<Trashed> {
+        let issue = self.issues.remove(id)?;
+        Some(Trashed {
+            issue,
+            comments: self.comments.remove(id),
+            state_history: self.state_histories.remove(id),
+            attachments: self.attachments.remove(id),
+        })
+    }
+
+    /// Restores what [`Store::take_issue`] took, unless the issue has come
+    /// back meanwhile.
+    pub fn put_back(&mut self, trashed: Trashed) {
+        let id = trashed.issue.id.clone();
+        if self.issues.contains_key(&id) {
+            return;
+        }
+        if let Some(comments) = trashed.comments {
+            self.comments.insert(id.clone(), comments);
+        }
+        if let Some(history) = trashed.state_history {
+            self.state_histories.insert(id.clone(), history);
+        }
+        if let Some(attachments) = trashed.attachments {
+            self.attachments.insert(id.clone(), attachments);
+        }
+        self.issues.insert(id, trashed.issue);
+    }
+
     /// The newest `updatedAt` a poll of `team_id` has returned, if any.
     pub fn watermark(&self, team_id: &str) -> Option<Timestamp> {
         self.watermarks.get(team_id).copied()
@@ -243,6 +312,23 @@ impl Store {
         by_id(&mut self.teams, &found.teams, |team| &team.id);
         by_id(&mut self.labels, &found.labels, |label| &label.id);
         by_id(&mut self.members, &found.members, |member| &member.id);
+    }
+
+    /// Takes in the Projects screen's projects and their milestones.
+    pub fn merge_projects(&mut self, loaded: &ProjectList) {
+        for overview in &loaded.projects {
+            let project = &overview.project;
+            self.projects.insert(project.id.clone(), project.clone());
+            if overview.milestones_complete {
+                self.set_project_milestones(&project.id, &overview.milestones);
+            } else {
+                // A first page names milestones but is not the project's list,
+                // so the milestone picker still loads every page.
+                by_id(&mut self.milestones, &overview.milestones, |milestone| {
+                    &milestone.id
+                });
+            }
+        }
     }
 
     /// Takes in an analytics load for `window`. Issues go through
@@ -367,6 +453,32 @@ impl Store {
         self.team_labels.insert(team_id.to_owned(), ids);
     }
 
+    /// Replaces the milestones of project `project_id`, and stores each
+    /// milestone by id.
+    pub fn set_project_milestones(&mut self, project_id: &str, milestones: &[ProjectMilestone]) {
+        by_id(&mut self.milestones, milestones, |milestone| &milestone.id);
+        let ids = milestones
+            .iter()
+            .map(|milestone| milestone.id.clone())
+            .collect();
+        self.project_milestones.insert(project_id.to_owned(), ids);
+    }
+
+    /// The milestones of project `project_id`, in Linear's order, if they
+    /// have been loaded.
+    pub fn project_milestones(&self, project_id: &str) -> Option<Vec<&ProjectMilestone>> {
+        let ids = self.project_milestones.get(project_id)?;
+        Some(
+            ids.iter()
+                .filter_map(|id| self.milestones.get(id))
+                .collect(),
+        )
+    }
+
+    pub fn milestone(&self, id: &str) -> Option<&ProjectMilestone> {
+        self.milestones.get(id)
+    }
+
     /// The labels team `team_id`'s issues can carry, if they have been
     /// loaded.
     pub fn team_labels(&self, team_id: &str) -> Option<Vec<&Label>> {
@@ -414,6 +526,92 @@ impl Store {
         if let Some(project) = &detail.project {
             self.projects.insert(project.id.clone(), project.clone());
         }
+        if let Some(milestone) = &detail.milestone {
+            self.milestones
+                .insert(milestone.id.clone(), milestone.clone());
+        }
+        self.relations.retain(|_, relation| {
+            relation.issue_id != issue_id && relation.related_issue_id != issue_id
+        });
+        for relation in &detail.relations {
+            self.relations.insert(relation.id.clone(), relation.clone());
+        }
+        for issue in &detail.related_issues {
+            self.upsert_issue(issue.clone());
+        }
+        by_id(&mut self.teams, &detail.teams, |team| &team.id);
+        by_id(&mut self.cycles, &detail.cycles, |cycle| &cycle.id);
+    }
+
+    /// Stores `relation`, or replaces the one with its id.
+    pub fn add_relation(&mut self, relation: IssueRelation) {
+        self.relations.insert(relation.id.clone(), relation);
+    }
+
+    /// Forgets the relation with id `id` and returns it, if it was stored.
+    pub fn remove_relation(&mut self, id: &str) -> Option<IssueRelation> {
+        self.relations.remove(id)
+    }
+
+    /// The relations of the issue with id `issue_id` lrat shows, as they
+    /// read from it, with the id of the issue at the other end, by kind.
+    pub fn relations(&self, issue_id: &str) -> Vec<(RelationKind, &IssueRelation, &str)> {
+        let mut found: Vec<_> = self
+            .relations
+            .values()
+            .filter_map(|relation| {
+                let (kind, other) = relation.seen_from(issue_id)?;
+                Some((kind, relation, other))
+            })
+            .collect();
+        found.sort_by_key(|&(kind, _, other)| (kind, other.to_owned()));
+        found
+    }
+
+    /// Whether an open issue blocks the issue with id `issue_id`, as far as
+    /// the stored relations know. A blocker the store does not hold counts
+    /// as open.
+    pub fn is_blocked(&self, issue_id: &str) -> bool {
+        self.relations(issue_id)
+            .into_iter()
+            .any(|(kind, _, other)| {
+                kind == RelationKind::BlockedBy
+                    && self
+                        .issue(other)
+                        .is_none_or(|blocker| blocker.state.state_type.is_open())
+            })
+    }
+
+    /// The stored sub-issues of the issue with id `issue_id`, oldest first.
+    pub fn children(&self, issue_id: &str) -> Vec<&Issue> {
+        let mut children: Vec<&Issue> = self
+            .issues
+            .values()
+            .filter(|issue| issue.parent_id.as_deref() == Some(issue_id))
+            .collect();
+        children.sort_by_key(|issue| (issue.created_at, issue.id.clone()));
+        children
+    }
+
+    /// Whether the issue with id `id` is a sub-issue of the issue with id
+    /// `ancestor` at any depth, following the parents the store holds. A
+    /// chain that reaches an issue the store lacks, or loops, ends there.
+    pub fn is_under(&self, id: &str, ancestor: &str) -> bool {
+        let mut seen: Vec<&str> = Vec::new();
+        let mut next = self.issue(id).and_then(|issue| issue.parent_id.as_deref());
+        while let Some(parent) = next {
+            if parent == ancestor {
+                return true;
+            }
+            if seen.contains(&parent) {
+                return false;
+            }
+            seen.push(parent);
+            next = self
+                .issue(parent)
+                .and_then(|issue| issue.parent_id.as_deref());
+        }
+        false
     }
 
     pub fn viewer(&self) -> Option<&Viewer> {
@@ -518,6 +716,14 @@ impl Store {
         self.projects.values()
     }
 
+    /// Every loaded project milestone, each project's in Linear's order.
+    pub fn milestones(&self) -> impl Iterator<Item = &ProjectMilestone> {
+        self.project_milestones
+            .values()
+            .flatten()
+            .filter_map(|id| self.milestones.get(id))
+    }
+
     /// Whether the filter options of `team_id` have loaded. A picker's
     /// member load alone does not count.
     pub fn has_team_options(&self, team_id: &str) -> bool {
@@ -532,6 +738,15 @@ impl Store {
             .flatten()
             .filter_map(|id| self.projects.get(id))
     }
+}
+
+/// An issue taken out of the store with what the store kept about it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Trashed {
+    pub issue: Issue,
+    comments: Option<Vec<Comment>>,
+    state_history: Option<Vec<StateSpan>>,
+    attachments: Option<Vec<Attachment>>,
 }
 
 /// How far back `windows` reach without a gap up to now.

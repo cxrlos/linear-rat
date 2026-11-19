@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use linear_rat::analytics::{StaleThreshold, WeekRange};
+use linear_rat::app::{Arrangement, Grouping, Sort, SortKey};
 use linear_rat::auth::KeyringStore;
 use linear_rat::config::{self, Loaded};
 use linear_rat::ui::icons::IconSet;
@@ -54,6 +55,69 @@ fn an_empty_config_is_every_documented_default() {
     assert_eq!(config.analytics.default_range, WeekRange::Twelve);
     assert_eq!(config.analytics.stale_threshold, StaleThreshold::days(14));
     assert_eq!(loaded.theme, Theme::default());
+}
+
+#[test]
+fn ui_sets_how_each_issue_list_starts_grouped_and_sorted() {
+    let loaded = parse(
+        r#"
+[ui]
+my-issues-group = "project"
+my-issues-sort = "due-date"
+team-issues-group = "assignee"
+team-issues-sort = "estimate-asc"
+"#,
+    );
+
+    assert_eq!(loaded.errors, vec![]);
+    let ui = loaded.config.ui;
+    assert_eq!(
+        ui.my_issues,
+        Arrangement {
+            group: Grouping::Project,
+            sort: Some(Sort::new(SortKey::DueDate, false)),
+        }
+    );
+    assert_eq!(
+        ui.team_issues,
+        Arrangement {
+            group: Grouping::Assignee,
+            sort: Some(Sort::new(SortKey::Estimate, false)),
+        }
+    );
+}
+
+#[test]
+fn my_issues_sort_default_is_its_own_order() {
+    let loaded = parse("[ui]\nmy-issues-group = \"none\"\nmy-issues-sort = \"default\"\n");
+
+    assert_eq!(loaded.errors, vec![]);
+    assert_eq!(
+        loaded.config.ui.my_issues,
+        Arrangement {
+            group: Grouping::None,
+            sort: None,
+        }
+    );
+}
+
+#[test]
+fn a_bad_group_or_sort_warns_and_ui_falls_back_to_its_defaults() {
+    let loaded = parse("[ui]\nmy-issues-group = \"label\"\nteam-issues-sort = \"default\"\n");
+
+    assert_eq!(
+        messages(&loaded),
+        vec![
+            "config.toml:2: `ui.my-issues-group` must be one of \"state\", \"priority\", \
+             \"project\", \"milestone\", \"cycle\", \"assignee\", \"none\"; [ui] uses its \
+             defaults",
+            "config.toml:3: `ui.team-issues-sort` must be one of \"updated\", \"created\", \
+             \"priority\", \"due-date\", \"estimate\", each optionally ending in -asc or \
+             -desc; [ui] uses its defaults",
+        ]
+    );
+    assert_eq!(loaded.config.ui.my_issues, Arrangement::MY_ISSUES);
+    assert_eq!(loaded.config.ui.team_issues, Arrangement::TEAM_ISSUES);
 }
 
 #[test]
@@ -280,7 +344,7 @@ fn a_misspelt_table_is_reported_instead_of_ignored() {
         messages(&loaded),
         vec![
             "config.toml:1: unknown table `[key]` is ignored; lrat reads [ui], [theme], \
-             [keys], [sync], [analytics] and [auth]"
+             [keys], [sync], [analytics], [auth] and [updates]"
         ]
     );
     assert_eq!(loaded.config.keys, vec![]);
@@ -440,4 +504,33 @@ fn an_unknown_auth_store_is_reported_and_the_os_keyring_used() {
     );
     assert_eq!(loaded.config.auth.store, KeyringStore::Os);
     assert_eq!(loaded.config.ui.icons, IconSet::Nerd);
+}
+
+#[test]
+fn without_an_updates_section_lrat_checks_for_releases() {
+    let loaded = parse("");
+
+    assert!(loaded.config.updates.check);
+}
+
+#[test]
+fn updates_check_false_turns_the_release_check_off() {
+    let loaded = parse("[updates]\ncheck = false\n");
+
+    assert_eq!(loaded.errors, vec![]);
+    assert!(!loaded.config.updates.check);
+}
+
+#[test]
+fn a_bad_updates_value_is_reported_and_the_check_stays_on() {
+    let loaded = parse("[updates]\ncheck = \"never\"\nwhen = 3\n");
+
+    assert_eq!(
+        messages(&loaded),
+        vec![
+            "config.toml:2: `updates.check` must be true or false; [updates] uses its defaults",
+            "config.toml:3: unknown key `when` in [updates] is ignored",
+        ]
+    );
+    assert!(loaded.config.updates.check);
 }

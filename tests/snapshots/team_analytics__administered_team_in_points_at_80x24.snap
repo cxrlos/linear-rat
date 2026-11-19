@@ -2,7 +2,7 @@
 source: tests/team_analytics.rs
 expression: "team_view(80, 24).backend()"
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    "
 "┌Analytics─────────────────────────────────────────────────────────────────────┐"
 "│v  Personal [Team]  t ENG Engineering   Range  4 weeks [12 weeks] 26 weeks    │"
 "│                                                                              │"

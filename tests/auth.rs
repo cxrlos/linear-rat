@@ -14,11 +14,15 @@ use linear_rat::auth::{
     self, ApiKey, AuthError, Credentials, EntryReader, InvalidApiKey, KeySource, KeyStore,
     KeyringEntry, KeyringError, KeyringStore, WorkspaceFile,
 };
-use linear_rat::linear::model::{Issue, Label, Member, Team, Viewer, WorkflowState, Workspace};
+use linear_rat::linear::model::{
+    Cycle, Issue, IssueRelation, Label, Member, ProjectMilestone, Team, Viewer, WorkflowState,
+    Workspace,
+};
 use linear_rat::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, Diagnostics, FakeClient,
-    IssueDetail, IssueLink, IssueUpdate, LinearClient, SearchResults, TeamAnalyticsIssues,
-    TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery, Urgency,
+    IssueDetail, IssueLink, IssueUpdate, LinearClient, ProjectList, RelationCreate, SearchQuery,
+    SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
+    Urgency,
 };
 
 const SECRET: &str = "lin_api_fictional0000000000000000000000000000";
@@ -166,6 +170,33 @@ impl LinearClient for RejectingClient {
         Err(ClientError::InvalidKey)
     }
 
+    async fn project_milestones(
+        &self,
+        _project_id: &str,
+    ) -> Result<Vec<ProjectMilestone>, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn archive_issue(&self, _: &str) -> Result<(), ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn unarchive_issue(&self, _: &str) -> Result<(), ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn trash_issue(&self, _: &str) -> Result<(), ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn subscribe_to_issue(&self, _: &str) -> Result<(), ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn unsubscribe_from_issue(&self, _: &str) -> Result<(), ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
     async fn update_issue(
         &self,
         _issue_id: &str,
@@ -178,7 +209,7 @@ impl LinearClient for RejectingClient {
         Err(ClientError::InvalidKey)
     }
 
-    async fn search_issues(&self, _: &str) -> Result<SearchResults, ClientError> {
+    async fn search_issues(&self, _: &SearchQuery) -> Result<SearchResults, ClientError> {
         Err(ClientError::InvalidKey)
     }
 
@@ -202,6 +233,22 @@ impl LinearClient for RejectingClient {
         Err(ClientError::InvalidKey)
     }
 
+    async fn recent_cycles(&self, _: &str) -> Result<Vec<Cycle>, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn viewer_projects(&self) -> Result<ProjectList, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn cycle_issues(&self, _: &str) -> Result<SearchResults, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn project_issues(&self, _: &str) -> Result<SearchResults, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
     async fn analytics_issues(&self, _: AnalyticsWindow) -> Result<AnalyticsIssues, ClientError> {
         Err(ClientError::InvalidKey)
     }
@@ -218,6 +265,14 @@ impl LinearClient for RejectingClient {
         &self,
         _: &linear_rat::linear::IssueCreate,
     ) -> Result<Issue, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn create_relation(&self, _: &RelationCreate) -> Result<IssueRelation, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn delete_relation(&self, _: &str) -> Result<(), ClientError> {
         Err(ClientError::InvalidKey)
     }
 

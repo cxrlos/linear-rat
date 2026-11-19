@@ -2,7 +2,7 @@
 source: tests/app.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    "
 "┌ENG-51────────────────────────────────────────────────────────────────────────┐"
 "│Add a dry-run mode to the importer                                            │"
 "│                                                                              │"

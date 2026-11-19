@@ -2,7 +2,7 @@
 source: tests/loading.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    "
 "┌My Issues─────────────────────────────────────────────────────────────────────┐"
 "│                                                                              │"
 "│ Not logged in                                                                │"

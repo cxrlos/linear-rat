@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use jiff::{SignedDuration, Timestamp};
 
-use super::{Effect, Load, LoadError, State, Update};
+use super::{Effect, Failure, Load, LoadError, State, Update};
 use crate::config::SyncSettings;
 use crate::linear::{AssignedIssues, ClientError, LiveEvent, TeamChanges};
 
@@ -37,15 +37,16 @@ pub struct TeamPoll {
 pub enum SyncFailure {
     /// Linear's rate limit held it back.
     Throttled,
-    /// Anything else; the message says what.
-    Failed(String),
+    /// Anything else; the failure says what.
+    Failed(Failure),
 }
 
-impl From<&ClientError> for SyncFailure {
-    fn from(error: &ClientError) -> Self {
+impl SyncFailure {
+    /// How `error`, which ended `action`, stops sync.
+    pub fn from_client(action: &str, error: &ClientError) -> Self {
         match error {
-            ClientError::RateLimited => Self::Throttled,
-            other => Self::Failed(super::load::chain(other)),
+            ClientError::RateLimited { .. } => Self::Throttled,
+            other => Self::Failed(Failure::from_client(action, other)),
         }
     }
 }
@@ -139,6 +140,11 @@ impl SyncStatus {
     /// session's load.
     pub fn is_refreshing(&self) -> bool {
         self.refresh != Refresh::Done
+    }
+
+    /// The time of the latest tick, `None` before the first.
+    pub fn now(&self) -> Option<Timestamp> {
+        self.now
     }
 
     /// When the last poll finished without a problem, by the local clock.
@@ -312,17 +318,20 @@ impl State {
 }
 
 /// `r`: polls now, focused or not, unless a poll is already in flight. While
-/// the snapshot's load has failed, tries that load again instead.
+/// the snapshot's load has failed, tries that load again instead. Either
+/// way it forgets the writes the API key was denied, so their keys try
+/// again.
 pub(super) fn refresh(state: &mut State) -> Update {
     if !state.can_refresh() {
         return Update::default();
     }
+    let unmuted = state.store.capabilities_mut().forget_denied_writes();
     let effect = match state.sync_status.refresh {
         Refresh::Failed(_) => retry_load(state),
         Refresh::Loading | Refresh::Done => start_poll(state),
     };
     Update {
-        redraw: false,
+        redraw: unmuted,
         effects: vec![effect],
     }
 }
@@ -412,6 +421,7 @@ pub(super) fn polled(
         let before = state.store.watermark(&team.team_id);
         changed |= state.store.apply(team);
         moved |= state.store.watermark(&team.team_id) != before;
+        forget_archived(state, team);
     }
     let indicator_changed = redraw_if_indicator_changes(state, |state| {
         let status = &mut state.sync_status;
@@ -426,7 +436,7 @@ pub(super) fn polled(
         }
     });
     if changed {
-        state.rebuild_my_issues();
+        state.rebuild_lists();
     }
     let mut effects = Vec::new();
     if changed || moved {
@@ -436,6 +446,20 @@ pub(super) fn polled(
     Update {
         redraw: changed || indicator_changed,
         effects,
+    }
+}
+
+/// Takes the issues among `changes` that the store now holds as archived
+/// off Team Issues, whose pages leave archived issues out.
+fn forget_archived(state: &mut State, changes: &TeamChanges) {
+    for issue in &changes.issues {
+        let archived = state
+            .store
+            .issue(&issue.id)
+            .is_some_and(|stored| stored.archived_at.is_some());
+        if archived {
+            state.team_issues.forget(&issue.id);
+        }
     }
 }
 
@@ -458,8 +482,9 @@ pub(super) fn live(state: &mut State, event: LiveEvent) -> Update {
                 status.live_poll_at = status
                     .now
                     .and_then(|now| now.checked_add(LIVE_POLL_AFTER).ok());
-                state.rebuild_my_issues();
+                state.rebuild_lists();
             }
+            forget_archived(state, &changes);
             changed
         }
         LiveEvent::Comment(posted) => {
@@ -500,23 +525,28 @@ pub(super) fn reconciled(
     if !changed {
         return Update::default();
     }
-    state.rebuild_my_issues();
+    state.rebuild_lists();
     Update {
         redraw: true,
         effects: vec![Effect::SaveSnapshot],
     }
 }
 
-/// Marks sync as failing or throttled. The first failure in a row also says
-/// why in the notice, unless one is showing; later ones only keep the
-/// indicator accented.
+/// Marks sync as failing or throttled. The first failure in a row also goes
+/// in the error log and says why in the notice, unless one is showing;
+/// later ones only keep the indicator accented.
 fn note_failure(state: &mut State, failure: SyncFailure) {
-    let message = match &failure {
-        SyncFailure::Failed(message) => Some(format!("Sync failed: {message}")),
+    let failed = match &failure {
+        SyncFailure::Failed(failed) => Some(failed.clone()),
         SyncFailure::Throttled => None,
     };
-    if state.sync_status.fail(failure) && state.notice.is_none() {
-        state.notice = message;
+    if state.sync_status.fail(failure)
+        && let Some(failed) = failed
+    {
+        if state.notice.is_none() {
+            state.notice = Some(format!("Sync failed: {failed}"));
+        }
+        state.record(failed);
     }
 }
 
@@ -537,9 +567,9 @@ pub(super) fn loaded(state: &mut State, loaded: &AssignedIssues) -> Update {
 pub(super) fn load_failed(state: &mut State, error: LoadError) -> Update {
     let refreshing = state.sync_status.is_refreshing();
     match error {
-        LoadError::Unreachable(message) | LoadError::Failed(message) if refreshing => {
+        LoadError::Unreachable(failure) | LoadError::Failed(failure) if refreshing => {
             state.sync_status.refresh = Refresh::Failed(state.sync_status.now);
-            note_failure(state, SyncFailure::Failed(message));
+            note_failure(state, SyncFailure::Failed(failure));
         }
         error => {
             state.sync_status.refresh = Refresh::Done;

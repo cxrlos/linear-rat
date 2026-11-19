@@ -1,7 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
-use linear_rat::app::{App, Effect, Event, MyIssues, State};
-use linear_rat::linear::demo;
+use linear_rat::app::{App, Effect, Event, Failure, MyIssues, State};
+use linear_rat::linear::{ErrorKind, demo};
 use ratatui::backend::TestBackend;
 use ratatui::style::Color;
 
@@ -199,9 +199,9 @@ fn the_next_key_press_clears_the_copy_notice() {
 fn an_effect_that_fails_shows_its_error_as_the_notice() {
     let mut app = app();
 
-    app.handle(Event::EffectFailed(
-        "could not open the browser with xdg-open: not found".to_owned(),
-    ))
+    app.handle(Event::EffectFailed(offline(
+        "could not open the browser with xdg-open: not found",
+    )))
     .unwrap();
 
     assert_eq!(
@@ -246,4 +246,9 @@ fn which_key_accents_copy_actions_with_a_focused_issue() {
 
     assert_eq!(fg_of(&app, "i  Copy the identifier"), Some(Color::Cyan));
     assert_eq!(fg_of(&app, "Copy the identifier"), Some(Color::Reset));
+}
+
+/// An offline failure with `message`, as the runtime sends one.
+fn offline(message: &str) -> Failure {
+    Failure::new(ErrorKind::Offline, "test", message)
 }

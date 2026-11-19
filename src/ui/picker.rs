@@ -1,6 +1,7 @@
 //! A picker: the filter typed so far, the entries it leaves with the number
 //! that picks each of the first nine, and the keys that choose and close.
 
+use super::text;
 use ratatui::Frame;
 use ratatui::layout::{Margin, Rect};
 use ratatui::style::Stylize;
@@ -8,8 +9,11 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Padding, Paragraph};
 
 use super::style;
-use crate::app::{Action, Choice, CreateForm, Edit, EditPicker, Links, Note, Picker, State, Step};
-use crate::keys::Context;
+use crate::app::{
+    Action, Choice, CreateForm, DUE_DATE_FORMS, DuePrompt, Edit, EditPicker, IssuePicker, Links,
+    Note, Picker, State, Step,
+};
+use crate::keys::{self, Context};
 
 /// The width the list asks for at least, so short entries leave room for
 /// the title and the keys at the bottom.
@@ -86,15 +90,79 @@ fn render_title(state: &State, form: &CreateForm, heading: &str, frame: &mut Fra
     let width = lines
         .iter()
         .map(Line::width)
-        .chain([heading.chars().count() + 2, bottom.width(), MIN_WIDTH])
+        .chain([text::width(heading) + 2, bottom.width(), MIN_WIDTH])
         .max()
         .unwrap_or(0)
         + 4;
     let width = u16::try_from(width).unwrap_or(u16::MAX);
     let popup = super::centered(area, width, 5);
+    let edge = usize::from(popup.width.saturating_sub(2));
     let block = super::popup_block(state)
-        .title(format!(" {heading} "))
-        .title_bottom(bottom);
+        .title(text::fit(&format!(" {heading} "), edge))
+        .title_bottom(text::fit_line(bottom, edge));
+    let lines: Vec<Line> = lines
+        .into_iter()
+        .map(|line| text::fit_line(line, edge.saturating_sub(2)))
+        .collect();
+    frame.render_widget(Clear, popup);
+    frame.render_widget(
+        Paragraph::new(lines).block(block.padding(Padding::horizontal(1))),
+        popup,
+    );
+}
+
+/// Draws the due-date prompt centered inside `area`'s border: the due date
+/// the issue has, what has been typed, and the forms it takes or why the
+/// last try was refused.
+pub fn render_due_date(state: &State, prompt: &DuePrompt, frame: &mut Frame, area: Rect) {
+    let theme = &state.theme;
+    let area = area.inner(Margin::new(1, 1));
+    let current = Line::from(vec![
+        Span::styled("Now ", style::muted(theme)),
+        Span::raw(
+            prompt
+                .current
+                .map_or_else(|| "no due date".to_owned(), |date| date.to_string()),
+        ),
+    ]);
+    let input = if prompt.text.is_empty() {
+        Line::from(vec![
+            Span::styled("> ", style::accent(theme)),
+            Span::styled("type a date", style::muted(theme)),
+        ])
+    } else {
+        Line::from(vec![
+            Span::styled("> ", style::accent(theme)),
+            Span::raw(prompt.text.clone()),
+        ])
+    };
+    let note = match &prompt.error {
+        Some(error) => Line::styled(format!("✘ {error}"), style::error(theme)),
+        None => Line::styled(DUE_DATE_FORMS, style::muted(theme)),
+    };
+    let title = prompt.title();
+    let lines = vec![current, input, note];
+    let bottom = keys_line(
+        state,
+        &[(&[Action::Accept], "set"), (&[Action::Close], "close")],
+    );
+    let width = lines
+        .iter()
+        .map(Line::width)
+        .chain([text::width(&title) + 2, bottom.width(), MIN_WIDTH])
+        .max()
+        .unwrap_or(0)
+        + 4;
+    let width = u16::try_from(width).unwrap_or(u16::MAX);
+    let popup = super::centered(area, width, 5);
+    let edge = usize::from(popup.width.saturating_sub(2));
+    let block = super::popup_block(state)
+        .title(text::fit(&format!(" {title} "), edge))
+        .title_bottom(text::fit_line(bottom, edge));
+    let lines: Vec<Line> = lines
+        .into_iter()
+        .map(|line| text::fit_line(line, edge.saturating_sub(2)))
+        .collect();
     frame.render_widget(Clear, popup);
     frame.render_widget(
         Paragraph::new(lines).block(block.padding(Padding::horizontal(1))),
@@ -112,13 +180,47 @@ fn edit_glyph(state: &State) -> impl Fn(&Edit) -> Option<Span<'static>> + '_ {
         Edit::Priority(priority) => {
             Some(Span::raw(state.ui.icons.priority(*priority)).fg(state.theme.priority(*priority)))
         }
-        Edit::Assignee(_) | Edit::Labels(_) | Edit::Estimate(_) | Edit::Text { .. } => None,
+        _ => None,
     }
 }
 
 /// Draws a picker of an issue's links centered inside `area`'s border.
 pub fn render_links(state: &State, links: &Links, frame: &mut Frame, area: Rect) {
-    render(state, &links.title(), &links.list, |_| None, frame, area);
+    let bottom = keys_line(
+        state,
+        &[
+            (&[Action::ScrollDown, Action::ScrollUp], "select"),
+            (&[Action::Accept], "open"),
+            (&[Action::CopyLink], "copy"),
+            (&[Action::Close], "close"),
+        ],
+    );
+    render_with(
+        state,
+        &links.title(),
+        &links.list,
+        |_| None,
+        bottom,
+        frame,
+        area,
+    );
+}
+
+/// Draws an issue picker centered inside `area`'s border, each issue led by
+/// its workflow state glyph.
+pub fn render_issues(state: &State, picker: &IssuePicker, frame: &mut Frame, area: Rect) {
+    let glyph = |id: &String| {
+        let state_type = state.store.issue(id)?.state.state_type;
+        Some(Span::raw(state.ui.icons.state(state_type)).fg(state.theme.state(state_type)))
+    };
+    render(
+        state,
+        &picker.title(&state.store),
+        &picker.list,
+        glyph,
+        frame,
+        area,
+    );
 }
 
 /// Draws a team switcher or filter centered inside `area`'s border.
@@ -136,6 +238,20 @@ fn render<T>(
     frame: &mut Frame,
     area: Rect,
 ) {
+    let bottom = bottom_keys(state, picker.is_multi());
+    render_with(state, title, picker, glyph, bottom, frame, area);
+}
+
+/// Draws `picker` as [`render`] does, with `bottom` as the keys under it.
+fn render_with<T>(
+    state: &State,
+    title: &str,
+    picker: &Picker<T>,
+    glyph: impl Fn(&T) -> Option<Span<'static>>,
+    bottom: Line<'static>,
+    frame: &mut Frame,
+    area: Rect,
+) {
     let theme = &state.theme;
     let area = area.inner(Margin::new(1, 1));
     let number_keys: Vec<String> = (1..=9)
@@ -150,7 +266,7 @@ fn render<T>(
         .collect();
     let key_width = number_keys
         .iter()
-        .map(|key| key.chars().count())
+        .map(|key| text::width(key))
         .max()
         .unwrap_or(0);
 
@@ -211,13 +327,12 @@ fn render<T>(
         None => None,
     };
 
-    let bottom = bottom_keys(state, picker.is_multi());
     let width = rows
         .iter()
         .chain(note.iter())
         .chain([&query])
         .map(Line::width)
-        .chain([title.chars().count() + 2, bottom.width(), MIN_WIDTH])
+        .chain([text::width(title) + 2, bottom.width(), MIN_WIDTH])
         .max()
         .unwrap_or(0)
         + 4;
@@ -234,9 +349,14 @@ fn render<T>(
     lines.extend(rows.drain(..).skip(offset).take(room));
     lines.extend(note);
 
+    let edge = usize::from(popup.width.saturating_sub(2));
     let block = super::popup_block(state)
-        .title(format!(" {title} "))
-        .title_bottom(bottom);
+        .title(text::fit(&format!(" {title} "), edge))
+        .title_bottom(text::fit_line(bottom, edge));
+    let lines: Vec<Line> = lines
+        .into_iter()
+        .map(|line| text::fit_line(line, edge.saturating_sub(2)))
+        .collect();
     frame.render_widget(Clear, popup);
     frame.render_widget(
         Paragraph::new(lines).block(block.padding(Padding::horizontal(1))),
@@ -247,23 +367,24 @@ fn render<T>(
 /// The keys that select, choose and close, as
 /// ` Down/Up select  Enter choose  Esc close `, with the key that toggles an
 /// entry in a multi-select picker. Keys the filter takes as text are left
-/// out.
+/// out. Choosing, toggling and closing say what the bottom bar says.
 fn bottom_keys(state: &State, multi: bool) -> Line<'static> {
-    let items: &[(&[Action], &str)] = if multi {
-        &[
-            (&[Action::ScrollDown, Action::ScrollUp], "select"),
-            (&[Action::ToggleEntry], "toggle"),
-            (&[Action::Accept], "save"),
-            (&[Action::Close], "close"),
-        ]
+    let select: (&[Action], &str) = (&[Action::ScrollDown, Action::ScrollUp], "select");
+    let toggle: (&[Action], &str) = (&[Action::ToggleEntry], hint_word(Action::ToggleEntry));
+    let choose: (&[Action], &str) = (&[Action::Accept], hint_word(Action::Accept));
+    let close: (&[Action], &str) = (&[Action::Close], hint_word(Action::Close));
+    if multi {
+        keys_line(state, &[select, toggle, choose, close])
     } else {
-        &[
-            (&[Action::ScrollDown, Action::ScrollUp], "select"),
-            (&[Action::Accept], "choose"),
-            (&[Action::Close], "close"),
-        ]
-    };
-    keys_line(state, items)
+        keys_line(state, &[select, choose, close])
+    }
+}
+
+/// The word the bottom bar says after `action`'s key.
+fn hint_word(action: Action) -> &'static str {
+    keys::spec(action)
+        .and_then(|spec| spec.hint)
+        .map_or("", |hint| hint.word)
 }
 
 /// Each group of `items` as its keys and word, leaving out keys the text

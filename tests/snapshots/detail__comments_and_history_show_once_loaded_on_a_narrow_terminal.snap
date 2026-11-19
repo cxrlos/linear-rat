@@ -2,11 +2,8 @@
 source: tests/detail.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics                                "
+" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    "
 "┌OPS-37────────────────────────────────────────────────────────────────────────┐"
-"│Omar Stilton · 4 days ago                                                     │"
-"│  Blocked on the sensor firmware update.                                      │"
-"│                                                                              │"
 "│History                                                                       │"
 "│◇ Triage       23h 49m                                                        │"
 "│○ Todo         1d 13h                                                         │"
@@ -16,12 +13,15 @@ expression: app.backend()
 "│Details                                                                       │"
 "│Team      Operations                                                          │"
 "│Project   Shared pantries                                                     │"
+"│Milestone Launch                                                              │"
 "│Cycle     Cycle 7 (active)                                                    │"
+"│Due       2026-11-20                                                          │"
 "│Labels    on-call, improvement                                                │"
 "│Assignee  Mira Gouda                                                          │"
 "│Creator   Basil Burrow                                                        │"
 "│Created   2026-10-28 10:25 UTC (5 days ago)                                   │"
 "│Updated   2026-11-01 10:14 UTC (1 day ago)                                    │"
+"│Updates   Subscribed                                                          │"
 "└──────────────────────────────────────────────────────────────────────────────┘"
 " Move │ j down  k up  gg top  G bottom  C-d/C-u page  h/l pane  / search        "
 " Do   │ y yank  o links  Esc close  ? keys  : palette  q quit                   "

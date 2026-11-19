@@ -31,6 +31,7 @@ fn every_key_in_the_reference_reads_back_as_config_notation() {
         let cell = row.split(" | ").nth(1).unwrap();
         let written: Vec<KeySequence> = cell
             .split(", ")
+            .filter(|key| !key.is_empty())
             .map(|key| key.trim_matches('`').parse().unwrap())
             .collect();
         let defaults: Vec<KeySequence> = spec

@@ -3,10 +3,12 @@ use ratatui::layout::Size;
 
 use super::edit::{self, Editable};
 use super::{
-    Action, Copyable, Effect, Event, Load, Modal, Palette, Pane, Purpose, Screen, Search, State,
-    analytics_screen, compose, create, detail, links, palette, results, search, sync, team_issues,
+    Action, Copyable, Effect, Event, Load, Modal, Palette, Pane, Purpose, Screen, State,
+    analytics_screen, browse, compose, create, detail, issue_picker, lifecycle, links, palette,
+    rearrange, relations, release, results, search, sync, team_issues,
 };
 use crate::keys::{self, Key, Resolution};
+use crate::linear::SearchQuery;
 use crate::ui;
 
 /// What one event did: whether the screen must be drawn again, and what the
@@ -55,17 +57,33 @@ fn apply(state: &mut State, event: Event) -> Update {
             update
         }
         Event::MyIssuesLoaded(Err(error)) => sync::load_failed(state, error),
-        Event::Tick(now) => sync::tick(state, now),
+        Event::Tick(now) => {
+            let mut update = sync::tick(state, now);
+            update.effects.extend(release::tick(state, now));
+            update
+        }
+        Event::ReleaseChecked(latest) => release::checked(state, latest),
         Event::FocusGained => sync::focus(state, true),
         Event::FocusLost => sync::focus(state, false),
         Event::Polled { changes, failure } => sync::polled(state, &changes, failure),
         Event::Reconciled { checked, result } => sync::reconciled(state, &checked, result),
         Event::Throttled => sync::throttled(state),
         Event::Live(event) => sync::live(state, event),
-        Event::SearchDone { term, result } => {
-            search::finish(state, &term, result);
+        Event::SearchDone { query, result } => {
+            // The issue picker searches by term alone, so only such a search
+            // can answer it.
+            let plain = query == SearchQuery::new(query.term.clone());
+            let outcome = match &result {
+                Ok(found) => Ok(found.issues.iter().map(|issue| issue.id.clone()).collect()),
+                Err(failure) => Err(failure.message.clone()),
+            };
+            search::finish(state, &query, result);
+            if plain {
+                issue_picker::searched(state, &query.term, outcome);
+            }
             Update::redraw()
         }
+        Event::TypingPaused(query) => issue_picker::paused(state, &query),
         Event::Resize { columns, rows } => {
             state.viewport = Size::new(columns, rows);
             let rows = ui::list_rows(state, state.viewport);
@@ -77,12 +95,39 @@ fn apply(state: &mut State, event: Event) -> Update {
             clamp_analytics_scroll(state);
             Update::redraw()
         }
-        Event::TeamsLoaded(result) => Update {
-            redraw: true,
-            effects: team_issues::teams_loaded(state, result),
+        Event::TeamsLoaded(result) => {
+            let mut effects = team_issues::teams_loaded(state, result);
+            effects.extend(browse::teams_loaded(state));
+            Update {
+                redraw: true,
+                effects,
+            }
+        }
+        Event::CyclesLoaded { team_id, result } => Update {
+            redraw: browse::cycles_loaded(state, &team_id, result),
+            effects: Vec::new(),
         },
+        Event::ProjectsLoaded(result) => {
+            browse::projects_loaded(state, result);
+            Update::redraw()
+        }
+        Event::CycleIssuesLoaded { cycle_id, result } => {
+            browse::cycle_issues_loaded(state, &cycle_id, result);
+            Update::redraw()
+        }
+        Event::ProjectIssuesLoaded { project_id, result } => {
+            browse::project_issues_loaded(state, &project_id, result);
+            Update::redraw()
+        }
         Event::TeamOptionsLoaded(result) => {
+            let team_id = result.as_ref().ok().map(|options| options.team_id.clone());
+            let failure = result.as_ref().err().cloned();
             team_issues::options_loaded(state, result);
+            edit::options_loaded(
+                state,
+                team_id.as_deref(),
+                failure.as_ref().map(|failure| failure.message.as_str()),
+            );
             Update::redraw()
         }
         Event::TeamIssuesLoaded {
@@ -133,8 +178,8 @@ fn apply(state: &mut State, event: Event) -> Update {
             clamp_analytics_scroll(state);
             Update::redraw()
         }
-        Event::EffectFailed(error) => {
-            state.notice = Some(error);
+        Event::EffectFailed(failure) => {
+            state.fail(failure);
             Update::redraw()
         }
         Event::WorkflowStatesLoaded { team_id, result } => {
@@ -145,7 +190,12 @@ fn apply(state: &mut State, event: Event) -> Update {
                 }
                 Err(error) => Some(error),
             };
-            create::loaded(state, Editable::State, &team_id, failure.as_deref());
+            create::loaded(
+                state,
+                Editable::State,
+                &team_id,
+                failure.as_ref().map(|f| f.message.as_str()),
+            );
             edit::loaded(state, Editable::State, &team_id, failure)
         }
         Event::TeamMembersLoaded { team_id, result } => {
@@ -156,7 +206,12 @@ fn apply(state: &mut State, event: Event) -> Update {
                 }
                 Err(error) => Some(error),
             };
-            create::loaded(state, Editable::Assignee, &team_id, failure.as_deref());
+            create::loaded(
+                state,
+                Editable::Assignee,
+                &team_id,
+                failure.as_ref().map(|f| f.message.as_str()),
+            );
             edit::loaded(state, Editable::Assignee, &team_id, failure)
         }
         Event::TeamLabelsLoaded { team_id, result } => {
@@ -169,7 +224,20 @@ fn apply(state: &mut State, event: Event) -> Update {
             };
             edit::loaded(state, Editable::Labels, &team_id, failure)
         }
+        Event::ProjectMilestonesLoaded { project_id, result } => {
+            let failure = match result {
+                Ok(milestones) => {
+                    state.store.set_project_milestones(&project_id, &milestones);
+                    None
+                }
+                Err(error) => Some(error),
+            };
+            edit::milestones_loaded(state, &project_id, failure)
+        }
         Event::IssueUpdated { write, result } => edit::finished(state, &write, result),
+        Event::LifecycleChanged { write, result } => lifecycle::finished(state, &write, result),
+        Event::RelationCreated { write, result } => relations::created(state, &write, result),
+        Event::RelationDeleted { write, result } => relations::deleted(state, &write, result),
         Event::EditorClosed { writing, result } => compose::closed(state, writing, result),
         Event::CommentCreated { comment, result } => compose::commented(state, &comment, result),
         Event::IssueCreated { issue, result } => compose::created(state, &issue, result),
@@ -196,6 +264,9 @@ fn type_text(state: &mut State, key: Key) -> Option<Update> {
             field.pop();
         }
     }
+    if let Some(Modal::IssuePicker(_)) = state.modals.top() {
+        return Some(issue_picker::typed(state));
+    }
     Some(Update::redraw())
 }
 
@@ -204,7 +275,7 @@ fn picks_by_number(state: &State, key: Key) -> bool {
     let contexts = keys::active_contexts(state);
     match state.keymap.resolve(&contexts, &[key]) {
         Resolution::Action(action @ Action::PickNumber(_)) => {
-            keys::spec(action).is_some_and(|spec| (spec.available)(state))
+            keys::spec(action).is_some_and(|spec| spec.availability(state).can_run())
         }
         _ => false,
     }
@@ -224,7 +295,13 @@ fn press(state: &mut State, key: Key) -> Update {
 
     let contexts = keys::active_contexts(state);
     let mut update = match state.keymap.resolve(&contexts, &keys) {
-        Resolution::Action(action) => perform(state, action),
+        Resolution::Action(action) => match denied(state, action) {
+            Some(reason) => {
+                state.notice = Some(reason);
+                Update::redraw()
+            }
+            None => perform(state, action),
+        },
         Resolution::Prefix => {
             state.modals.push(Modal::WhichKey { prefix: keys });
             Update::redraw()
@@ -233,6 +310,14 @@ fn press(state: &mut State, key: Key) -> Update {
     };
     update.redraw |= chord_ended;
     update
+}
+
+/// Why the API key is known not to be allowed `action` here, if it is not.
+fn denied(state: &State, action: Action) -> Option<String> {
+    keys::spec(action)?
+        .availability(state)
+        .reason()
+        .map(str::to_owned)
 }
 
 /// Carries out `action` against `state`.
@@ -251,6 +336,8 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             let effects = match screen {
                 Screen::TeamIssues => team_issues::open(state),
                 Screen::Analytics => analytics_screen::request_missing(state),
+                Screen::Cycles => browse::open_cycles(state),
+                Screen::Projects => browse::open_projects(state),
                 Screen::MyIssues | Screen::Results => Vec::new(),
             };
             Update {
@@ -259,6 +346,8 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             }
         }
         Action::Refresh => sync::refresh(state),
+        Action::SkipRelease => release::skip(state),
+        Action::ShowReleaseNotes => release::show_notes(state),
         Action::ShowCheatsheet => {
             state.modals.push(Modal::Cheatsheet { scroll: 0 });
             Update::redraw()
@@ -267,8 +356,9 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             state.modals.push(Modal::Palette(Palette::default()));
             Update::redraw()
         }
-        Action::ShowSearch => {
-            state.modals.push(Modal::Search(Search::default()));
+        Action::ShowSearch => search::open(state),
+        Action::ShowMessages => {
+            state.modals.push(Modal::Messages { scroll: 0 });
             Update::redraw()
         }
         Action::Accept => match state.modals.top() {
@@ -278,8 +368,12 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             Some(Modal::Palette(_)) => palette::accept(state),
             Some(Modal::Search(_)) => search::accept(state),
             Some(Modal::Choice(_)) => choose(state, None),
+            Some(Modal::DueDate(_)) => edit::accept_due_date(state),
+            Some(Modal::Confirm(_)) => lifecycle::confirm(state),
+            Some(Modal::IssuePicker(_)) => issue_picker::choose(state, None),
             _ => Update::default(),
         },
+
         Action::Close if state.modals.pop().is_some() => Update::redraw(),
         Action::MoveDown
         | Action::MoveUp
@@ -369,17 +463,43 @@ pub fn perform(state: &mut State, action: Action) -> Update {
                 effects: Vec::new(),
             }
         }
+        Action::MoveDown
+        | Action::MoveUp
+        | Action::MoveToTop
+        | Action::MoveToBottom
+        | Action::HalfPageDown
+        | Action::HalfPageUp
+            if matches!(state.screen, Screen::Cycles | Screen::Projects) =>
+        {
+            let rows = ui::browse_rows(state, state.viewport);
+            Update {
+                redraw: browse::perform(state, action, rows),
+                effects: Vec::new(),
+            }
+        }
+        Action::ListIssues => {
+            let effects = browse::list_issues(state);
+            Update {
+                redraw: !effects.is_empty(),
+                effects,
+            }
+        }
+        Action::SwitchCyclesTeam if state.screen == Screen::Cycles => {
+            open_choice(state, browse::team_choice(state))
+        }
         Action::ScrollDown | Action::ScrollUp => match state.modals.top() {
             Some(Modal::Picker(_)) => edit::select(state, step(action)),
             Some(Modal::Links(_)) => links::select(state, step(action)),
             Some(Modal::Create(_)) => create::select(state, step(action)),
             Some(Modal::Choice(_)) => select_choice(state, step(action)),
+            Some(Modal::IssuePicker(_)) => issue_picker::select(state, step(action)),
             Some(Modal::Palette(_)) => palette::step(state, action),
             Some(Modal::Search(_)) => Update::default(),
             None if state.screen == Screen::Analytics => {
                 let max = ui::analytics_max_scroll(state, state.viewport);
                 analytics_screen::scroll(state, action == Action::ScrollDown, max)
             }
+            Some(Modal::Messages { .. }) => scroll_messages(state, action),
             _ => scroll_cheatsheet(state, action),
         },
         Action::ToggleAnalyticsView if state.screen == Screen::Analytics => {
@@ -403,6 +523,8 @@ pub fn perform(state: &mut State, action: Action) -> Update {
                 ..open_choice(state, choice)
             }
         }
+        Action::GroupBy => open_choice(state, rearrange::group_choice(state)),
+        Action::SortBy => open_choice(state, rearrange::sort_choice(state)),
         Action::LoadMore if state.screen == Screen::TeamIssues => {
             let effects = team_issues::load_more(state);
             Update {
@@ -412,16 +534,37 @@ pub fn perform(state: &mut State, action: Action) -> Update {
         }
         Action::Copy(copyable) => copy(state, copyable),
         Action::OpenLinks(set) => links::open(state, set),
+        Action::CopyLink => links::copy(state),
         Action::Edit(field) => edit::open(state, field),
         Action::PickNumber(n) => match state.modals.top() {
             Some(Modal::Links(_)) => links::choose(state, Some(usize::from(n))),
             Some(Modal::Choice(_)) => choose(state, Some(usize::from(n))),
             Some(Modal::Create(_)) => create::accept(state, Some(usize::from(n))),
+            Some(Modal::IssuePicker(_)) => issue_picker::choose(state, Some(usize::from(n))),
             _ => edit::choose(state, Some(usize::from(n))),
         },
-        Action::ToggleEntry => edit::toggle(state, None),
+        Action::ToggleEntry => match state.modals.top() {
+            Some(Modal::Search(_)) => search::toggle_comments(state),
+            Some(Modal::IssuePicker(_)) => issue_picker::toggle(state, None),
+            _ => edit::toggle(state, None),
+        },
+        Action::ToggleSearchScope => search::toggle_scope(state),
+        Action::Archive => lifecycle::archive(state),
+        Action::Unarchive => lifecycle::unarchive(state),
+        Action::Trash => lifecycle::ask_to_trash(state),
+        Action::ToggleSubscription => lifecycle::toggle_subscription(state),
+        Action::Confirm => lifecycle::confirm(state),
+        Action::Decline => lifecycle::decline(state),
         Action::Comment => compose::comment(state),
         Action::CreateIssue => create::open(state),
+        Action::AddRelation => relations::open_add(state),
+        Action::RemoveRelation => relations::open_remove(state),
+        Action::ClearParent => relations::clear_parent(state),
+        Action::GoToRelated => relations::open_related(state),
+        Action::ToggleBlocked if state.screen == Screen::TeamIssues => Update {
+            redraw: true,
+            effects: team_issues::toggle_blocked(state),
+        },
         _ => Update::default(),
     }
 }
@@ -459,10 +602,23 @@ fn choose(state: &mut State, nth: Option<usize>) -> Update {
     let Some(Modal::Choice(choice)) = state.modals.top() else {
         return Update::default();
     };
-    if choice.purpose == Purpose::AnalyticsTeam {
+    if choice.purpose == Purpose::RelationKind {
+        return relations::kind_chosen(state, nth);
+    }
+    if choice.purpose == Purpose::CyclesTeam {
+        browse::pick_team(state, nth).map_or_else(Update::default, |effects| Update {
+            redraw: true,
+            effects,
+        })
+    } else if choice.purpose == Purpose::AnalyticsTeam {
         let update = analytics_screen::pick_team(state, nth);
         clamp_analytics_scroll(state);
         update
+    } else if matches!(choice.purpose, Purpose::Group | Purpose::Sort) {
+        rearrange::pick(state, nth).map_or_else(Update::default, |effects| Update {
+            redraw: true,
+            effects,
+        })
     } else {
         team_issues::pick(state, nth).map_or_else(Update::default, |effects| Update {
             redraw: true,
@@ -493,6 +649,23 @@ fn clamp_analytics_scroll(state: &mut State) {
 fn scroll_cheatsheet(state: &mut State, action: Action) -> Update {
     let max = ui::cheatsheet_max_scroll(state, state.viewport);
     let Some(Modal::Cheatsheet { scroll }) = state.modals.top_mut() else {
+        return Update::default();
+    };
+    let before = *scroll;
+    *scroll = match action {
+        Action::ScrollDown => scroll.saturating_add(1).min(max),
+        _ => scroll.saturating_sub(1),
+    };
+    Update {
+        redraw: *scroll != before,
+        effects: Vec::new(),
+    }
+}
+
+/// Moves the open error log one row, no further than its last row.
+fn scroll_messages(state: &mut State, action: Action) -> Update {
+    let max = ui::messages_max_scroll(state, state.viewport);
+    let Some(Modal::Messages { scroll }) = state.modals.top_mut() else {
         return Update::default();
     };
     let before = *scroll;

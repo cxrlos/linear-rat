@@ -1,0 +1,7 @@
+# budget: 5
+# Subscribes the viewer to one issue's notifications.
+mutation IssueSubscribe($id: String!) {
+  issueSubscribe(id: $id) {
+    success
+  }
+}

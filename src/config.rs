@@ -5,6 +5,8 @@
 //! [ui]
 //! icons = "nerd"                         # or "unicode", the default
 //! wide-layout-columns = 120
+//! my-issues-group = "state"              # or priority, project, cycle, assignee, none
+//! team-issues-sort = "priority"          # or updated, created, due-date, estimate; -asc/-desc
 //!
 //! [theme]
 //! name = "nord"                          # a built-in, or themes/<name>.json
@@ -29,6 +31,9 @@
 //!
 //! [auth]
 //! store = "keyutils"                     # or "os", the default
+//!
+//! [updates]
+//! check = false                          # true by default
 //! ```
 //!
 //! A problem is reported with its file and line, and only the section it is
@@ -52,6 +57,7 @@ use toml::de::{DeTable, DeValue};
 use toml_parser::parser::{Event, EventKind};
 
 use crate::analytics::{StaleThreshold, WeekRange};
+use crate::app::{Arrangement, Grouping, Sort, SortKey};
 use crate::auth::KeyringStore;
 use crate::keys::{self, Change, Context, KeySequence, Override, Target};
 use crate::ui::icons::IconSet;
@@ -73,6 +79,8 @@ pub struct Config {
     pub analytics: AnalyticsSettings,
     /// `[auth]`.
     pub auth: AuthSettings,
+    /// `[updates]`.
+    pub updates: UpdateSettings,
 }
 
 impl Default for Config {
@@ -84,7 +92,21 @@ impl Default for Config {
             sync: SyncSettings::default(),
             analytics: AnalyticsSettings::default(),
             auth: AuthSettings::default(),
+            updates: UpdateSettings::default(),
         }
+    }
+}
+
+/// `[updates]`: whether lrat asks GitHub once a day for a newer release.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UpdateSettings {
+    /// `check`: true by default.
+    pub check: bool,
+}
+
+impl Default for UpdateSettings {
+    fn default() -> Self {
+        Self { check: true }
     }
 }
 
@@ -104,6 +126,13 @@ pub struct UiSettings {
     /// beside the list; below it the focused pane fills the body. 120 by
     /// default.
     pub wide_layout_columns: u16,
+    /// `my-issues-group` and `my-issues-sort`: how My Issues starts out
+    /// grouped and sorted; by workflow state and its own order by default.
+    pub my_issues: Arrangement,
+    /// `team-issues-group` and `team-issues-sort`: how Team Issues starts
+    /// out grouped and sorted; one list, most recently updated first, by
+    /// default.
+    pub team_issues: Arrangement,
 }
 
 impl Default for UiSettings {
@@ -111,6 +140,8 @@ impl Default for UiSettings {
         Self {
             icons: IconSet::Unicode,
             wide_layout_columns: 120,
+            my_issues: Arrangement::MY_ISSUES,
+            team_issues: Arrangement::TEAM_ISSUES,
         }
     }
 }
@@ -302,6 +333,7 @@ pub fn parse(text: &str, path: &Path) -> Loaded {
                     config.analytics = reader.section("analytics", value, read_analytics);
                 }
                 "auth" => config.auth = reader.section("auth", value, read_auth),
+                "updates" => config.updates = reader.section("updates", value, read_updates),
                 _ => {
                     let what = match value.get_ref() {
                         DeValue::Table(_) => format!("table `[{name_str}]`"),
@@ -310,7 +342,7 @@ pub fn parse(text: &str, path: &Path) -> Loaded {
                     reader.error_at(
                         name,
                         format!(
-                            "unknown {what} is ignored; lrat reads [ui], [theme], [keys], [sync], [analytics] and [auth]"
+                            "unknown {what} is ignored; lrat reads [ui], [theme], [keys], [sync], [analytics], [auth] and [updates]"
                         ),
                     );
                 }
@@ -339,7 +371,15 @@ pub fn parse(text: &str, path: &Path) -> Loaded {
 }
 
 /// The top-level tables lrat reads.
-const SECTIONS: [&str; 6] = ["ui", "theme", "keys", "sync", "analytics", "auth"];
+const SECTIONS: [&str; 7] = [
+    "ui",
+    "theme",
+    "keys",
+    "sync",
+    "analytics",
+    "auth",
+    "updates",
+];
 
 /// Where each table header starts and the top-level table it opens, in
 /// file order. TOML's own parser finds them, so a header-like line inside a
@@ -404,8 +444,60 @@ fn read_ui(ui: &mut UiSettings, key: &str, value: &Spanned<DeValue>) -> Setting 
         },
         "wide-layout-columns" => integer(value, "ui.wide-layout-columns", 0..=u64::from(u16::MAX))
             .map(|columns| ui.wide_layout_columns = u16::try_from(columns).unwrap_or(u16::MAX)),
+        "my-issues-group" => {
+            grouping(value, "ui.my-issues-group").map(|group| ui.my_issues.group = group)
+        }
+        "team-issues-group" => {
+            grouping(value, "ui.team-issues-group").map(|group| ui.team_issues.group = group)
+        }
+        "my-issues-sort" => match value.get_ref().as_str() {
+            Some("default") => {
+                ui.my_issues.sort = None;
+                Ok(())
+            }
+            _ => sort(
+                value,
+                "ui.my-issues-sort",
+                ", or \"default\" for active cycle, then priority",
+            )
+            .map(|sort| ui.my_issues.sort = Some(sort)),
+        },
+        "team-issues-sort" => {
+            sort(value, "ui.team-issues-sort", "").map(|sort| ui.team_issues.sort = Some(sort))
+        }
         _ => return None,
     })
+}
+
+fn grouping(value: &Spanned<DeValue>, key: &str) -> Result<Grouping, String> {
+    value
+        .get_ref()
+        .as_str()
+        .and_then(Grouping::from_name)
+        .ok_or_else(|| {
+            let names: Vec<String> = Grouping::ALL
+                .iter()
+                .map(|grouping| format!("\"{}\"", grouping.name()))
+                .collect();
+            format!("`{key}` must be one of {}", names.join(", "))
+        })
+}
+
+fn sort(value: &Spanned<DeValue>, key: &str, more: &str) -> Result<Sort, String> {
+    value
+        .get_ref()
+        .as_str()
+        .and_then(Sort::from_name)
+        .ok_or_else(|| {
+            let names: Vec<String> = SortKey::ALL
+                .iter()
+                .map(|key| format!("\"{}\"", key.name()))
+                .collect();
+            format!(
+                "`{key}` must be one of {}, each optionally ending in -asc or -desc{more}",
+                names.join(", ")
+            )
+        })
 }
 
 fn read_theme(theme: &mut ThemeSection, key: &str, value: &Spanned<DeValue>) -> Setting {
@@ -489,6 +581,13 @@ fn read_auth(auth: &mut AuthSettings, key: &str, value: &Spanned<DeValue>) -> Se
             None => Err("`auth.store` must be \"os\" or \"keyutils\"".to_owned()),
         },
     )
+}
+
+fn read_updates(updates: &mut UpdateSettings, key: &str, value: &Spanned<DeValue>) -> Setting {
+    if key != "check" {
+        return None;
+    }
+    Some(boolean(value, "updates.check").map(|check| updates.check = check))
 }
 
 fn integer(value: &Spanned<DeValue>, key: &str, range: RangeInclusive<u64>) -> Result<u64, String> {

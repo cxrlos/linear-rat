@@ -190,7 +190,7 @@ _lrat_commands() {
 'auth:Manage the Linear API key' \
 'completions:Print the completion script for a shell' \
 'open:Open an issue'\''s Linear page in the browser' \
-'doctor:Check the API key, Linear, the terminal and the config' \
+'doctor:Check the API key, Linear, the terminal, the config and the version' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'lrat commands' commands "$@"
@@ -266,7 +266,7 @@ _lrat__subcmd__help_commands() {
 'auth:Manage the Linear API key' \
 'completions:Print the completion script for a shell' \
 'open:Open an issue'\''s Linear page in the browser' \
-'doctor:Check the API key, Linear, the terminal and the config' \
+'doctor:Check the API key, Linear, the terminal, the config and the version' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'lrat help commands' commands "$@"

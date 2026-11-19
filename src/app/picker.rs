@@ -1,7 +1,9 @@
 //! A filterable list to choose one entry from, or in multi-select mode to
 //! mark any number of entries in. Typing narrows it, the selection moves
 //! through what is left, and the first nine entries left can be picked (or
-//! toggled) by number. Generic over what an entry stands for.
+//! toggled) by number. Generic over what an entry stands for. A ranked
+//! picker leaves the filtering to its owner, which refills it in the order
+//! the query ranks its entries.
 
 use std::collections::BTreeSet;
 
@@ -19,6 +21,9 @@ pub struct Picker<T> {
     /// The indices of the marked entries in multi-select mode, `None` in
     /// single-select mode.
     marked: Option<BTreeSet<usize>>,
+    /// Whether the owner ranks the entries by the query, so every entry is
+    /// visible whatever was typed.
+    ranked: bool,
 }
 
 /// One choice: what the list shows and filters on, and what it stands for.
@@ -48,7 +53,20 @@ impl<T> Picker<T> {
             current,
             note: None,
             marked: None,
+            ranked: false,
         }
+    }
+
+    /// A picker whose owner filters and orders the entries by the query
+    /// itself, refilling it as the query changes, and in `multi` mode marks
+    /// entries rather than choosing one.
+    pub fn ranked(multi: bool) -> Self {
+        let mut picker = Self::new(Vec::new(), None);
+        picker.ranked = true;
+        if multi {
+            picker.marked = Some(BTreeSet::new());
+        }
+        picker
     }
 
     /// A multi-select picker over `entries` with the entries at `marked`
@@ -167,8 +185,12 @@ impl<T> Picker<T> {
     }
 
     /// The entries whose label contains every word typed, ignoring case, in
-    /// their order, with their index among all entries.
+    /// their order, with their index among all entries. A ranked picker
+    /// shows every entry.
     pub fn visible(&self) -> Vec<(usize, &Entry<T>)> {
+        if self.ranked {
+            return self.entries.iter().enumerate().collect();
+        }
         let words: Vec<String> = self
             .query
             .split_whitespace()
@@ -333,6 +355,24 @@ mod tests {
         assert_eq!(list.marked(), [&0]);
         assert!(list.is_marked(0));
         assert!(!list.is_marked(2));
+    }
+
+    #[test]
+    fn a_ranked_picker_shows_every_entry_whatever_was_typed() {
+        let mut list = Picker::ranked(false);
+        list.set_entries(
+            vec![Entry {
+                label: "ENG-1 Login".to_owned(),
+                value: 1,
+            }],
+            None,
+        );
+
+        list.query_mut().push_str("zzz");
+
+        assert_eq!(list.nth(1), Some(&1));
+        assert!(!list.is_multi());
+        assert!(Picker::<u8>::ranked(true).is_multi());
     }
 
     #[test]

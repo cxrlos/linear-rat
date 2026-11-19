@@ -1,7 +1,8 @@
 use jiff::Timestamp;
 
-use super::{NewComment, NewIssue, TeamPoll, Write, Writing};
-use crate::linear::{AnalyticsWindow, TeamQuery, Urgency};
+use super::{LifecycleWrite, NewComment, NewIssue, RelationWrite, TeamPoll, Write, Writing};
+use crate::linear::{AnalyticsWindow, SearchQuery, TeamQuery, Urgency};
+use crate::release::Record;
 
 /// A request to the outside world, returned by [`update`](super::update) and
 /// carried out by the runtime.
@@ -23,9 +24,12 @@ pub enum Effect {
         issue_id: String,
         urgency: Urgency,
     },
-    /// Search the workspace for this term; the result comes back as
+    /// Search Linear for this query; the result comes back as
     /// [`Event::SearchDone`](super::Event::SearchDone).
-    Search(String),
+    Search(SearchQuery),
+    /// Wait [`SEARCH_PAUSE`](super::SEARCH_PAUSE), then send
+    /// [`Event::TypingPaused`](super::Event::TypingPaused) with this query.
+    SearchAfterPause(String),
     /// Load the viewer's teams; the result comes back as
     /// [`Event::TeamsLoaded`](super::Event::TeamsLoaded).
     LoadTeams,
@@ -56,6 +60,18 @@ pub enum Effect {
         team_id: String,
         window: AnalyticsWindow,
     },
+    /// Load the recent cycles of the team with this id; the result comes
+    /// back as [`Event::CyclesLoaded`](super::Event::CyclesLoaded).
+    LoadCycles(String),
+    /// Load the projects of the viewer's teams; the result comes back as
+    /// [`Event::ProjectsLoaded`](super::Event::ProjectsLoaded).
+    LoadProjects,
+    /// Load the issues of the cycle with this id; the result comes back as
+    /// [`Event::CycleIssuesLoaded`](super::Event::CycleIssuesLoaded).
+    LoadCycleIssues(String),
+    /// Load the issues of the project with this id; the result comes back
+    /// as [`Event::ProjectIssuesLoaded`](super::Event::ProjectIssuesLoaded).
+    LoadProjectIssues(String),
     /// Put this text on the system clipboard.
     Copy(String),
     /// Open this URL in the viewer's browser.
@@ -89,9 +105,19 @@ pub enum Effect {
     LoadTeamLabels {
         team_id: String,
     },
+    /// Load a project's milestones; the result comes back as
+    /// [`Event::ProjectMilestonesLoaded`](super::Event::ProjectMilestonesLoaded).
+    LoadProjectMilestones {
+        project_id: String,
+    },
+
     /// Send one `issueUpdate` making [`Write::edit`]; the result comes back
     /// as [`Event::IssueUpdated`](super::Event::IssueUpdated).
     UpdateIssue(Write),
+    /// Send the one mutation that archives, unarchives or trashes an issue,
+    /// or subscribes the viewer to it or unsubscribes them; the result comes
+    /// back as [`Event::LifecycleChanged`](super::Event::LifecycleChanged).
+    ChangeLifecycle(LifecycleWrite),
     /// Suspend the screen and open the viewer's `$EDITOR` on `text`; the
     /// buffer comes back as
     /// [`Event::EditorClosed`](super::Event::EditorClosed).
@@ -99,6 +125,14 @@ pub enum Effect {
         writing: Writing,
         text: String,
     },
+    /// Send one `issueRelationCreate` for [`RelationWrite::relation`]; the
+    /// result comes back as
+    /// [`Event::RelationCreated`](super::Event::RelationCreated).
+    CreateRelation(RelationWrite),
+    /// Send one `issueRelationDelete` for [`RelationWrite::relation`]; the
+    /// result comes back as
+    /// [`Event::RelationDeleted`](super::Event::RelationDeleted).
+    DeleteRelation(RelationWrite),
     /// Send one `commentCreate`; the result comes back as
     /// [`Event::CommentCreated`](super::Event::CommentCreated).
     CreateComment(NewComment),
@@ -115,4 +149,9 @@ pub enum Effect {
         seen: Timestamp,
         text: String,
     },
+    /// Ask GitHub for the latest release; the answer comes back as
+    /// [`Event::ReleaseChecked`](super::Event::ReleaseChecked).
+    CheckRelease,
+    /// Write what the release checks found to the release cache.
+    SaveRelease(Record),
 }

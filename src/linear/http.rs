@@ -3,18 +3,20 @@
 
 mod analytics;
 mod assigned;
+mod browse;
 mod changes;
 mod create;
 mod detail;
 mod diagnostics;
 mod edit;
 mod issue_key;
+mod lifecycle;
 mod live;
+mod relations;
 mod search;
 mod team;
 mod team_analytics;
 
-use std::collections::HashSet;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
@@ -26,13 +28,17 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use super::governor::{Governor, SystemTimer, Timer, Urgency};
-use super::model::{Issue, Label, Member, Team, Viewer, WorkflowState, Workspace};
+use super::model::{
+    Cycle, Issue, IssueRelation, Label, Member, ProjectMilestone, Team, Viewer, WorkflowState,
+    Workspace,
+};
+use super::paging::{Next, RepeatedCursor, Stitch};
 use super::search_bucket::SearchBucket;
 use super::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, Diagnostics, GraphQlError,
     IssueCreate, IssueDetail, IssueLink, IssueUpdate, LinearClient, LiveEvent, PostedComment,
-    Response, SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions,
-    TeamQuery,
+    ProjectList, RelationCreate, Response, SearchQuery, SearchResults, TeamAnalyticsIssues,
+    TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
 };
 use crate::auth::ApiKey;
 
@@ -154,8 +160,8 @@ impl HttpClient {
             }
             match self.post(document, variables).await? {
                 Attempt::Answered(response) => return Ok(response),
-                Attempt::RateLimited { .. } if retries == RATE_LIMIT_RETRIES => {
-                    return Err(ClientError::RateLimited);
+                Attempt::RateLimited { retry_after } if retries == RATE_LIMIT_RETRIES => {
+                    return Err(ClientError::RateLimited { retry_after });
                 }
                 Attempt::RateLimited { retry_after } => {
                     retries += 1;
@@ -250,10 +256,9 @@ impl HttpClient {
         page_info: fn(&P) -> &PageInfo,
         limit: usize,
     ) -> Result<(Response<Vec<P>>, bool), ClientError> {
-        let mut pages = Vec::new();
+        let mut stitch = Stitch::new(limit);
         let mut errors = Vec::new();
         let mut urgency = first_page;
-        let mut sent_cursors = HashSet::new();
         variables["after"] = Value::Null;
         loop {
             let response: Response<P> = self.send(document, &variables, urgency).await?;
@@ -262,30 +267,26 @@ impl HttpClient {
             }
             errors.extend(response.errors);
             let info = page_info(&response.data);
-            let next = match (info.has_next_page, &info.end_cursor) {
-                (false, _) => None,
-                (true, Some(cursor)) if sent_cursors.insert(cursor.clone()) => Some(cursor.clone()),
-                (true, _) => {
-                    return Err(ClientError::Decode(
+            let (has_next_page, end_cursor) = (info.has_next_page, info.end_cursor.clone());
+            let next = stitch
+                .add(response.data, has_next_page, end_cursor.as_deref())
+                .map_err(|RepeatedCursor| {
+                    ClientError::Decode(
                         "Linear said there are more pages but gave no cursor it had not \
                          given before"
                             .to_owned(),
-                    ));
+                    )
+                })?;
+            match next {
+                Next::After(cursor) => {
+                    variables["after"] = Value::String(cursor);
+                    urgency = Urgency::Background;
                 }
-            };
-            pages.push(response.data);
-            let cut = next.is_some() && pages.len() >= limit;
-            let Some(cursor) = next.filter(|_| !cut) else {
-                return Ok((
-                    Response {
-                        data: pages,
-                        errors,
-                    },
-                    cut,
-                ));
-            };
-            variables["after"] = Value::String(cursor);
-            urgency = Urgency::Background;
+                Next::Done { cut } => {
+                    let data = stitch.into_pages();
+                    return Ok((Response { data, errors }, cut));
+                }
+            }
         }
     }
 
@@ -362,6 +363,33 @@ impl LinearClient for HttpClient {
         edit::team_labels(self, team_id).await
     }
 
+    async fn project_milestones(
+        &self,
+        project_id: &str,
+    ) -> Result<Vec<ProjectMilestone>, ClientError> {
+        edit::project_milestones(self, project_id).await
+    }
+
+    async fn archive_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        lifecycle::archive(self, issue_id).await
+    }
+
+    async fn unarchive_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        lifecycle::unarchive(self, issue_id).await
+    }
+
+    async fn trash_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        lifecycle::trash(self, issue_id).await
+    }
+
+    async fn subscribe_to_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        lifecycle::subscribe(self, issue_id).await
+    }
+
+    async fn unsubscribe_from_issue(&self, issue_id: &str) -> Result<(), ClientError> {
+        lifecycle::unsubscribe(self, issue_id).await
+    }
+
     async fn update_issue(
         &self,
         issue_id: &str,
@@ -378,8 +406,8 @@ impl LinearClient for HttpClient {
         detail::load(self, issue_id, urgency).await
     }
 
-    async fn search_issues(&self, term: &str) -> Result<SearchResults, ClientError> {
-        search::search(self, term).await
+    async fn search_issues(&self, query: &SearchQuery) -> Result<SearchResults, ClientError> {
+        search::search(self, query).await
     }
 
     async fn teams(&self) -> Result<Vec<Team>, ClientError> {
@@ -402,6 +430,22 @@ impl LinearClient for HttpClient {
         team::count(self, query).await
     }
 
+    async fn recent_cycles(&self, team_id: &str) -> Result<Vec<Cycle>, ClientError> {
+        browse::recent_cycles(self, team_id).await
+    }
+
+    async fn viewer_projects(&self) -> Result<ProjectList, ClientError> {
+        browse::projects(self).await
+    }
+
+    async fn cycle_issues(&self, cycle_id: &str) -> Result<SearchResults, ClientError> {
+        browse::cycle_issues(self, cycle_id).await
+    }
+
+    async fn project_issues(&self, project_id: &str) -> Result<SearchResults, ClientError> {
+        browse::project_issues(self, project_id).await
+    }
+
     async fn analytics_issues(
         &self,
         window: AnalyticsWindow,
@@ -419,6 +463,14 @@ impl LinearClient for HttpClient {
 
     async fn create_issue(&self, input: &IssueCreate) -> Result<Issue, ClientError> {
         create::create_issue(self, input).await
+    }
+
+    async fn create_relation(&self, input: &RelationCreate) -> Result<IssueRelation, ClientError> {
+        relations::create(self, input).await
+    }
+
+    async fn delete_relation(&self, id: &str) -> Result<(), ClientError> {
+        relations::delete(self, id).await
     }
 
     async fn administrable_teams(&self) -> Result<Vec<String>, ClientError> {

@@ -2,7 +2,7 @@
 source: tests/cheatsheet.rs
 expression: text
 ---
- [1] My Issues │ [2] Team Issues │ [3] Analytics                                
+ [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    
 ┌Analytics─────────────────────────────────────────────────────────────────────┐
 │v [Personal] Team    Range  4 weeks [12 weeks] 26 weeks                       │
 │Loading analytics from Linear…                                                │
@@ -10,11 +10,11 @@ expression: text
 │Week        W34 W35 W36 W37 W38 W39 W40 W41 W42 W43 W44 W45  Total            │
 │┌ Keys ─────────────────────────────────────────────────────────────────────┐ │
 ││ Move                                │ App                                 │ │
-││  j,Down,C-n/k,Up,C-p  down / up     │  1/2/3  screens   r      refresh    │ │
-││                                     │  ?      keys      :,C-k  palette    │ │
-││ Analytics                           │  /      search    q      quit       │ │
-││  [/]  shorter / longer range        │  C-z    suspend                     │ │
-││  v    Personal or Team              │                                     │ │
+││  j,Down,C-n/k,Up,C-p  down / up     │  1/2/3  screens    4      cycles    │ │
+││                                     │  5      projects   r      refresh   │ │
+││ Analytics                           │  ?      keys       :,C-k  palette   │ │
+││  [/]  shorter / longer range        │  /      search     !      messages  │ │
+││  v    Personal or Team              │  q      quit       C-z    suspend   │ │
 ││  t    team                          │                                     │ │
 │└ Esc close ────────────────────────────────────────────────────────────────┘ │
 │Tue  · · · · · · · · · · ·                                                    │
@@ -24,4 +24,4 @@ expression: text
 │Sat  · · · · · · · · · · ·                                                    │
 └──────────────────────────────────────────────────────────────────────────────┘
  Move │ j/k move                                                                
- Do   │ Enter pick │ Tab toggle │ Esc close
+ Do   │ Esc close

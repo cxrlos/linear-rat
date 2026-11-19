@@ -1,0 +1,79 @@
+# budget: 650
+# One page of a project's issues, closed ones included, with the team,
+# workflow state, people, cycle, project and project milestone each one
+# refers to, so the Projects screen can list them grouped by milestone.
+# Pages hold 50 issues; the client follows `endCursor` for at most four
+# pages.
+query ProjectIssues($projectId: String!, $after: String) {
+  project(id: $projectId) {
+    issues(first: 50, after: $after) {
+      nodes {
+        id
+        identifier
+        title
+        description
+        url
+        branchName
+        priority
+        estimate
+        labelIds
+        createdAt
+        updatedAt
+        startedAt
+        completedAt
+        canceledAt
+        triagedAt
+        team {
+          id
+          key
+          name
+          issueEstimationType
+        }
+        state {
+          id
+          name
+          type
+          position
+        }
+        assignee {
+          id
+          name
+          displayName
+        }
+        creator {
+          id
+          name
+          displayName
+        }
+        cycle {
+          id
+          number
+          name
+          startsAt
+          endsAt
+          completedAt
+        }
+        project {
+          id
+        }
+        projectMilestone {
+          id
+        }
+        parent {
+          id
+        }
+        dueDate
+        archivedAt
+        subscribers(first: 1, filter: { isMe: { eq: true } }) {
+          nodes {
+            id
+          }
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}

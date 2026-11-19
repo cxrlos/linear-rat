@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use jiff::Timestamp;
 use linear_rat::auth::ApiKey;
-use linear_rat::linear::model::{Attachment, Project, StateType};
+use linear_rat::linear::model::{Attachment, Project, ProjectMilestone, RelationType, StateType};
 use linear_rat::linear::{ClientConfig, ClientError, HttpClient, LinearClient, Timer, Urgency};
 use serde_json::{Value, json};
 use wiremock::matchers::{body_partial_json, body_string_contains, method};
@@ -105,6 +105,11 @@ fn history_page_with(nodes: Vec<Value>, attachments: Vec<Value>) -> Value {
             "issue": {
                 "id": "issue-1",
                 "project": { "id": "project-rind", "name": "Rind photos" },
+                "projectMilestone": {
+                    "id": "milestone-beta",
+                    "name": "Beta",
+                    "project": { "id": "project-rind" }
+                },
                 "attachments": { "nodes": attachments },
                 "stateHistory": {
                     "nodes": nodes,
@@ -124,6 +129,61 @@ async fn mount(server: &MockServer, query: &str, after: Option<&str>, body: Valu
         .respond_with(ResponseTemplate::new(200).set_body_json(body))
         .mount(server)
         .await;
+}
+
+fn relations_page(issue: Value) -> Value {
+    json!({ "data": { "issue": issue } })
+}
+
+fn no_relations() -> Value {
+    relations_page(json!({
+        "id": "issue-1",
+        "parent": null,
+        "children": { "nodes": [] },
+        "relations": { "nodes": [] },
+        "inverseRelations": { "nodes": [] }
+    }))
+}
+
+async fn mount_relations(server: &MockServer, body: Value) {
+    Mock::given(method("POST"))
+        .and(body_string_contains("query IssueRelations"))
+        .and(body_partial_json(
+            json!({ "variables": { "id": "issue-1" } }),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(body))
+        .mount(server)
+        .await;
+}
+
+/// An issue node as the relations query returns it, in state `state_type`.
+fn related(id: &str, identifier: &str, state_type: &str, parent: Option<&str>) -> Value {
+    json!({
+        "id": id,
+        "identifier": identifier,
+        "title": format!("Issue {identifier}"),
+        "description": null,
+        "url": format!("https://linear.app/squeakworks/issue/{identifier}"),
+        "branchName": identifier.to_lowercase(),
+        "priority": 0,
+        "estimate": null,
+        "labelIds": [],
+        "createdAt": "2026-10-01T09:00:00.000Z",
+        "updatedAt": "2026-10-02T09:00:00.000Z",
+        "startedAt": null,
+        "completedAt": null,
+        "canceledAt": null,
+        "triagedAt": null,
+        "team": { "id": "team-eng", "key": "ENG", "name": "Engineering", "issueEstimationType": "notUsed" },
+        "state": { "id": format!("state-{state_type}"), "name": state_type, "type": state_type, "position": 1 },
+        "assignee": null,
+        "creator": { "id": "member-ada", "name": "Ada Gouda", "displayName": "ada" },
+        "cycle": null,
+        "project": null,
+        "projectMilestone": null,
+        "parent": parent.map(|id| json!({ "id": id })),
+        "dueDate": null
+    })
 }
 
 fn at(text: &str) -> Timestamp {
@@ -177,6 +237,7 @@ async fn loads_every_comment_page_and_the_state_history_oldest_first() {
         ]),
     )
     .await;
+    mount_relations(&server, no_relations()).await;
 
     let detail = client_for(&server)
         .issue_detail("issue-1", Urgency::Urgent)
@@ -230,6 +291,14 @@ async fn loads_every_comment_page_and_the_state_history_oldest_first() {
             name: "Rind photos".to_owned()
         })
     );
+    assert_eq!(
+        detail.milestone,
+        Some(ProjectMilestone {
+            id: "milestone-beta".to_owned(),
+            name: "Beta".to_owned(),
+            project_id: "project-rind".to_owned()
+        })
+    );
     assert!(detail.problems.is_empty());
 }
 
@@ -244,6 +313,7 @@ async fn bounds_both_connections_with_first() {
     )
     .await;
     mount(&server, "IssueStateHistory", None, history_page(Vec::new())).await;
+    mount_relations(&server, no_relations()).await;
 
     client_for(&server)
         .issue_detail("issue-1", Urgency::Urgent)
@@ -260,8 +330,15 @@ async fn bounds_both_connections_with_first() {
             body["query"].as_str().unwrap().to_owned()
         })
         .collect();
-    assert_eq!(queries.len(), 2);
+    assert_eq!(queries.len(), 3);
     assert!(queries.iter().any(|q| q.contains("comments(first: 100")));
+    assert!(queries.iter().any(|q| q.contains("children(first: 50")));
+    assert!(queries.iter().any(|q| q.contains("relations(first: 25")));
+    assert!(
+        queries
+            .iter()
+            .any(|q| q.contains("inverseRelations(first: 25"))
+    );
     assert!(queries.iter().any(|q| q.contains("stateHistory(first: 50")));
     assert!(queries.iter().any(|q| q.contains("attachments(first: 50")));
 }
@@ -297,6 +374,7 @@ async fn loads_the_attachments_with_a_pull_requests_status() {
         ),
     )
     .await;
+    mount_relations(&server, no_relations()).await;
 
     let detail = client_for(&server)
         .issue_detail("issue-1", Urgency::Urgent)
@@ -358,6 +436,7 @@ async fn a_background_load_waits_for_a_spent_budget_and_an_urgent_one_does_not()
     for (query, body) in [
         ("IssueComments", comments_page(Vec::new(), None)),
         ("IssueStateHistory", history_page(Vec::new())),
+        ("IssueRelations", no_relations()),
     ] {
         Mock::given(method("POST"))
             .and(body_string_contains(format!("query {query}")))
@@ -390,4 +469,94 @@ async fn a_background_load_waits_for_a_spent_budget_and_an_urgent_one_does_not()
         .await
         .unwrap();
     assert_eq!(timer.slept().first(), Some(&Duration::from_secs(600)));
+}
+
+#[tokio::test]
+async fn loads_the_parent_the_sub_issues_and_the_relations_each_way() {
+    let server = MockServer::start().await;
+    mount(
+        &server,
+        "IssueComments",
+        None,
+        comments_page(Vec::new(), None),
+    )
+    .await;
+    mount(&server, "IssueStateHistory", None, history_page(Vec::new())).await;
+    mount_relations(
+        &server,
+        relations_page(json!({
+            "id": "issue-1",
+            "parent": related("issue-top", "ENG-10", "started", None),
+            "children": { "nodes": [
+                related("issue-child", "ENG-11", "completed", Some("issue-1")),
+            ] },
+            "relations": { "nodes": [
+                { "id": "rel-blocks", "type": "blocks",
+                  "relatedIssue": related("issue-later", "ENG-12", "unstarted", None) },
+                { "id": "rel-similar", "type": "similar",
+                  "relatedIssue": related("issue-alike", "ENG-13", "backlog", None) },
+            ] },
+            "inverseRelations": { "nodes": [
+                { "id": "rel-blocker", "type": "blocks",
+                  "issue": related("issue-first", "ENG-9", "started", None) },
+            ] }
+        })),
+    )
+    .await;
+
+    let detail = client_for(&server)
+        .issue_detail("issue-1", Urgency::Urgent)
+        .await
+        .unwrap();
+
+    let relations: Vec<(&str, RelationType, &str, &str)> = detail
+        .relations
+        .iter()
+        .map(|relation| {
+            (
+                relation.id.as_str(),
+                relation.kind,
+                relation.issue_id.as_str(),
+                relation.related_issue_id.as_str(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        relations,
+        [
+            ("rel-blocks", RelationType::Blocks, "issue-1", "issue-later"),
+            (
+                "rel-similar",
+                RelationType::Similar,
+                "issue-1",
+                "issue-alike"
+            ),
+            (
+                "rel-blocker",
+                RelationType::Blocks,
+                "issue-first",
+                "issue-1"
+            ),
+        ]
+    );
+    let mut keys: Vec<&str> = detail
+        .related_issues
+        .iter()
+        .map(|issue| issue.identifier.as_str())
+        .collect();
+    keys.sort_unstable();
+    assert_eq!(keys, ["ENG-10", "ENG-11", "ENG-12", "ENG-13", "ENG-9"]);
+    let child = detail
+        .related_issues
+        .iter()
+        .find(|issue| issue.id == "issue-child")
+        .unwrap();
+    assert_eq!(child.parent_id.as_deref(), Some("issue-1"));
+    assert!(
+        detail
+            .members
+            .iter()
+            .any(|member| member.name == "Ada Gouda")
+    );
+    assert!(detail.problems.is_empty());
 }

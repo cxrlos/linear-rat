@@ -11,3 +11,4 @@ expression: "printed(&report, Some(&dir))"
 ● OSC 52 copy   not detectable outside tmux
 ● Focus events  not detectable outside tmux
 ● Config        <config dir>/config.toml: no file, using the defaults
+● Version       lrat <version> is the latest

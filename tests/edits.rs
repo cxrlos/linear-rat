@@ -7,9 +7,9 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
-use linear_rat::app::{App, Edit, Effect, Event, State, Store, Write};
+use linear_rat::app::{App, Edit, Effect, Event, Failure, State, Store, Write};
 use linear_rat::linear::model::{Issue, Priority};
-use linear_rat::linear::{FakeClient, IssueUpdate, LinearClient, Patch, demo};
+use linear_rat::linear::{ErrorKind, FakeClient, IssueUpdate, LinearClient, Patch, demo};
 use ratatui::backend::TestBackend;
 
 /// The issue My Issues focuses first in the demo, in team DES.
@@ -145,7 +145,9 @@ fn accepted(write: &Write) -> Event {
 fn rejected(write: &Write) -> Event {
     Event::IssueUpdated {
         write: write.clone(),
-        result: Err("Linear returned errors: Entity not found (INVALID_INPUT)".to_owned()),
+        result: Err(failed(
+            "Linear returned errors: Entity not found (INVALID_INPUT)",
+        )),
     }
 }
 
@@ -365,7 +367,7 @@ fn a_failed_member_load_says_so_in_the_picker_and_the_notice() {
 
     app.handle(Event::TeamMembersLoaded {
         team_id: DES.to_owned(),
-        result: Err("Linear did not answer in time".to_owned()),
+        result: Err(failed("Linear did not answer in time")),
     })
     .unwrap();
 
@@ -519,4 +521,9 @@ fn edits_through_the_fake_client_build_on_each_other() {
     assert_eq!(after.priority, Priority::Urgent);
     assert_eq!(after.assignee_id, None);
     assert!(after.updated_at > issue.updated_at);
+}
+
+/// A failure with `message`, as the runtime sends one.
+fn failed(message: &str) -> Failure {
+    Failure::new(ErrorKind::Other, "test", message)
 }

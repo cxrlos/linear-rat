@@ -1,5 +1,7 @@
 use super::create::CreateForm;
-use super::edit::EditPicker;
+use super::edit::{DuePrompt, EditPicker};
+use super::issue_picker::IssuePicker;
+use super::lifecycle::Confirm;
 use super::links::Links;
 use super::picker::Picker;
 use super::{FilterField, Palette, Phase, Search};
@@ -30,6 +32,14 @@ pub enum Modal {
     Links(Links),
     /// The form that creates an issue.
     Create(CreateForm),
+    /// The prompt that sets an issue's due date.
+    DueDate(DuePrompt),
+    /// A question to answer before something hard to undo runs.
+    Confirm(Confirm),
+    /// The error log, newest first, scrolled down by `scroll` rows.
+    Messages { scroll: u16 },
+    /// A list to choose one or several issues from, for a purpose.
+    IssuePicker(IssuePicker),
 }
 
 impl Modal {
@@ -40,9 +50,14 @@ impl Modal {
             | Modal::Palette(_)
             | Modal::Links(_)
             | Modal::Create(_)
-            | Modal::Choice(_) => true,
+            | Modal::Choice(_)
+            | Modal::DueDate(_)
+            | Modal::IssuePicker(_) => true,
             Modal::Search(search) => !matches!(search.phase, Phase::Searching { .. }),
-            Modal::Cheatsheet { .. } | Modal::WhichKey { .. } => false,
+            Modal::Cheatsheet { .. }
+            | Modal::WhichKey { .. }
+            | Modal::Confirm(_)
+            | Modal::Messages { .. } => false,
         }
     }
 
@@ -54,19 +69,28 @@ impl Modal {
             Modal::Picker(picker) => Some(picker.list.query_mut()),
             Modal::Links(links) => Some(links.list.query_mut()),
             Modal::Choice(choice) => Some(choice.list.query_mut()),
+            Modal::IssuePicker(picker) => Some(picker.list.query_mut()),
             Modal::Palette(palette) => {
                 palette.selected = 0;
                 Some(&mut palette.query)
             }
             Modal::Search(search) => search.text_field(),
             Modal::Create(form) => form.text_field(),
-            Modal::Cheatsheet { .. } | Modal::WhichKey { .. } => None,
+            Modal::DueDate(prompt) => {
+                prompt.error = None;
+                Some(&mut prompt.text)
+            }
+            Modal::Cheatsheet { .. }
+            | Modal::WhichKey { .. }
+            | Modal::Confirm(_)
+            | Modal::Messages { .. } => None,
         }
     }
 }
 
-/// A picker of teams or filter values, and what choosing one does. An entry
-/// holds the id it picks, `None` for "Any", which clears a filter.
+/// A picker of teams, filter values, groupings or sorts, and what choosing
+/// one does. An entry holds the id or name it picks, `None` for "Any",
+/// which clears a filter, or for a list's own order.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Choice {
     pub purpose: Purpose,
@@ -82,14 +106,26 @@ pub enum Purpose {
     Filter(FilterField),
     /// Show this team in the Team view of Analytics.
     AnalyticsTeam,
+    /// Show this team's cycles on the Cycles screen.
+    CyclesTeam,
+    /// Group the issue list on screen this way, by its config name.
+    Group,
+    /// Sort the issue list on screen this way, by its config name, or its
+    /// own order for `None`.
+    Sort,
+    /// Add a relation of this kind to the focused issue.
+    RelationKind,
 }
 
 impl Choice {
     /// What the popup is titled.
     pub fn title(&self) -> String {
         match self.purpose {
-            Purpose::Team | Purpose::AnalyticsTeam => "Team".to_owned(),
+            Purpose::Team | Purpose::AnalyticsTeam | Purpose::CyclesTeam => "Team".to_owned(),
             Purpose::Filter(field) => format!("Filter by {}", field.name().to_lowercase()),
+            Purpose::Group => "Group by".to_owned(),
+            Purpose::Sort => "Sort by".to_owned(),
+            Purpose::RelationKind => "Add a relation".to_owned(),
         }
     }
 

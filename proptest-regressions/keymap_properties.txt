@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 61980fde42f192c4527189c77c3abfaf3601ee1857513e0ebc2cc7e51eeae41e # shrinks to overrides = [Override { context: List, target: Noop, change: Replace, keys: [KeySequence([Key { code: Char('d'), modifiers: KeyModifiers(CONTROL) }])] }], context = List
+cc 242f209d226d44e12bbb31cf150df0c4f8ed3ae72b0a6734ba33b061280faae8 # shrinks to overrides = [Override { context: Detail, target: Noop, change: Replace, keys: [KeySequence([Key { code: Char('g'), modifiers: KeyModifiers(0x0) }])] }], context = Detail
