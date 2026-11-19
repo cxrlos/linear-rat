@@ -53,6 +53,7 @@ Done when someone reading only the issue and the PR could pick up the next piece
 - `src/runtime.rs`: the async loop. Reads terminal input and the shutdown signal, feeds events to `App` and carries out effects: loads through the Linear client, copying and opening URLs.
 - `src/clipboard.rs`: copying through OSC 52, so it works over SSH; inside tmux it checks `set-clipboard`.
 - `src/browser.rs`: opens a URL with `xdg-open` or `open`, detached from the terminal.
+- `src/release.rs`: the release check (ADR 0004). The GitHub source with an injectable URL, the once-a-day cache (`release.json`), the install channel read from the binary's path and the off switches.
 - `src/linear/`: all Linear access. The `LinearClient` trait, the real `HttpClient` with pagination (cursor walking in `paging.rs`), the budget governor (`governor.rs`, rate-limit and complexity headers, `Retry-After`), `FakeClient`, the GraphQL documents (`graphql/`), the pinned `schema.graphql`, the domain types (`model.rs`) and the demo workspace (`demo.rs`).
 - `src/auth/`: the redacting API key type, key resolution (`LINEAR_API_KEY`, then the OS keyring) and the workspace file that names the keyring entry.
 - `src/analytics/`: the pure analytics calculator.
