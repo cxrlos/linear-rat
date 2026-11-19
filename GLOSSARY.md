@@ -124,3 +124,9 @@ An open issue with no update for a configured number of days.
 
 **Triage time**:
 Time from an issue's creation to it leaving triage.
+
+## lrat itself
+
+**Release notice**:
+A muted line saying a newer stable lrat release is out, with how to upgrade for the way lrat was installed. It never interrupts.
+_Avoid_: update notification, upgrade prompt
