@@ -137,6 +137,8 @@ pub struct ProjectOverview {
     /// From 0 to 1, as Linear's `Project.progress`.
     pub progress: f64,
     pub milestones: Vec<ProjectMilestone>,
+    /// Whether `milestones` holds every milestone, not a first page.
+    pub milestones_complete: bool,
 }
 
 /// A stage inside a project that issues can be grouped under.

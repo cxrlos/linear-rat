@@ -319,7 +319,15 @@ impl Store {
         for overview in &loaded.projects {
             let project = &overview.project;
             self.projects.insert(project.id.clone(), project.clone());
-            self.set_project_milestones(&project.id, &overview.milestones);
+            if overview.milestones_complete {
+                self.set_project_milestones(&project.id, &overview.milestones);
+            } else {
+                // A first page names milestones but is not the project's list,
+                // so the milestone picker still loads every page.
+                by_id(&mut self.milestones, &overview.milestones, |milestone| {
+                    &milestone.id
+                });
+            }
         }
     }
 

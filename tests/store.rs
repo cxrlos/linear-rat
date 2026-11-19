@@ -378,3 +378,64 @@ fn the_administrable_teams_are_unknown_until_loaded() {
     assert!(teams.includes("team-eng"));
     assert!(!teams.includes("team-des"));
 }
+
+fn overview(milestones_complete: bool) -> linear_rat::linear::model::ProjectOverview {
+    use linear_rat::linear::model::{
+        Project, ProjectMilestone, ProjectOverview, ProjectStatus, ProjectStatusType,
+    };
+    ProjectOverview {
+        project: Project {
+            id: "project-1".to_owned(),
+            name: "Nibble 3.0".to_owned(),
+        },
+        status: ProjectStatus {
+            name: "In Progress".to_owned(),
+            status_type: ProjectStatusType::Started,
+        },
+        target_date: None,
+        lead: None,
+        progress: 0.5,
+        milestones: ["Beta", "Launch"]
+            .into_iter()
+            .take(if milestones_complete { 2 } else { 1 })
+            .enumerate()
+            .map(|(index, name)| ProjectMilestone {
+                id: format!("milestone-{index}"),
+                name: name.to_owned(),
+                project_id: "project-1".to_owned(),
+            })
+            .collect(),
+        milestones_complete,
+    }
+}
+
+#[test]
+fn a_cut_short_milestone_list_is_not_kept_as_the_projects_milestones() {
+    let mut store = Store::default();
+
+    store.merge_projects(&linear_rat::linear::ProjectList {
+        projects: vec![overview(false)],
+        problems: Vec::new(),
+    });
+
+    assert!(store.project_milestones("project-1").is_none());
+}
+
+#[test]
+fn a_cut_short_milestone_list_leaves_a_complete_one_in_place() {
+    let mut store = Store::default();
+    store.merge_projects(&linear_rat::linear::ProjectList {
+        projects: vec![overview(true)],
+        problems: Vec::new(),
+    });
+
+    store.merge_projects(&linear_rat::linear::ProjectList {
+        projects: vec![overview(false)],
+        problems: Vec::new(),
+    });
+
+    assert_eq!(
+        store.project_milestones("project-1").map(|m| m.len()),
+        Some(2)
+    );
+}

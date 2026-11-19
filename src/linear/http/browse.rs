@@ -187,6 +187,7 @@ struct ProjectNode {
 impl ProjectNode {
     fn into_overview(self) -> ProjectOverview {
         ProjectOverview {
+            milestones_complete: !self.project_milestones.page_info.has_next_page,
             milestones: milestones(self.project_milestones.nodes, &self.id),
             project: Project {
                 id: self.id,

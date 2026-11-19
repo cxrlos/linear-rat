@@ -235,6 +235,7 @@ pub fn project_overviews(data: &DemoWorkspace) -> Vec<ProjectOverview> {
                         .cloned()
                 }),
                 progress,
+                milestones_complete: true,
                 milestones: data
                     .milestones
                     .iter()
