@@ -184,7 +184,7 @@ pub fn render_attach(state: &State, prompt: &AttachPrompt, frame: &mut Frame, ar
     let (placeholder, hint, items): (&str, String, &[(&[Action], &str)]) = match &prompt.step {
         AttachStep::File => (
             "type a path",
-            format!("Up to {} MB; ~ is your home", MAX_FILE_SIZE / 1_000_000),
+            format!("Under {} MB; ~ is your home", MAX_FILE_SIZE / 1_000_000),
             &[
                 (&[Action::Accept], "attach"),
                 (&[Action::ToggleEntry], "complete"),

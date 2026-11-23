@@ -1,6 +1,6 @@
 //! Attaching a local file or a link to the focused issue, each from a
 //! prompt. A file is checked before Linear is asked anything: it must
-//! exist, be a regular file and be at most [`MAX_FILE_SIZE`]. Its upload
+//! exist, be a regular file and be smaller than [`MAX_FILE_SIZE`]. Its upload
 //! shows its progress in the indicator until Linear answers. Nothing shows
 //! before Linear stores the attachment, so a failure has nothing to undo.
 
@@ -11,7 +11,7 @@ use super::{Effect, Failure, Modal, State, Update, WriteClass};
 use crate::linear::FileUpload;
 use crate::linear::model::Attachment;
 
-/// The largest file lrat uploads, in bytes.
+/// The size, in bytes, every file lrat uploads stays under.
 pub const MAX_FILE_SIZE: u64 = 50_000_000;
 
 /// The open attach prompt: which issue it attaches to, what it asks for
@@ -344,7 +344,7 @@ fn checked_file(typed: &str) -> Result<FileUpload, String> {
         |name| name.to_string_lossy().into_owned(),
     );
     let size = metadata.len();
-    if size > MAX_FILE_SIZE {
+    if size >= MAX_FILE_SIZE {
         return Err(format!(
             "{name} is {}; the limit is {}",
             megabytes(size),
@@ -480,6 +480,24 @@ mod tests {
         assert_eq!(megabytes(60_000_000), "60.0 MB");
         assert_eq!(megabytes(50_000_001), "50.1 MB");
         assert_eq!(megabytes_whole(MAX_FILE_SIZE), "50 MB");
+    }
+
+    #[test]
+    fn a_file_must_be_under_the_limit() {
+        let dir = std::env::temp_dir().join(format!("lrat-attach-limit-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("wheel.bin");
+        // Sparse, so the test writes almost nothing.
+        let sized = |size| {
+            fs::File::create(&file).unwrap().set_len(size).unwrap();
+            checked_file(&file.display().to_string())
+        };
+
+        assert_eq!(sized(MAX_FILE_SIZE - 1).unwrap().size, MAX_FILE_SIZE - 1);
+        assert_eq!(
+            sized(MAX_FILE_SIZE).unwrap_err(),
+            "wheel.bin is 50.0 MB; the limit is 50 MB"
+        );
     }
 
     #[test]
