@@ -503,7 +503,13 @@ async fn a_reload_keeps_the_focused_cycle_by_id() {
     press(&mut app, "r");
 
     let mut cycles = FakeClient.recent_cycles(&team_id).await.unwrap();
-    cycles.retain(|cycle| cycle.id != app.state().cycles.cycles()[0].id);
+    let newest = cycles.iter().map(|cycle| cycle.starts_at).max().unwrap();
+    let mut next = cycles[0].clone();
+    next.id = "cycle-next".to_owned();
+    next.starts_at = newest
+        .checked_add(SignedDuration::from_hours(24 * 14))
+        .unwrap();
+    cycles.push(next);
     app.handle(Event::CyclesLoaded {
         team_id,
         result: Ok(cycles),
@@ -511,6 +517,7 @@ async fn a_reload_keeps_the_focused_cycle_by_id() {
     .unwrap();
 
     assert_eq!(app.state().cycles.focused().unwrap().id, focused);
+    assert_eq!(app.state().cycles.cycles()[2].id, focused);
 }
 
 #[tokio::test]
