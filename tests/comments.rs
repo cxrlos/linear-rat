@@ -590,6 +590,50 @@ fn a_detail_loaded_while_an_unresolve_is_in_flight_keeps_the_thread_open() {
 }
 
 #[test]
+fn deleting_the_viewers_thread_takes_its_replies_and_a_refusal_brings_them_back() {
+    let mut app = app();
+    let viewer = app.state().store.viewer().unwrap().id.clone();
+    let mut detail = IssueDetail::demo(ISSUE);
+    for comment in &mut detail.comments {
+        if comment.id == OPEN {
+            comment.author_id = Some(viewer.clone());
+        }
+    }
+    app.handle(Event::IssueDetailLoaded {
+        issue_id: ISSUE.to_owned(),
+        result: Ok(detail),
+    })
+    .unwrap();
+    focus(&mut app, OPEN);
+
+    press(&mut app, "X");
+    assert!(
+        shows(&app, "Its reply is deleted too."),
+        "{:#?}",
+        screen(&app)
+    );
+    let write = only_change(press(&mut app, "y"));
+
+    assert_eq!(comment(&app, OPEN), None);
+    assert_eq!(comment(&app, OPEN_REPLY), None, "its reply went with it");
+
+    app.handle(Event::CommentChanged {
+        write,
+        result: Err(offline()),
+    })
+    .unwrap();
+    let ids: Vec<String> = app
+        .state()
+        .store
+        .comments(ISSUE)
+        .unwrap()
+        .iter()
+        .map(|comment| comment.id.clone())
+        .collect();
+    assert_eq!(ids, [RESOLVED, RESOLVED_REPLY, OPEN, OPEN_REPLY]);
+}
+
+#[test]
 fn r_and_e_keep_their_detail_meaning_without_a_focused_comment() {
     let mut app = app();
 
