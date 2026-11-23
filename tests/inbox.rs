@@ -15,7 +15,7 @@ use linear_rat::app::{
     WriteClass, snooze_presets,
 };
 use linear_rat::linear::model::Notification;
-use linear_rat::linear::{ErrorKind, FakeClient, LinearClient, NotificationsLoaded, demo};
+use linear_rat::linear::{ErrorKind, FakeClient, LinearClient, NotificationsLoaded, Urgency, demo};
 use ratatui::backend::TestBackend;
 
 fn key_event(c: char) -> Event {
@@ -409,6 +409,28 @@ async fn enter_opens_the_issue_with_the_comment_focused_and_marks_it_read() {
     // Esc twice comes back to the Inbox.
     press(&mut app, "\x1b\x1b");
     assert_eq!(app.state().screen, Screen::Inbox);
+}
+
+#[tokio::test]
+async fn the_comment_enter_focused_is_the_detail_s_focused_comment_once_it_loads() {
+    let mut app = inbox().await;
+    let notification = focused(&app);
+    let comment_id = notification.comment_id.clone().unwrap();
+
+    press(&mut app, "\n");
+    let detail = FakeClient
+        .issue_detail(&notification.issue_id, Urgency::Urgent)
+        .await
+        .unwrap();
+    app.handle(Event::IssueDetailLoaded {
+        issue_id: notification.issue_id.clone(),
+        result: Ok(detail),
+    })
+    .unwrap();
+
+    let comment = linear_rat::app::focused_comment(app.state()).unwrap();
+    assert_eq!(comment.id, comment_id);
+    assert!(linear_rat::app::can_focus_comments(app.state()));
 }
 
 #[tokio::test]
