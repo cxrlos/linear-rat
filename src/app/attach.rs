@@ -430,9 +430,11 @@ fn shared_start(names: &[String]) -> String {
 
 /// Whether `url` is http or https with a host.
 fn is_web_url(url: &str) -> bool {
-    let rest = url
-        .strip_prefix("https://")
-        .or_else(|| url.strip_prefix("http://"));
+    let rest = url.split_once("://").and_then(|(scheme, rest)| {
+        // Schemes are case-insensitive.
+        (scheme.eq_ignore_ascii_case("https") || scheme.eq_ignore_ascii_case("http"))
+            .then_some(rest)
+    });
     rest.and_then(|rest| rest.split(['/', '?', '#']).next())
         .is_some_and(|host| !host.is_empty() && !host.contains(char::is_whitespace))
 }
@@ -512,6 +514,8 @@ mod tests {
     fn only_web_urls_with_a_host_pass() {
         assert!(is_web_url("https://example.com/cave"));
         assert!(is_web_url("http://example.com"));
+        assert!(is_web_url("HTTPS://example.com/cave"));
+        assert!(is_web_url("Http://example.com"));
         assert!(!is_web_url("https://"));
         assert!(!is_web_url("https:///cave"));
         assert!(!is_web_url("ftp://example.com"));
