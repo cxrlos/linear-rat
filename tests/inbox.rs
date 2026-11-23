@@ -434,6 +434,32 @@ async fn the_comment_enter_focused_is_the_detail_s_focused_comment_once_it_loads
 }
 
 #[tokio::test]
+async fn the_comment_enter_focused_scrolls_into_view_once_the_detail_loads() {
+    let mut app = inbox_at(80, 12).await;
+    let notification = focused(&app);
+
+    press(&mut app, "\n");
+    let detail = FakeClient
+        .issue_detail(&notification.issue_id, Urgency::Urgent)
+        .await
+        .unwrap();
+    app.handle(Event::IssueDetailLoaded {
+        issue_id: notification.issue_id.clone(),
+        result: Ok(detail),
+    })
+    .unwrap();
+
+    let state = app.state();
+    let (start, end) = linear_rat::ui::focused_comment_lines(state, state.viewport).unwrap();
+    let (rows, _) = linear_rat::ui::detail_rows(state, state.viewport);
+    let scroll = state.detail.scroll(&notification.issue_id);
+    assert!(
+        scroll <= start && (end <= scroll + rows || scroll == start),
+        "comment at lines {start}..{end}, detail shows {rows} rows from {scroll}"
+    );
+}
+
+#[tokio::test]
 async fn the_first_load_follows_my_issues_and_polls_bring_deltas() {
     let mut app = App::new(TestBackend::new(80, 24), State::loading(None)).unwrap();
     let assigned = FakeClient.assigned_issues().await.unwrap();

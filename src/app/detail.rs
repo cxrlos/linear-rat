@@ -187,6 +187,14 @@ pub(super) fn loaded(state: &mut State, issue_id: String, result: Result<IssueDe
             super::reactions::reapply_in_flight(state);
             // The detail can bring newer copies of related issues.
             state.rebuild_lists();
+            // A comment focused before its detail loaded, as Enter on an
+            // Inbox notification does, had no lines to scroll to until now.
+            let focused = state.focused_issue().map(|issue| issue.id.as_str());
+            if focused == Some(issue_id.as_str())
+                && state.detail.focused_comment(&issue_id).is_some()
+            {
+                super::comments::scroll_to_focus(state, &issue_id);
+            }
             DetailLoad::Loaded
         }
         Err(failure) => {

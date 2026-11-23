@@ -161,7 +161,7 @@ pub(super) fn move_focus(state: &mut State, forward: bool) -> Update {
 
 /// Scrolls the detail of `issue_id` so the focused comment shows, its top
 /// first when it is taller than the pane.
-fn scroll_to_focus(state: &mut State, issue_id: &str) {
+pub(super) fn scroll_to_focus(state: &mut State, issue_id: &str) {
     let Some((start, end)) = ui::focused_comment_lines(state, state.viewport) else {
         return;
     };
