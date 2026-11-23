@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use jiff::{SignedDuration, Timestamp};
 
-use super::{Effect, Failure, Load, LoadError, State, Update};
+use super::{Effect, Failure, Load, LoadError, State, Update, inbox};
 use crate::config::SyncSettings;
 use crate::linear::{AssignedIssues, ClientError, LiveEvent, TeamChanges};
 
@@ -289,7 +289,9 @@ pub(super) fn due(state: &mut State) -> Vec<Effect> {
 
 fn due_sync(state: &mut State) -> Vec<Effect> {
     if state.sync_status.poll_due(&state.sync) {
-        return vec![start_poll(state)];
+        let mut effects = vec![start_poll(state)];
+        effects.extend(inbox::poll(state));
+        return effects;
     }
     if state.sync_status.reconcile_due(&state.sync) {
         state.sync_status.reconciling = true;
@@ -308,7 +310,14 @@ fn due_sync(state: &mut State) -> Vec<Effect> {
 impl State {
     /// Whether a refresh can start now: the snapshot's failed load can be
     /// tried again, or the store is ready to sync and no poll is in flight.
+    /// On Cycles, Projects and a cycle's or project's issues, whether what
+    /// the screen shows can load again.
     pub fn can_refresh(&self) -> bool {
+        if self.sync_status.refresh == Refresh::Done
+            && let Some(can) = super::browse::can_reload(self)
+        {
+            return can;
+        }
         match self.sync_status.refresh {
             Refresh::Failed(_) => true,
             Refresh::Loading => false,
@@ -318,22 +327,43 @@ impl State {
 }
 
 /// `r`: polls now, focused or not, unless a poll is already in flight. While
-/// the snapshot's load has failed, tries that load again instead. Either
-/// way it forgets the writes the API key was denied, so their keys try
-/// again.
+/// the snapshot's load has failed, tries that load again instead. On
+/// Cycles, Projects and a cycle's or project's issues, loads what the
+/// screen shows again instead. Either way it forgets the writes the API key
+/// was denied, so their keys try again.
 pub(super) fn refresh(state: &mut State) -> Update {
     if !state.can_refresh() {
         return Update::default();
     }
     let unmuted = state.store.capabilities_mut().forget_denied_writes();
-    let effect = match state.sync_status.refresh {
-        Refresh::Failed(_) => retry_load(state),
-        Refresh::Loading | Refresh::Done => start_poll(state),
+    if state.sync_status.refresh == Refresh::Done
+        && let Some(effects) = super::browse::reload(state)
+    {
+        return Update {
+            redraw: unmuted,
+            effects,
+        };
+    }
+    let effects = match state.sync_status.refresh {
+        Refresh::Failed(_) => vec![retry_load(state)],
+        Refresh::Loading | Refresh::Done => {
+            let mut effects = vec![start_poll(state)];
+            effects.extend(inbox::poll(state));
+            effects
+        }
     };
     Update {
         redraw: unmuted,
-        effects: vec![effect],
+        effects,
     }
+}
+
+/// A reload of the Cycles or Projects screen, or of a cycle's or project's
+/// issues, failed: the sync indicator shows it as it shows a failed poll.
+/// One that went well changes nothing here: only an issue poll counts as a
+/// sync, so only a poll sets the time synced and clears a problem.
+pub(super) fn reload_failed(state: &mut State, failure: Failure) {
+    note_failure(state, SyncFailure::Failed(failure));
 }
 
 fn retry_load(state: &mut State) -> Effect {
@@ -368,11 +398,14 @@ fn redraw_if_indicator_changes(state: &mut State, change: impl FnOnce(&mut State
 }
 
 pub(super) fn tick(state: &mut State, now: Timestamp) -> Update {
-    let redraw = redraw_if_indicator_changes(state, |state| {
+    let before = state.sync_status.now;
+    let mut redraw = redraw_if_indicator_changes(state, |state| {
         let status = &mut state.sync_status;
         status.now = Some(now);
         status.last_activity.get_or_insert(now);
     });
+    // A snoozed notification coming back changes the Inbox and its tab.
+    redraw |= inbox::wakes(state, before, now);
     Update {
         redraw,
         effects: due(state),
@@ -463,12 +496,17 @@ fn forget_archived(state: &mut State, changes: &TeamChanges) {
     }
 }
 
-/// Applies a live event: an issue merges through the same newer-wins path
-/// as a poll, without moving a watermark, and a comment joins the comments
+/// Applies a live event: an issue, created, updated, archived or
+/// unarchived, merges through the same newer-wins path as a poll, without
+/// moving a watermark, and a comment joins, replaces or leaves the comments
 /// already loaded. An issue event that changed the store schedules a delta
 /// poll [`LIVE_POLL_AFTER`] after the latest one; a comment schedules none,
 /// since a delta poll fetches no comments. A new connection asks for a poll
 /// at once, to catch up.
+///
+/// Events Linear does not filter are kept only when they concern the
+/// viewer: a comment only on an issue in the store, a notification only
+/// for the viewer.
 pub(super) fn live(state: &mut State, event: LiveEvent) -> Update {
     let status = &mut state.sync_status;
     let redraw = match event {
@@ -476,7 +514,9 @@ pub(super) fn live(state: &mut State, event: LiveEvent) -> Update {
             status.catch_up = true;
             false
         }
-        LiveEvent::Issue(changes) => {
+        LiveEvent::Issue(changes)
+        | LiveEvent::Archived(changes)
+        | LiveEvent::Unarchived(changes) => {
             let changed = state.store.apply(&changes);
             if changed {
                 status.live_poll_at = status
@@ -489,9 +529,55 @@ pub(super) fn live(state: &mut State, event: LiveEvent) -> Update {
         }
         LiveEvent::Comment(posted) => {
             let issue_id = posted.comment.issue_id.clone();
+            if state.store.issue(&issue_id).is_none() {
+                return Update::default();
+            }
             let before = state.store.comments(&issue_id).map(<[_]>::len);
             state.store.add_comment(posted);
             state.store.comments(&issue_id).map(<[_]>::len) != before
+        }
+        LiveEvent::CommentUpdated(posted) => {
+            if state.store.issue(&posted.comment.issue_id).is_none() {
+                return Update::default();
+            }
+            let replaced = state.store.replace_comment(posted.comment).is_some();
+            if replaced && let Some(author) = posted.author {
+                state.store.add_member(author);
+            }
+            replaced
+        }
+        LiveEvent::CommentDeleted {
+            issue_id,
+            comment_id,
+        } => {
+            if state.store.issue(&issue_id).is_none() {
+                return Update::default();
+            }
+            // Linear deletes a thread's replies with it.
+            let removed = state.store.remove_comment(&comment_id);
+            if let Some(focused) = state.detail.focused_comment(&issue_id)
+                && removed.iter().any(|comment| comment.id == focused)
+            {
+                state.detail.focus_comment(&issue_id, None);
+            }
+            !removed.is_empty()
+        }
+        LiveEvent::Notification {
+            recipient_id,
+            loaded,
+        } => {
+            let for_viewer = state
+                .store
+                .viewer()
+                .is_some_and(|viewer| viewer.id == recipient_id);
+            if !for_viewer {
+                return Update::default();
+            }
+            let changed = state.store.merge_live_notifications(&loaded);
+            if changed {
+                state.rebuild_lists();
+            }
+            changed
         }
     };
     let mut effects = Vec::new();
@@ -550,13 +636,16 @@ fn note_failure(state: &mut State, failure: SyncFailure) {
     }
 }
 
-/// My Issues loaded: it fills the screen, and polling may start.
+/// My Issues loaded: it fills the screen, the viewer is confirmed so the
+/// Inbox loads, and polling may start.
 pub(super) fn loaded(state: &mut State, loaded: &AssignedIssues) -> Update {
     state.show_assigned(loaded);
     state.sync_status.refresh = Refresh::Done;
+    let mut effects: Vec<Effect> = inbox::first_load(state).into_iter().collect();
+    effects.extend(due(state));
     Update {
         redraw: true,
-        effects: due(state),
+        effects,
     }
 }
 
@@ -590,6 +679,33 @@ mod tests {
 
     fn at(seconds: i64) -> Timestamp {
         NOW.checked_add(SignedDuration::from_secs(seconds)).unwrap()
+    }
+
+    /// The store can hold comments of an issue it no longer holds; an edit
+    /// to one of them must not land, since it concerns no issue on screen.
+    #[test]
+    fn a_live_comment_edit_on_an_issue_not_in_the_store_is_dropped() {
+        let mut state = State::default();
+        let mut detail = crate::linear::IssueDetail::demo("issue-des-34");
+        for comment in &mut detail.comments {
+            comment.issue_id = "issue-gone".to_owned();
+        }
+        state.store.merge_detail("issue-gone", &detail);
+        let before = state.store.comments("issue-gone").unwrap().to_vec();
+        let mut edited = before[0].clone();
+        edited.body = "Edited elsewhere".to_owned();
+
+        let update = live(
+            &mut state,
+            LiveEvent::CommentUpdated(crate::linear::PostedComment {
+                comment: edited,
+                author: None,
+            }),
+        );
+
+        assert!(!update.redraw);
+        assert!(update.effects.is_empty(), "{:?}", update.effects);
+        assert_eq!(state.store.comments("issue-gone").unwrap(), before);
     }
 
     #[test]

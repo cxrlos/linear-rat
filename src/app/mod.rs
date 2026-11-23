@@ -3,8 +3,10 @@
 mod action;
 mod analytics_screen;
 mod arrange;
+mod attach;
 mod browse;
 mod capabilities;
+mod comments;
 mod compose;
 mod create;
 mod detail;
@@ -14,6 +16,7 @@ mod edit_text;
 mod effect;
 mod event;
 mod failure;
+mod inbox;
 mod issue_list;
 mod issue_picker;
 mod lifecycle;
@@ -24,6 +27,7 @@ mod my_issues;
 mod names;
 mod palette;
 mod picker;
+mod reactions;
 mod rearrange;
 mod relations;
 mod release;
@@ -42,8 +46,15 @@ use ratatui::layout::Rect;
 pub use action::{Action, Copyable};
 pub use analytics_screen::{AnalyticsScreen, AnalyticsView};
 pub use arrange::{Arrangement, Group, GroupKey, Grouping, Sort, SortKey, arrange, linear_order};
+pub use attach::{
+    AttachPrompt, AttachStep, Attaching, MAX_FILE_SIZE, NewAttachment, Upload, UploadId, Uploads,
+};
 pub use browse::{Cycles, Projects, cycle_counts, cycle_title};
 pub use capabilities::{Capabilities, Capability, WriteClass};
+pub use comments::{
+    CommentChange, CommentWrite, can_focus_comments, focused_comment, is_collapsed,
+    owns_focused_comment, threads,
+};
 pub use compose::{Drafts, IssueDraft, NewComment, NewIssue, Writing, is_local};
 pub use create::{CreateForm, Step};
 pub use detail::{Detail, DetailLoad};
@@ -56,6 +67,11 @@ pub use edit_text::TextOpened;
 pub use effect::Effect;
 pub use event::Event;
 pub use failure::{ERROR_LOG_CAP, ErrorLog, Failure, LoggedFailure};
+pub use inbox::{
+    Inbox, InboxChange, InboxGroup, InboxWrite, focused as focused_notification,
+    groups as inbox_groups, has_read as inbox_has_read, shown as inbox_shown, snooze_presets,
+    unread_count,
+};
 pub use issue_list::{IssueList, Pane};
 pub use issue_picker::{
     IssuePicker, IssuePurpose, Mode, PickerScope, SEARCH_PAUSE, open as open_issue_picker,
@@ -68,10 +84,11 @@ pub use my_issues::MyIssues;
 pub use names::Names;
 pub use palette::{Palette, PaletteEntry, palette_matches};
 pub use picker::{Entry, Note, Picker};
+pub use reactions::{ReactionChange, ReactionWrite, can_react, shown_emoji};
 pub use rearrange::{can_rearrange, own_order};
 pub use relations::{RelationWrite, RelationsInFlight};
 pub use release::Release;
-pub use results::Results;
+pub use results::{Listing, Results};
 pub use search::{Phase, Scope, Search};
 pub use state::{Screen, State};
 pub use store::{Store, Trashed};

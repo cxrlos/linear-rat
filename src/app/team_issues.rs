@@ -646,7 +646,7 @@ pub(super) fn pick(state: &mut State, nth: Option<usize>) -> Option<Vec<Effect>>
     let Some(Modal::Choice(choice)) = state.modals.top() else {
         return None;
     };
-    let purpose = choice.purpose;
+    let purpose = choice.purpose.clone();
     let id = choice.chosen(nth).cloned()?;
     state.modals.pop();
     Some(carry_out(state, purpose, id))
@@ -668,7 +668,10 @@ fn carry_out(state: &mut State, purpose: Purpose, id: Option<String>) -> Vec<Eff
         | Purpose::CyclesTeam
         | Purpose::Group
         | Purpose::Sort
-        | Purpose::RelationKind => Vec::new(),
+        | Purpose::RelationKind
+        | Purpose::RemoveRelations { .. }
+        | Purpose::Reaction
+        | Purpose::Snooze => Vec::new(),
         Purpose::Filter(field) => {
             let Some(mut query) = state.team_issues.query.clone() else {
                 return Vec::new();

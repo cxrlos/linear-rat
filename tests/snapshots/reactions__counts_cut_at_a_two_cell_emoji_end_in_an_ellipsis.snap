@@ -1,0 +1,28 @@
+---
+source: tests/reactions.rs
+expression: app.backend()
+---
+" [1] My Issues │ [2] │ [3] │ [4] │ [5] │"
+"┌DES-34────────────────────────────────┐"
+"│Design QA for the autumn release      │"
+"│                                      │"
+"│State     ◐ In Progress               │"
+"│Priority  ▮▮▮ High                    │"
+"│Estimate  3                           │"
+"│                                      │"
+"│Bring two options to the critique on  │"
+"│Thursday.                             │"
+"│👍 2  🎉 1  👎 1  😄 1  😕 1  ❤️ 1…   │" Hidden by multi-width symbols: [(2, " "), (8, " "), (14, " "), (20, " "), (26, " "), (32, " ")]
+"│                                      │"
+"│Comments (4)                          │"
+"│▸ resolved · 1 reply                  │"
+"│                                      │"
+"│Nell Havarti · 6 days ago             │"
+"│  Added screenshots from the cellar   │"
+"│  map.                                │"
+"│  👀 1  👍 1                          │" Hidden by multi-width symbols: [(4, " "), (10, " ")]
+"│    Mira Gouda · 5 days ago · edited  │"
+"└──────────────────────────────────────┘"
+" Move │ j down  k up  gg top  G bottom  "
+" Do   │ y yank  o links  + react        "
+" Edit │ s state  a assignee  p priority "

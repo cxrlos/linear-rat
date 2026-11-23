@@ -1,0 +1,9 @@
+# budget: 2
+# Every comment deleted in the workspace, for live updates: which comment of
+# which issue. Comments on anything but an issue are dropped by the client.
+subscription CommentDeletedLive {
+  commentDeleted {
+    id
+    issueId
+  }
+}

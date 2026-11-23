@@ -5,9 +5,13 @@
 //! Everything is derived from [`NOW`] and a fixed seed, so every call returns
 //! the same data on every machine.
 
+use std::collections::BTreeMap;
+
 use jiff::civil::{Date, date};
 use jiff::{SignedDuration, Timestamp};
 
+use super::model::Notification;
+use super::model::Reaction;
 use super::model::{
     Attachment, Comment, Cycle, Estimation, Issue, IssueRelation, Label, Member, Priority, Project,
     ProjectMilestone, ProjectOverview, ProjectStatus, ProjectStatusType, RelationType, StateSpan,
@@ -43,6 +47,8 @@ pub struct DemoWorkspace {
     pub comments: Vec<Comment>,
     pub attachments: Vec<Attachment>,
     pub relations: Vec<IssueRelation>,
+    /// Issues' own reactions by issue id, oldest first.
+    pub issue_reactions: BTreeMap<String, Vec<Reaction>>,
 }
 
 /// Builds the demo workspace. Deterministic: no clock, no OS randomness.
@@ -100,11 +106,14 @@ pub fn workspace() -> DemoWorkspace {
         comments: Vec::new(),
         attachments: Vec::new(),
         relations: Vec::new(),
+        issue_reactions: BTreeMap::new(),
     };
     for spec in &TEAMS {
         add_team(&mut data, spec, &mut rng);
     }
     add_links(&mut data);
+    add_threads(&mut data);
+    add_reactions(&mut data);
     add_milestones(&mut data);
     add_schedule(&mut data);
     add_relations(&mut data);
@@ -371,6 +380,98 @@ fn add_links(data: &mut DemoWorkspace) {
         .find(|comment| comment.issue_id == focus_rings)
     {
         comment.body.push_str(DES_16_COMMENT);
+    }
+}
+
+/// Turns DES-34's comments into conversations: the viewer's comment
+/// becomes an edited reply to the one before it, and a resolved thread with
+/// the viewer's reply comes ahead of both. Added after the generated data,
+/// so the seed's draws stay as they were.
+fn add_threads(data: &mut DemoWorkspace) {
+    let issue_id = "issue-des-34";
+    let mut ids = data
+        .comments
+        .iter()
+        .filter(|comment| comment.issue_id == issue_id)
+        .map(|comment| comment.id.clone());
+    let (Some(first), Some(second)) = (ids.next(), ids.next()) else {
+        return;
+    };
+    let Some(at) = data.comments.iter().position(|comment| comment.id == first) else {
+        return;
+    };
+    if let Some(reply) = data
+        .comments
+        .iter_mut()
+        .find(|comment| comment.id == second)
+    {
+        reply.parent_id = Some(first);
+        reply.edited_at = Some(ts(unix(reply.created_at) + HOUR));
+    }
+    let asked = unix(NOW) - 8 * DAY - 5 * HOUR;
+    let resolved = [
+        (
+            "comment-des-34-rind",
+            None,
+            "pia",
+            asked,
+            "Should the rind colour follow the theme, or stay fixed?",
+        ),
+        (
+            "comment-des-34-rind-reply",
+            Some("comment-des-34-rind"),
+            VIEWER,
+            asked + 4 * HOUR,
+            "It follows the theme now, same as the borders.",
+        ),
+    ]
+    .map(|(id, parent, author, created, body)| Comment {
+        id: id.to_owned(),
+        issue_id: issue_id.to_owned(),
+        author_id: Some(member_id(author)),
+        body: body.to_owned(),
+        created_at: ts(created),
+        parent_id: parent.map(str::to_owned),
+        resolved_at: parent.is_none().then(|| ts(asked + 5 * HOUR)),
+        edited_at: None,
+        reactions: Vec::new(),
+    });
+    data.comments.splice(at..at, resolved);
+}
+
+/// Reactions on DES-34 and on a comment of each of its threads, the
+/// viewer's among them.
+fn add_reactions(data: &mut DemoWorkspace) {
+    let issue_id = "issue-des-34";
+    let at = unix(NOW) - 2 * DAY;
+    let reaction = |n: usize, emoji: &str, handle: &str| Reaction {
+        id: format!("reaction-des-34-{n}"),
+        emoji: emoji.to_owned(),
+        user_id: Some(member_id(handle)),
+        created_at: ts(at + i64::try_from(n).unwrap_or(0) * HOUR),
+    };
+    data.issue_reactions.insert(
+        issue_id.to_owned(),
+        vec![
+            reaction(1, "👍", "pia"),
+            reaction(2, "👍", "nell"),
+            reaction(3, "🎉", VIEWER),
+        ],
+    );
+    let on_comments = [
+        (
+            "comment-des-34-rind",
+            vec![reaction(4, "🎉", "nell"), reaction(5, "❤️", "iris")],
+        ),
+        (
+            "comment-90",
+            vec![reaction(6, "👀", VIEWER), reaction(7, "👍", "pia")],
+        ),
+    ];
+    for (comment_id, reactions) in on_comments {
+        if let Some(comment) = data.comments.iter_mut().find(|c| c.id == comment_id) {
+            comment.reactions = reactions;
+        }
     }
 }
 
@@ -852,6 +953,10 @@ fn finish(
                 author_id: Some(author),
                 body: body.to_owned(),
                 created_at: ts(at),
+                parent_id: None,
+                resolved_at: None,
+                edited_at: None,
+                reactions: Vec::new(),
             }
         })
         .collect();
@@ -926,6 +1031,101 @@ fn fill_history(cycle: &mut Cycle, issues: &[Issue]) {
         cycle.issue_count_history.push(count(scope.len()));
         cycle.completed_issue_count_history.push(count(done.len()));
     }
+}
+
+/// One notification of the demo inbox: which of the viewer's open issues
+/// it is about, its kind, its actor, how many minutes before [`NOW`] it
+/// came, whether it is read, and the emoji of a reaction.
+type DemoNotification = (
+    usize,
+    &'static str,
+    &'static str,
+    i64,
+    bool,
+    Option<&'static str>,
+);
+
+/// The viewer's inbox: a dozen notifications of mixed kinds and read states
+/// about five of the viewer's open issues.
+const NOTIFICATIONS: [DemoNotification; 12] = [
+    (0, "issueNewComment", "theo", 20, false, None),
+    (0, "issueCommentMention", "ada", 2 * 60, false, None),
+    (0, "issueEmojiReaction", "jun", 5 * 60, true, Some("+1")),
+    (1, "issueAssignedToYou", "omar", 60, false, None),
+    (1, "issueStatusChanged", "omar", 3 * 60, true, None),
+    (2, "issueNewComment", "iris", 6 * 60, true, None),
+    (2, "issueNewComment", "nell", 26 * 60, true, None),
+    (3, "issueMention", "basil", 2 * 24 * 60, false, None),
+    (
+        3,
+        "issueEmojiReaction",
+        "pia",
+        3 * 24 * 60,
+        true,
+        Some("tada"),
+    ),
+    (4, "issueStatusChanged", "theo", 4 * 24 * 60, true, None),
+    (4, "issueAssignedToYou", "ada", 5 * 24 * 60, true, None),
+    (4, "issueNewComment", "ada", 45, false, None),
+];
+
+/// The demo inbox, newest first. A comment notification points at the
+/// issue's latest comment.
+pub fn notifications(data: &DemoWorkspace) -> Vec<Notification> {
+    let mut open: Vec<&Issue> = data
+        .issues
+        .iter()
+        .filter(|issue| issue.assignee_id.as_deref() == Some(data.viewer.id.as_str()))
+        .filter(|issue| {
+            !matches!(
+                issue.state.state_type,
+                StateType::Completed | StateType::Canceled
+            )
+        })
+        .collect();
+    // Issues with comments first, so the comment notifications have one to
+    // point at.
+    let has_comments = |issue: &Issue| {
+        data.comments
+            .iter()
+            .any(|comment| comment.issue_id == issue.id)
+    };
+    open.sort_by(|a, b| {
+        has_comments(b)
+            .cmp(&has_comments(a))
+            .then(a.identifier.cmp(&b.identifier))
+    });
+    let mut notifications: Vec<Notification> = NOTIFICATIONS
+        .iter()
+        .enumerate()
+        .filter_map(|(index, &(nth, kind, actor, minutes, read, emoji))| {
+            let issue = open.get(nth)?;
+            let at = NOW - SignedDuration::from_mins(minutes);
+            let comment_id = kind.contains("Comment").then(|| {
+                data.comments
+                    .iter()
+                    .rev()
+                    .find(|comment| comment.issue_id == issue.id)
+                    .map(|comment| comment.id.clone())
+            });
+            Some(Notification {
+                id: format!("notification-{}", index + 1),
+                kind: kind.to_owned(),
+                issue_id: issue.id.clone(),
+                team_id: issue.team_id.clone(),
+                comment_id: comment_id.flatten(),
+                actor_id: Some(member_id(actor)),
+                reaction_emoji: emoji.map(str::to_owned),
+                created_at: at,
+                updated_at: at,
+                read_at: read.then_some(at + SignedDuration::from_mins(5)),
+                snoozed_until_at: None,
+                archived_at: None,
+            })
+        })
+        .collect();
+    notifications.sort_by_key(|notification| std::cmp::Reverse(notification.created_at));
+    notifications
 }
 
 fn count(len: usize) -> u32 {

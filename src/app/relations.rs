@@ -1,7 +1,8 @@
 //! An issue's parent, sub-issues and relations: setting and clearing the
-//! parent, adding and removing relations, and going to a related issue, all
-//! through the issue picker. Relation writes show at once and are rolled
-//! back if Linear rejects them, as edits are.
+//! parent, adding relations and going to a related issue through the issue
+//! picker, and removing relations from a list of the issue's own. Relation
+//! writes show at once and are rolled back if Linear rejects them, as edits
+//! are.
 
 use super::detail::DetailLoad;
 use super::edit::{self, Edit};
@@ -192,8 +193,8 @@ pub(super) fn kind_chosen(state: &mut State, nth: Option<usize>) -> Update {
     issue_picker::open(state, picker)
 }
 
-/// Opens the issue picker over the issues the focused issue has relations
-/// with, to remove them.
+/// Opens the list of the focused issue's relations that Linear has
+/// confirmed, one row each, to mark the ones to remove.
 pub(super) fn open_remove(state: &mut State) -> Update {
     let Some(issue) = focused(state) else {
         return Update::redraw();
@@ -205,27 +206,90 @@ pub(super) fn open_remove(state: &mut State) -> Update {
             effects,
         };
     }
-    let mut others: Vec<String> = Vec::new();
-    for (_, _, other) in state.store.relations(&issue.id) {
-        if !others.iter().any(|known| known == other) {
-            others.push(other.to_owned());
-        }
-    }
-    if others.is_empty() {
+    let entries: Vec<Entry<Option<String>>> = state
+        .store
+        .relations(&issue.id)
+        .into_iter()
+        .filter(|(_, relation, _)| !super::is_local(&relation.id))
+        .map(|(kind, relation, other)| Entry {
+            label: removal_label(state, kind, other),
+            value: Some(relation.id.clone()),
+        })
+        .collect();
+    if entries.is_empty() {
         state.notice = Some(format!("{} has no relations", issue.identifier));
         return Update::redraw();
     }
-    let picker = IssuePicker::new(
-        IssuePurpose::RemoveRelation { issue_id: issue.id },
-        Mode::Several,
-        PickerScope {
-            excluded: Vec::new(),
-            only: Some(others),
-            not_under: None,
+    state.modals.push(Modal::Choice(Choice {
+        purpose: Purpose::RemoveRelations {
+            issue_id: issue.id.clone(),
         },
-        None,
-    );
-    issue_picker::open(state, picker)
+        list: Picker::multi(entries, []),
+    }));
+    Update::redraw()
+}
+
+/// A row of the removal list, as `Blocks ENG-12 Title`: the relation in
+/// the words the detail uses for it.
+fn removal_label(state: &State, kind: RelationKind, other_id: &str) -> String {
+    let phrase = kind.name();
+    match state.store.issue(other_id) {
+        Some(other) => format!("{phrase} {} {}", other.identifier, other.title),
+        None => format!("{phrase} {other_id}"),
+    }
+}
+
+/// Marks or unmarks the selected relation of the removal list, or the
+/// `nth` visible one when given.
+pub(super) fn toggle(state: &mut State, nth: Option<usize>) -> Update {
+    let Some(Modal::Choice(choice)) = state.modals.top_mut() else {
+        return Update::default();
+    };
+    Update {
+        redraw: match nth {
+            Some(n) => choice.list.toggle_nth(n),
+            None => choice.list.toggle_selected(),
+        },
+        effects: Vec::new(),
+    }
+}
+
+/// Closes the removal list and removes every marked relation, or the
+/// selected one when none is marked. A number toggles that row instead.
+pub(super) fn removal_chosen(state: &mut State, nth: Option<usize>) -> Update {
+    if nth.is_some() {
+        return toggle(state, nth);
+    }
+    let Some(Modal::Choice(choice)) = state.modals.top() else {
+        return Update::default();
+    };
+    let Purpose::RemoveRelations { issue_id } = &choice.purpose else {
+        return Update::default();
+    };
+    let issue_id = issue_id.clone();
+    let marked: Vec<String> = choice
+        .list
+        .marked()
+        .into_iter()
+        .flatten()
+        .cloned()
+        .collect();
+    let chosen = if marked.is_empty() {
+        choice
+            .list
+            .selected()
+            .cloned()
+            .into_iter()
+            .flatten()
+            .collect()
+    } else {
+        marked
+    };
+    if chosen.is_empty() {
+        return Update::default();
+    }
+    state.modals.pop();
+    remove(state, &issue_id, &chosen)
 }
 
 /// Opens the issue picker over the focused issue's parent, sub-issues and
@@ -319,10 +383,11 @@ pub(super) fn add(
     }
 }
 
-/// Removes every relation between the issue `issue_id` and each of
-/// `others`: each goes at once and to Linear as one `issueRelationDelete`.
-/// A relation Linear has not confirmed yet is left alone.
-pub(super) fn remove(state: &mut State, issue_id: &str, others: &[String]) -> Update {
+/// Removes the relations of the issue `issue_id` with the ids
+/// `relation_ids`: each goes at once and to Linear as one
+/// `issueRelationDelete`. A relation Linear has not confirmed yet is left
+/// alone.
+pub(super) fn remove(state: &mut State, issue_id: &str, relation_ids: &[String]) -> Update {
     let Some(identifier) = state.store.issue(issue_id).map(|i| i.identifier.clone()) else {
         return Update::redraw();
     };
@@ -330,8 +395,8 @@ pub(super) fn remove(state: &mut State, issue_id: &str, others: &[String]) -> Up
         .store
         .relations(issue_id)
         .into_iter()
-        .filter(|(_, relation, other)| {
-            others.iter().any(|chosen| chosen == other) && !super::is_local(&relation.id)
+        .filter(|(_, relation, _)| {
+            relation_ids.contains(&relation.id) && !super::is_local(&relation.id)
         })
         .map(|(_, relation, _)| relation.clone())
         .collect();

@@ -115,6 +115,13 @@ pub enum ClientError {
     GraphQl(Vec<GraphQlError>),
     #[error("could not read Linear's response: {0}")]
     Decode(String),
+    /// The host Linear signed an upload URL for refused the file or could
+    /// not be reached. It says nothing about the API key.
+    #[error("the upload failed: {0}")]
+    Upload(String),
+    /// The file to attach could not be read.
+    #[error("could not read the file: {0}")]
+    ReadFile(String),
 }
 
 impl ClientError {
@@ -144,6 +151,7 @@ impl ClientError {
                 .find(|kind| *kind != ErrorKind::Other)
                 .unwrap_or(ErrorKind::Other),
             Self::Decode(_) => ErrorKind::SchemaDrift,
+            Self::Upload(_) | Self::ReadFile(_) => ErrorKind::Other,
         }
     }
 }

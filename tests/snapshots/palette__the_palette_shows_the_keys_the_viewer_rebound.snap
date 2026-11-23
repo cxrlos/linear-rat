@@ -2,7 +2,7 @@
 source: tests/palette.rs
 expression: "format!(\"{}\\n\\n{}\", quit.join(\"\\n\"), screen(&app).join(\"\\n\"))"
 ---
- [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    
+ [1] My Issues │ [2] │ [3] │ [4] │ [5] │ [6]                                    
 ┌My Issues─────────────────────────────────────────────────────────────────────┐
 │◐┌ Palette ─────────────────────────────────────────────────────────────────┐ │
 │▸│ : quit                                                                   │ │
@@ -27,14 +27,14 @@ expression: "format!(\"{}\\n\\n{}\", quit.join(\"\\n\"), screen(&app).join(\"\\n
  Do   │ Enter choose │ Esc close                                                
                                                                                 
 
- [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    
+ [1] My Issues │ [2] │ [3] │ [4] │ [5] │ [6]                                    
 ┌My Issues─────────────────────────────────────────────────────────────────────┐
 │◐┌ Palette ─────────────────────────────────────────────────────────────────┐ │
 │▸│ : every key                                                              │ │
 │ │──────────────────────────────────────────────────────────────────────────│ │
 │ │ Show every key for this context                                    ?, F1 │ │
+│ │ Mark every notification about the issue read                           M │ │
 │ │ ENG-65 Rotate refresh tokens on every use                         ○ Todo │ │
-│ │                                                                          │ │
 │ │                                                                          │ │
 │ │                                                                          │ │
 │ │                                                                          │ │

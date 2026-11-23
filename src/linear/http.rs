@@ -3,8 +3,11 @@
 
 mod analytics;
 mod assigned;
+mod attach;
 mod browse;
 mod changes;
+mod comment;
+mod comment_change;
 mod create;
 mod detail;
 mod diagnostics;
@@ -12,6 +15,8 @@ mod edit;
 mod issue_key;
 mod lifecycle;
 mod live;
+mod notifications;
+mod reaction;
 mod relations;
 mod search;
 mod team;
@@ -27,7 +32,9 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
+use super::ReactionTarget;
 use super::governor::{Governor, SystemTimer, Timer, Urgency};
+use super::model::Reaction;
 use super::model::{
     Cycle, Issue, IssueRelation, Label, Member, ProjectMilestone, Team, Viewer, WorkflowState,
     Workspace,
@@ -35,10 +42,11 @@ use super::model::{
 use super::paging::{Next, RepeatedCursor, Stitch};
 use super::search_bucket::SearchBucket;
 use super::{
-    AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, Diagnostics, GraphQlError,
-    IssueCreate, IssueDetail, IssueLink, IssueUpdate, LinearClient, LiveEvent, PostedComment,
-    ProjectList, RelationCreate, Response, SearchQuery, SearchResults, TeamAnalyticsIssues,
-    TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
+    AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, Diagnostics, FileUpload,
+    GraphQlError, IssueCreate, IssueDetail, IssueLink, IssueUpdate, LinearClient, LiveEvent,
+    NotificationUpdate, NotificationsLoaded, PostedComment, ProjectList, RelationCreate, Response,
+    SearchQuery, SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions,
+    TeamQuery,
 };
 use crate::auth::ApiKey;
 
@@ -374,6 +382,33 @@ impl LinearClient for HttpClient {
         lifecycle::archive(self, issue_id).await
     }
 
+    async fn notifications(
+        &self,
+        since: Option<Timestamp>,
+    ) -> Result<NotificationsLoaded, ClientError> {
+        notifications::load(self, since).await
+    }
+
+    async fn update_notification(
+        &self,
+        id: &str,
+        update: &NotificationUpdate,
+    ) -> Result<(), ClientError> {
+        notifications::update(self, id, update).await
+    }
+
+    async fn archive_notification(&self, id: &str, urgency: Urgency) -> Result<(), ClientError> {
+        notifications::archive(self, id, urgency).await
+    }
+
+    async fn mark_issue_notifications_read(
+        &self,
+        issue_id: &str,
+        read_at: Timestamp,
+    ) -> Result<(), ClientError> {
+        notifications::mark_issue_read(self, issue_id, read_at).await
+    }
+
     async fn unarchive_issue(&self, issue_id: &str) -> Result<(), ClientError> {
         lifecycle::unarchive(self, issue_id).await
     }
@@ -457,8 +492,33 @@ impl LinearClient for HttpClient {
         &self,
         issue_id: &str,
         body: &str,
+        parent_id: Option<&str>,
     ) -> Result<PostedComment, ClientError> {
-        create::create_comment(self, issue_id, body).await
+        create::create_comment(self, issue_id, body, parent_id).await
+    }
+
+    async fn update_comment(&self, id: &str, body: &str) -> Result<(), ClientError> {
+        comment_change::update(self, id, body).await
+    }
+
+    async fn delete_comment(&self, id: &str) -> Result<(), ClientError> {
+        comment_change::delete(self, id).await
+    }
+
+    async fn resolve_comment(&self, id: &str, resolved: bool) -> Result<(), ClientError> {
+        comment_change::resolve(self, id, resolved).await
+    }
+
+    async fn add_reaction(
+        &self,
+        target: &ReactionTarget,
+        emoji: &str,
+    ) -> Result<Reaction, ClientError> {
+        reaction::add(self, target, emoji).await
+    }
+
+    async fn remove_reaction(&self, id: &str) -> Result<(), ClientError> {
+        reaction::remove(self, id).await
     }
 
     async fn create_issue(&self, input: &IssueCreate) -> Result<Issue, ClientError> {
@@ -499,6 +559,24 @@ impl LinearClient for HttpClient {
 
     async fn issue_updated_at(&self, issue_id: &str) -> Result<Timestamp, ClientError> {
         edit::issue_updated_at(self, issue_id).await
+    }
+
+    async fn attach_file(
+        &self,
+        issue_id: &str,
+        file: &FileUpload,
+        progress: impl FnMut(u64) + Send + Sync + 'static,
+    ) -> Result<super::model::Attachment, ClientError> {
+        attach::attach_file(self, issue_id, file, progress).await
+    }
+
+    async fn attach_link(
+        &self,
+        issue_id: &str,
+        url: &str,
+        title: Option<&str>,
+    ) -> Result<super::model::Attachment, ClientError> {
+        attach::attach_link(self, issue_id, url, title).await
     }
 }
 

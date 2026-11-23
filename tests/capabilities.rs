@@ -292,7 +292,7 @@ fn a_narrow_palette_cuts_the_reason_and_keeps_the_key() {
         .iter()
         .find(|line| line.contains("Change the assignee"))
         .unwrap_or_else(|| panic!("{}", lines.join("\n")));
-    assert!(row.contains("… a │"), "{row}");
+    assert!(row.contains("API…") && row.contains(" a │"), "{row}");
 }
 
 #[test]
@@ -337,6 +337,8 @@ fn a_forbidden_comment_denies_comments_in_the_team() {
             issue_id: app.state().focused_issue().unwrap().id.clone(),
             identifier: FIRST.to_owned(),
             body: "Brie".to_owned(),
+            parent_id: None,
+            local_id: None,
         },
         result: Err(forbidden("comment on DES-34")),
     })

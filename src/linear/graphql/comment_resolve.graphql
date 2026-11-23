@@ -1,0 +1,8 @@
+# budget: 5
+# Resolves the thread a top-level comment starts, without naming a
+# resolving reply.
+mutation CommentResolve($id: String!) {
+  commentResolve(id: $id) {
+    success
+  }
+}

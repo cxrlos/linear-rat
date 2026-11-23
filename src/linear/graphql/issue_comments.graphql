@@ -1,5 +1,6 @@
-# budget: 310
-# One page of an issue's comments with each author. Pages hold 100 comments.
+# budget: 510
+# One page of an issue's comments with each author, reply, resolution and
+# reactions. Pages hold 100 comments.
 # The client follows `endCursor` until `hasNextPage` is false and sorts them
 # oldest first.
 query IssueComments($id: String!, $after: String) {
@@ -10,6 +11,17 @@ query IssueComments($id: String!, $after: String) {
         id
         body
         createdAt
+        editedAt
+        resolvedAt
+        parentId
+        reactions {
+          id
+          emoji
+          createdAt
+          user {
+            id
+          }
+        }
         user {
           id
           name

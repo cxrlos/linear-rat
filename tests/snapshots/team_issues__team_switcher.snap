@@ -2,7 +2,7 @@
 source: tests/team_issues.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    "
+" [1] │ [2] Team Issues │ [3] │ [4] │ [5] │ [6]                                  "
 "t ENG Engineering · 50 of 70 m more · f Filters none                            "
 "┌Team Issues───────────────────────────────────────────────────────────────────┐"
 "│▸ ENG-69 Make the importer resumable      ● Done        ▮▮▯ Medium  8 Cycle 7 │"
@@ -17,9 +17,9 @@ expression: app.backend()
 "│  ENG-66 Add key│ 3 OPS Operations                          │one              │"
 "│  ENG-65 Rotate └ Down/Up select  Enter choose  Esc close ──┘one    2 Cycle 7 │"
 "│  ENG-68 Profile the slow pantry dashboa… ◇ Triage      ▮▯▯ Low               │"
-"│  ENG-53 Bump the minimum supported iOS … ◐ In Progress ··· None    5 Cycle 7 │"
+"│  ENG-53 Bump the minimum supported iOS…  ◐ In Progress ··· None    5 Cycle 7 │"
 "│  ENG-61 Add contract tests for the reci… ◐ In Progress ▮▯▯ Low     2 Cycle 7 │"
-"│  ENG-60 Improve error messages on sync … ◐ In Progress ··· None    5 Cycle 7 │"
+"│  ENG-60 Improve error messages on sync…  ◐ In Progress ··· None    5 Cycle 7 │"
 "│  ENG-59 Show who last moved a wheel      ◌ Backlog     ▮▯▯ Low     2         │"
 "│  ENG-51 Add a dry-run mode to the impor… ◐ In Progress ▮▮▯ Medium  2 Cycle 7 │"
 "└──────────────────────────────────────────────────────────────────────────────┘"

@@ -2,7 +2,7 @@
 source: tests/messages.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] │ [3] │ [4] │ [5]                             sync failing "
+" [1] My Issues │ [2] │ [3] │ [4] │ [5] │ [6]                       sync failing "
 "┌My Issues─────────────────────────────────────────────────────────────────────┐"
 "│┌ Messages ──────────────────────────────────────────────────────────────────┐│"
 "││ 09:02:00  rate limited · load the teams you administer                     ││"

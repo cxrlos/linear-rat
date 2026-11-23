@@ -363,3 +363,33 @@ fn every_whole_issue_projection_asks_for_every_stored_field() {
     }
     assert!(missing.is_empty(), "{missing:#?}");
 }
+
+/// Every document that reads a comment (the ones asking for a comment's
+/// `body` beside `createdAt`) asks for the fields the store keeps on it, so
+/// a reply, a resolve or a reaction never vanishes when a comment is read
+/// again.
+#[test]
+fn every_comment_projection_asks_for_every_stored_field() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/linear/graphql");
+    let mut missing = Vec::new();
+    let mut checked = 0;
+    for entry in fs::read_dir(&dir).unwrap() {
+        let path = entry.unwrap().path();
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        if !name.starts_with("comment") && name != "issue_comments.graphql" {
+            continue;
+        }
+        let text = fs::read_to_string(&path).unwrap();
+        if !text.contains("body") {
+            continue;
+        }
+        checked += 1;
+        for field in ["parentId", "resolvedAt", "editedAt", "reactions {"] {
+            if !text.contains(field) {
+                missing.push(format!("{name}: {field}"));
+            }
+        }
+    }
+    assert!(checked >= 3, "only {checked} comment documents found");
+    assert!(missing.is_empty(), "{missing:#?}");
+}

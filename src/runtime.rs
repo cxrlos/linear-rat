@@ -14,15 +14,19 @@ use futures_util::stream::FuturesUnordered;
 use futures_util::{Stream, StreamExt};
 use jiff::{SignedDuration, Timestamp};
 use ratatui::backend::Backend;
+use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::time::{Instant, MissedTickBehavior};
 
 use crate::app::{
-    App, Effect, Event, Failure, Lifecycle, LifecycleWrite, LoadError, NewComment, NewIssue,
-    RelationWrite, SEARCH_PAUSE, SyncFailure, TeamPoll, Write,
+    App, CommentChange, CommentWrite, Effect, Event, Failure, InboxChange, InboxWrite, Lifecycle,
+    LifecycleWrite, LoadError, NewComment, NewIssue, RelationWrite, SEARCH_PAUSE, SyncFailure,
+    TeamPoll, Write,
 };
+use crate::app::{Attaching, NewAttachment};
+use crate::app::{ReactionChange, ReactionWrite};
 use crate::linear::{
-    AnalyticsWindow, ClientError, ErrorKind, LinearClient, LiveEvent, RelationCreate, SearchQuery,
-    Urgency,
+    AnalyticsWindow, ClientError, ErrorKind, LinearClient, LiveEvent, NotificationUpdate, Patch,
+    RelationCreate, SearchQuery, Urgency,
 };
 use crate::release::ReleaseCheck;
 use crate::snapshot::SnapshotCache;
@@ -52,6 +56,9 @@ struct Reach<'a, C> {
     snapshots: Option<&'a SnapshotCache>,
     releases: Option<&'a ReleaseCheck>,
     live: Cell<Option<Live<'a>>>,
+    /// Where uploads report their progress, as events the loop feeds in
+    /// as they come.
+    progress: UnboundedSender<Event>,
 }
 
 /// Runs until the app asks to quit, `shutdown` resolves, or terminal input
@@ -105,13 +112,15 @@ where
     S: Future<Output = ()>,
     J: Stream<Item = JobControl>,
 {
+    let (progress, progressed) = mpsc::unbounded_channel();
     let reach = Reach {
         client,
         snapshots,
         releases,
         live: Cell::new(None),
+        progress,
     };
-    let result = run_loop(app, &reach, input, shutdown, job_control).await;
+    let result = run_loop(app, &reach, progressed, input, shutdown, job_control).await;
     save_snapshot(app, &reach);
     result
 }
@@ -119,6 +128,7 @@ where
 async fn run_loop<B, C, I, S, J>(
     app: &mut App<B>,
     reach: &Reach<'_, C>,
+    mut progressed: UnboundedReceiver<Event>,
     mut input: I,
     shutdown: S,
     job_control: J,
@@ -154,6 +164,7 @@ where
             }
             Some(event) = in_flight.next(), if !in_flight.is_empty() => Some(event),
             Some(event) = next_live(&mut live) => Some(Event::Live(event)),
+            Some(event) = progressed.recv() => Some(event),
             Some(signal) = job_control.next() => on_job_control(app, signal, &mut System)?,
             terminal_event = input.next() => match terminal_event {
                 Some(event) => from_terminal(event.context("reading terminal input")?),
@@ -584,12 +595,37 @@ where
             in_flight.push(Box::pin(create_comment(reach.client, comment)));
             Ok(())
         }
+        Effect::ChangeComment(write) => {
+            in_flight.push(Box::pin(change_comment(reach.client, write)));
+            Ok(())
+        }
+        Effect::React(write) => {
+            in_flight.push(Box::pin(react(reach.client, write)));
+            Ok(())
+        }
         Effect::CreateIssue(issue) => {
             in_flight.push(Box::pin(create_issue(reach.client, issue)));
             Ok(())
         }
         Effect::UpdateIssueText { write, seen, text } => {
             in_flight.push(Box::pin(update_issue_text(reach.client, write, seen, text)));
+            Ok(())
+        }
+        Effect::Attach(attachment) => {
+            let progress = reach.progress.clone();
+            in_flight.push(Box::pin(attach(reach.client, attachment, progress)));
+            Ok(())
+        }
+        Effect::LoadNotifications { since } => {
+            in_flight.push(Box::pin(load_notifications(reach.client, since)));
+            Ok(())
+        }
+        Effect::WriteInbox(write) => {
+            in_flight.push(Box::pin(write_inbox(reach.client, write)));
+            Ok(())
+        }
+        Effect::ArchiveNotifications(writes) => {
+            in_flight.push(Box::pin(archive_notifications(reach.client, writes)));
             Ok(())
         }
     };
@@ -774,6 +810,97 @@ async fn change_lifecycle<C: LinearClient>(client: Option<&C>, write: LifecycleW
     Event::LifecycleChanged { write, result }
 }
 
+async fn load_notifications<C: LinearClient>(
+    client: Option<&C>,
+    since: Option<Timestamp>,
+) -> Event {
+    let result = ask(
+        client,
+        "load the Inbox",
+        "could not load the Inbox",
+        |client| client.notifications(since),
+    )
+    .await;
+    if let Ok(loaded) = &result {
+        tracing::debug!(
+            notifications = loaded.notifications.len(),
+            delta = since.is_some(),
+            "loaded notifications"
+        );
+    }
+    Event::NotificationsLoaded { since, result }
+}
+
+/// Sends the one mutation of `write`, as the viewer waits on it, or in the
+/// background when `urgency` says so.
+async fn send_inbox_write<C: LinearClient>(
+    client: Option<&C>,
+    write: &InboxWrite,
+    urgency: Urgency,
+) -> Result<(), Failure> {
+    let action = format!(
+        "{} a notification on {}",
+        write.change.verb(),
+        write.identifier
+    );
+    let Some(client) = client else {
+        return Err(no_client(&action));
+    };
+    let id = write.notification_id.as_str();
+    let result = match write.change {
+        InboxChange::Read(at) => {
+            let update = NotificationUpdate {
+                read_at: Patch::Set(at),
+                ..NotificationUpdate::default()
+            };
+            client.update_notification(id, &update).await
+        }
+        InboxChange::Unread => {
+            let update = NotificationUpdate {
+                read_at: Patch::Clear,
+                ..NotificationUpdate::default()
+            };
+            client.update_notification(id, &update).await
+        }
+        InboxChange::Snooze(until) => {
+            let update = NotificationUpdate {
+                snoozed_until_at: Some(until),
+                ..NotificationUpdate::default()
+            };
+            client.update_notification(id, &update).await
+        }
+        InboxChange::ReadIssue(at) => {
+            client
+                .mark_issue_notifications_read(&write.issue_id, at)
+                .await
+        }
+        InboxChange::Archive => client.archive_notification(id, urgency).await,
+    };
+    result.map_err(|error| {
+        tracing::warn!(%error, change = ?write.change, "Linear rejected an inbox write");
+        Failure::from_client(&action, &error)
+    })
+}
+
+async fn write_inbox<C: LinearClient>(client: Option<&C>, write: InboxWrite) -> Event {
+    let result = send_inbox_write(client, &write, Urgency::Urgent).await;
+    Event::InboxWritten { write, result }
+}
+
+/// Archives each of `writes` in turn, as background requests, so the
+/// governor spaces them when the budget runs low.
+async fn archive_notifications<C: LinearClient>(
+    client: Option<&C>,
+    writes: Vec<InboxWrite>,
+) -> Event {
+    let mut answers = Vec::with_capacity(writes.len());
+    for write in writes {
+        let result = send_inbox_write(client, &write, Urgency::Background).await;
+        answers.push((write, result));
+    }
+    Event::InboxBatchWritten(answers)
+}
+
 /// Reads the issue's `updatedAt` again and sends `write` only if it is still
 /// `seen`. If it moved, `text` is kept in a file and the error names it.
 /// Linear has no compare-and-set, so an edit landing between the read and
@@ -860,7 +987,11 @@ async fn create_comment<C: LinearClient>(client: Option<&C>, comment: NewComment
     let action = format!("comment on {}", comment.identifier);
     let result = match client {
         Some(client) => client
-            .create_comment(&comment.issue_id, &comment.body)
+            .create_comment(
+                &comment.issue_id,
+                &comment.body,
+                comment.parent_id.as_deref(),
+            )
             .await
             .map_err(|error| Failure::from_client(&action, &error)),
         None => Err(no_client(&action)),
@@ -872,6 +1003,95 @@ async fn create_comment<C: LinearClient>(client: Option<&C>, comment: NewComment
         }
     }
     Event::CommentCreated { comment, result }
+}
+
+/// Uploads and attaches a file, sending its progress to `progress`, or
+/// attaches a link.
+async fn attach<C: LinearClient>(
+    client: Option<&C>,
+    attachment: NewAttachment,
+    progress: UnboundedSender<Event>,
+) -> Event {
+    let action = attachment.action();
+    let result = match client {
+        Some(client) => {
+            let id = attachment.issue_id.as_str();
+            match &attachment.what {
+                Attaching::File { upload, file } => {
+                    let upload = *upload;
+                    let report = move |sent| {
+                        // Closed only once the loop has ended.
+                        let _ = progress.send(Event::UploadProgress { upload, sent });
+                    };
+                    client.attach_file(id, file, report).await
+                }
+                Attaching::Link { url, title } => {
+                    client.attach_link(id, url, title.as_deref()).await
+                }
+            }
+            .map_err(|error| Failure::from_client(&action, &error))
+        }
+        None => Err(no_client(&action)),
+    };
+    match &result {
+        Ok(_) => tracing::info!(issue = %attachment.identifier, "Linear stored an attachment"),
+        Err(error) => {
+            tracing::warn!(issue = %attachment.identifier, %error, "Linear did not attach");
+        }
+    }
+    Event::Attached { attachment, result }
+}
+
+async fn change_comment<C: LinearClient>(client: Option<&C>, write: CommentWrite) -> Event {
+    let action = match write.change {
+        CommentChange::Edit(_) => "edit a comment",
+        CommentChange::Delete => "delete a comment",
+        CommentChange::Resolve => "resolve a thread",
+        CommentChange::Unresolve => "unresolve a thread",
+    };
+    let action = format!("{action} on {}", write.identifier);
+    let id = write.comment_id.as_str();
+    let result = match client {
+        Some(client) => match &write.change {
+            CommentChange::Edit(body) => client.update_comment(id, body).await,
+            CommentChange::Delete => client.delete_comment(id).await,
+            CommentChange::Resolve => client.resolve_comment(id, true).await,
+            CommentChange::Unresolve => client.resolve_comment(id, false).await,
+        }
+        .map_err(|error| Failure::from_client(&action, &error)),
+        None => Err(no_client(&action)),
+    };
+    match &result {
+        Ok(()) => tracing::info!(issue = %write.identifier, "Linear changed a comment"),
+        Err(error) => {
+            tracing::warn!(issue = %write.identifier, %error, "Linear did not change a comment");
+        }
+    }
+    Event::CommentChanged { write, result }
+}
+
+async fn react<C: LinearClient>(client: Option<&C>, write: ReactionWrite) -> Event {
+    let action = format!("react on {}", write.identifier);
+    let result = match client {
+        Some(client) => match &write.change {
+            ReactionChange::Add(stand_in) => client
+                .add_reaction(&write.target, &stand_in.emoji)
+                .await
+                .map(Some),
+            ReactionChange::Remove(reaction) => {
+                client.remove_reaction(&reaction.id).await.map(|()| None)
+            }
+        }
+        .map_err(|error| Failure::from_client(&action, &error)),
+        None => Err(no_client(&action)),
+    };
+    match &result {
+        Ok(_) => tracing::info!(issue = %write.identifier, "Linear changed a reaction"),
+        Err(error) => {
+            tracing::warn!(issue = %write.identifier, %error, "Linear did not change a reaction");
+        }
+    }
+    Event::Reacted { write, result }
 }
 
 async fn create_issue<C: LinearClient>(client: Option<&C>, issue: NewIssue) -> Event {
@@ -1072,6 +1292,7 @@ mod tests {
             snapshots: None,
             releases: None,
             live: Cell::new(None),
+            progress: mpsc::unbounded_channel().0,
         };
         execute(app, effect, &reach, &mut in_flight, outside).unwrap()
     }
@@ -1132,6 +1353,7 @@ mod tests {
                 snapshots: None,
                 releases: None,
                 live: Cell::new(None),
+                progress: mpsc::unbounded_channel().0,
             };
             for effect in [Effect::LoadMyIssues, Effect::Poll(Vec::new())] {
                 let flow = execute(
@@ -1159,6 +1381,7 @@ mod tests {
             snapshots: None,
             releases: None,
             live: Cell::new(None),
+            progress: mpsc::unbounded_channel().0,
         };
         let flow = execute(
             &mut app,
@@ -1193,6 +1416,7 @@ mod tests {
             snapshots: None,
             releases: None,
             live: Cell::new(None),
+            progress: mpsc::unbounded_channel().0,
         };
         let started = Instant::now();
 
@@ -1246,6 +1470,7 @@ mod tests {
             snapshots: None,
             releases: None,
             live: Cell::new(None),
+            progress: mpsc::unbounded_channel().0,
         };
         let frames = app.frames_drawn();
 
@@ -1274,6 +1499,7 @@ mod tests {
             snapshots: None,
             releases: None,
             live: Cell::new(None),
+            progress: mpsc::unbounded_channel().0,
         };
 
         let flow = execute(&mut app, effect, &reach, &mut in_flight, &mut outside).unwrap();
@@ -1455,6 +1681,108 @@ mod tests {
                 "suspend lrat",
                 "could not suspend lrat"
             )))
+        );
+    }
+
+    /// Starts attaching the crate's `Cargo.toml` to the focused issue, as
+    /// Shift-F, its path and Enter do, and hands back the attach asked for.
+    fn start_upload(app: &mut App<TestBackend>) -> NewAttachment {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+        let key = |code| Event::Key(KeyEvent::new(code, KeyModifiers::NONE));
+        let mut effects = Vec::new();
+        for c in "FCargo.toml".chars() {
+            effects.extend(app.handle(key(KeyCode::Char(c))).unwrap());
+        }
+        effects.extend(app.handle(key(KeyCode::Enter)).unwrap());
+        match effects.as_slice() {
+            [Effect::Attach(attachment)] => attachment.clone(),
+            other => panic!("expected one attachment, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn an_attach_joins_the_requests_in_flight_and_reports_its_progress() {
+        let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+        let attachment = start_upload(&mut app);
+        let Attaching::File { upload, file } = &attachment.what else {
+            panic!("{attachment:?}");
+        };
+        let (progress, mut progressed) = mpsc::unbounded_channel();
+        let mut in_flight = FuturesUnordered::new();
+        let reach = Reach {
+            client: Some(&FakeClient),
+            snapshots: None,
+            releases: None,
+            live: Cell::new(None),
+            progress,
+        };
+
+        let flow = execute(
+            &mut app,
+            Effect::Attach(attachment.clone()),
+            &reach,
+            &mut in_flight,
+            &mut Fake::default(),
+        )
+        .unwrap();
+        let event = in_flight.next().await.unwrap();
+
+        assert_eq!(flow, ControlFlow::Continue(()));
+        let Event::Attached {
+            attachment: answered,
+            result,
+        } = event
+        else {
+            panic!("{event:?}");
+        };
+        assert_eq!(answered, attachment);
+        assert_eq!(result.unwrap().title, "Cargo.toml");
+        assert_eq!(
+            progressed.try_recv().unwrap(),
+            Event::UploadProgress {
+                upload: *upload,
+                sent: file.size,
+            }
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn upload_progress_reaches_the_indicator_while_the_loop_waits() {
+        let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+        let attachment = start_upload(&mut app);
+        let Attaching::File { upload, file } = &attachment.what else {
+            panic!("{attachment:?}");
+        };
+        let (progress, progressed) = mpsc::unbounded_channel();
+        progress
+            .send(Event::UploadProgress {
+                upload: *upload,
+                sent: file.size * 42 / 100 + 1,
+            })
+            .unwrap();
+        let reach = Reach {
+            client: Some(&FakeClient),
+            snapshots: None,
+            releases: None,
+            live: Cell::new(None),
+            progress,
+        };
+
+        let running = run_loop(
+            &mut app,
+            &reach,
+            progressed,
+            futures_util::stream::pending(),
+            std::future::pending(),
+            futures_util::stream::pending(),
+        );
+        let stopped = tokio::time::timeout(Duration::from_millis(200), running).await;
+
+        assert!(stopped.is_err(), "the loop stopped: {stopped:?}");
+        assert!(
+            screen(&app).contains("uploading Cargo.toml 42%"),
+            "{}",
+            screen(&app)
         );
     }
 }

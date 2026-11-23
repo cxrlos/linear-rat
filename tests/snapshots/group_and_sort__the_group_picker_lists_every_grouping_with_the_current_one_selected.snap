@@ -2,27 +2,27 @@
 source: tests/group_and_sort.rs
 expression: "screen(&app).join(\"\\n\")"
 ---
- [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects                                            
+ [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects │ [6] Inbox                                
 ┏My Issues━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓┌DES-34────────────────────────────────────────┐
 ┃◐ Started (9)                                                         ┃│Design QA for the autumn release              │
 ┃▸ DES-34 Design QA for the autum… ◐ In Progress ▮▮▮ High    3 Cycle 7 ┃│                                              │
 ┃  ENG-51 Add a dry-run mode to t… ◐ In Progress ▮▮▯ Medium  2 Cycle 7 ┃│State     ◐ In Progress                       │
 ┃  OPS-37 Clean up unused API keys ◐ In Review   ▮▮▯ Medium    Cycle 7 ┃│Priority  ▮▮▮ High                            │
-┃  ENG-61 Add contract tests for … ◐ In Progress ▮▯▯ Low     2 Cycle 7 ┃│Estimate  3                                   │
-┃  OPS-36 Plan the office cheese … ◐ In Review   ▮▯▯ Low       Cycle 7 ┃│                                              │
-┃  ENG-60 Improve error messages … ◐ In Progress ··· None    5 Cycle 7 ┃│Bring two options to the critique on Thursday.│
+┃  ENG-61 Add contract tests for…  ◐ In Progress ▮▯▯ Low     2 Cycle 7 ┃│Estimate  3                                   │
+┃  OPS-36 Plan the office cheese…  ◐ In Review   ▮▯▯ Low       Cycle 7 ┃│                                              │
+┃  ENG-60 Improve error messages…  ◐ In Progress ··· None    5 Cycle 7 ┃│Bring two options to the critique on Thursday.│
 ┃  ENG-22 Store the last sync wat… ◐ ┌ Group by ─────────────────────────────────┐                                     │
-┃  OPS-15 Tag cloud resources by … ◐ │ > type to filter                          │                                     │
+┃  OPS-15 Tag cloud resources by…  ◐ │ > type to filter                          │                                     │
 ┃  DES-12 Motion guidelines for l… ◐ │ 1 workflow state ✓                        │                                     │
 ┃○ Unstarted (10)                    │ 2 priority                                │                                     │
 ┃  DES-40 Color-blind safe workfl… ○ │ 3 project                                 │                                     │
-┃  ENG-57 Throttle sensor writes … ○ │ 4 project milestone                       │                                     │
+┃  ENG-57 Throttle sensor writes…  ○ │ 4 project milestone                       │                                     │
 ┃  OPS-38 Add synthetic checks fo… ○ │ 5 cycle                                   │                                     │
 ┃  DES-31 Review copy for permiss… ○ │ 6 assignee                                │ts                                   │
 ┃  ENG-65 Rotate refresh tokens o… ○ │ 7 none                                    │                                     │
-┃  DES-16 Accessible focus rings … ○ └ Down/Up select  Enter choose  Esc close ──┘                                     │
+┃  DES-16 Accessible focus rings…  ○ └ Down/Up select  Enter choose  Esc close ──┘                                     │
 ┃  ENG-56 Notification settings r… ○ Todo        ▮▮▮ High    2         ┃│Details                                       │
-┃  ENG-6  Migrate burrow storage … ○ Todo        ▮▮▯ Medium  3         ┃│Team      Design                              │
+┃  ENG-6  Migrate burrow storage…  ○ Todo        ▮▮▯ Medium  3         ┃│Team      Design                              │
 ┃  OPS-26 Archive the old marketi… ○ Todo        ▮▮▯ Medium            ┃│Project   None                                │
 ┃  OPS-20 Replace the warehouse l… ○ Todo        ▮▯▯ Low               ┃│Milestone None                                │
 ┃◌ Backlog (7)                                                         ┃│Cycle     Cycle 7 (active)                    │

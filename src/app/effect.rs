@@ -1,6 +1,11 @@
 use jiff::Timestamp;
 
-use super::{LifecycleWrite, NewComment, NewIssue, RelationWrite, TeamPoll, Write, Writing};
+use super::ReactionWrite;
+
+use super::{
+    CommentWrite, InboxWrite, LifecycleWrite, NewAttachment, NewComment, NewIssue, RelationWrite,
+    TeamPoll, Write, Writing,
+};
 use crate::linear::{AnalyticsWindow, SearchQuery, TeamQuery, Urgency};
 use crate::release::Record;
 
@@ -149,9 +154,35 @@ pub enum Effect {
         seen: Timestamp,
         text: String,
     },
+    /// Send the one mutation that edits, deletes, resolves or unresolves a
+    /// comment; the result comes back as
+    /// [`Event::CommentChanged`](super::Event::CommentChanged).
+    ChangeComment(CommentWrite),
+    /// Add or remove one of the viewer's reactions; the result comes back
+    /// as [`Event::Reacted`](super::Event::Reacted).
+    React(ReactionWrite),
     /// Ask GitHub for the latest release; the answer comes back as
     /// [`Event::ReleaseChecked`](super::Event::ReleaseChecked).
     CheckRelease,
     /// Write what the release checks found to the release cache.
     SaveRelease(Record),
+    /// Upload a file and attach it, reporting the upload's progress as
+    /// [`Event::UploadProgress`](super::Event::UploadProgress), or attach a
+    /// link; the result comes back as
+    /// [`Event::Attached`](super::Event::Attached).
+    Attach(NewAttachment),
+
+    /// Load the viewer's notifications: the newest ones with `since`
+    /// `None`, else those updated after it; the result comes back as
+    /// [`Event::NotificationsLoaded`](super::Event::NotificationsLoaded).
+    LoadNotifications {
+        since: Option<Timestamp>,
+    },
+    /// Send the one mutation of an inbox write; the result comes back as
+    /// [`Event::InboxWritten`](super::Event::InboxWritten).
+    WriteInbox(InboxWrite),
+    /// Archive these notifications one after another, in the background so
+    /// the governor spaces them; the results come back together as
+    /// [`Event::InboxBatchWritten`](super::Event::InboxBatchWritten).
+    ArchiveNotifications(Vec<InboxWrite>),
 }

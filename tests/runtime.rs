@@ -15,9 +15,9 @@ use linear_rat::linear::model::{
 };
 use linear_rat::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, Diagnostics, FakeClient,
-    IssueDetail, IssueLink, IssueUpdate, LinearClient, LiveEvent, ProjectList, RelationCreate,
-    SearchQuery, SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions,
-    TeamQuery, Urgency, demo,
+    IssueDetail, IssueLink, IssueUpdate, LinearClient, LiveEvent, NotificationUpdate,
+    NotificationsLoaded, Patch, ProjectList, RelationCreate, SearchQuery, SearchResults,
+    TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery, Urgency, demo,
 };
 use linear_rat::runtime;
 use linear_rat::snapshot::SnapshotCache;
@@ -199,7 +199,32 @@ impl LinearClient for RejectingClient {
         &self,
         _: &str,
         _: &str,
+        _: Option<&str>,
     ) -> Result<linear_rat::linear::PostedComment, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn update_comment(&self, _: &str, _: &str) -> Result<(), ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn delete_comment(&self, _: &str) -> Result<(), ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn resolve_comment(&self, _: &str, _: bool) -> Result<(), ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn add_reaction(
+        &self,
+        _: &linear_rat::linear::ReactionTarget,
+        _: &str,
+    ) -> Result<linear_rat::linear::model::Reaction, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn remove_reaction(&self, _: &str) -> Result<(), ClientError> {
         Err(ClientError::InvalidKey)
     }
 
@@ -239,6 +264,24 @@ impl LinearClient for RejectingClient {
     }
 
     async fn issue_updated_at(&self, _: &str) -> Result<Timestamp, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn attach_file(
+        &self,
+        _: &str,
+        _: &linear_rat::linear::FileUpload,
+        _: impl FnMut(u64) + Send + Sync + 'static,
+    ) -> Result<linear_rat::linear::model::Attachment, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn attach_link(
+        &self,
+        _: &str,
+        _: &str,
+        _: Option<&str>,
+    ) -> Result<linear_rat::linear::model::Attachment, ClientError> {
         Err(ClientError::InvalidKey)
     }
 }
@@ -399,7 +442,32 @@ async fn q_quits_while_the_load_is_still_in_flight() {
             &self,
             _: &str,
             _: &str,
+            _: Option<&str>,
         ) -> Result<linear_rat::linear::PostedComment, ClientError> {
+            future::pending().await
+        }
+
+        async fn update_comment(&self, _: &str, _: &str) -> Result<(), ClientError> {
+            future::pending().await
+        }
+
+        async fn delete_comment(&self, _: &str) -> Result<(), ClientError> {
+            future::pending().await
+        }
+
+        async fn resolve_comment(&self, _: &str, _: bool) -> Result<(), ClientError> {
+            future::pending().await
+        }
+
+        async fn add_reaction(
+            &self,
+            _: &linear_rat::linear::ReactionTarget,
+            _: &str,
+        ) -> Result<linear_rat::linear::model::Reaction, ClientError> {
+            future::pending().await
+        }
+
+        async fn remove_reaction(&self, _: &str) -> Result<(), ClientError> {
             future::pending().await
         }
 
@@ -441,6 +509,24 @@ async fn q_quits_while_the_load_is_still_in_flight() {
         async fn issue_updated_at(&self, _: &str) -> Result<Timestamp, ClientError> {
             future::pending().await
         }
+
+        async fn attach_file(
+            &self,
+            _: &str,
+            _: &linear_rat::linear::FileUpload,
+            _: impl FnMut(u64) + Send + Sync + 'static,
+        ) -> Result<linear_rat::linear::model::Attachment, ClientError> {
+            future::pending().await
+        }
+
+        async fn attach_link(
+            &self,
+            _: &str,
+            _: &str,
+            _: Option<&str>,
+        ) -> Result<linear_rat::linear::model::Attachment, ClientError> {
+            future::pending().await
+        }
     }
     let mut app = App::new(TestBackend::new(80, 24), State::loading(None)).unwrap();
 
@@ -466,6 +552,16 @@ struct CountingClient {
     updates: Mutex<Vec<IssueUpdate>>,
     live: Vec<LiveEvent>,
     went_live: Mutex<Vec<Vec<String>>>,
+    /// Each inbox mutation sent, as `archive <id> <urgency>`.
+    inbox: Mutex<Vec<String>>,
+}
+
+impl CountingClient {
+    fn record_inbox(&self, call: String) {
+        if let Ok(mut inbox) = self.inbox.lock() {
+            inbox.push(call);
+        }
+    }
 }
 
 impl LinearClient for CountingClient {
@@ -590,8 +686,33 @@ impl LinearClient for CountingClient {
         &self,
         issue_id: &str,
         body: &str,
+        parent_id: Option<&str>,
     ) -> Result<linear_rat::linear::PostedComment, ClientError> {
-        FakeClient.create_comment(issue_id, body).await
+        FakeClient.create_comment(issue_id, body, parent_id).await
+    }
+
+    async fn update_comment(&self, id: &str, body: &str) -> Result<(), ClientError> {
+        FakeClient.update_comment(id, body).await
+    }
+
+    async fn delete_comment(&self, id: &str) -> Result<(), ClientError> {
+        FakeClient.delete_comment(id).await
+    }
+
+    async fn resolve_comment(&self, id: &str, resolved: bool) -> Result<(), ClientError> {
+        FakeClient.resolve_comment(id, resolved).await
+    }
+
+    async fn add_reaction(
+        &self,
+        target: &linear_rat::linear::ReactionTarget,
+        emoji: &str,
+    ) -> Result<linear_rat::linear::model::Reaction, ClientError> {
+        FakeClient.add_reaction(target, emoji).await
+    }
+
+    async fn remove_reaction(&self, id: &str) -> Result<(), ClientError> {
+        FakeClient.remove_reaction(id).await
     }
 
     async fn create_issue(
@@ -635,6 +756,65 @@ impl LinearClient for CountingClient {
 
     async fn issue_updated_at(&self, issue_id: &str) -> Result<Timestamp, ClientError> {
         FakeClient.issue_updated_at(issue_id).await
+    }
+
+    async fn attach_file(
+        &self,
+        _: &str,
+        _: &linear_rat::linear::FileUpload,
+        _: impl FnMut(u64) + Send + Sync + 'static,
+    ) -> Result<linear_rat::linear::model::Attachment, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn attach_link(
+        &self,
+        _: &str,
+        _: &str,
+        _: Option<&str>,
+    ) -> Result<linear_rat::linear::model::Attachment, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn notifications(
+        &self,
+        since: Option<Timestamp>,
+    ) -> Result<NotificationsLoaded, ClientError> {
+        FakeClient.notifications(since).await
+    }
+
+    async fn update_notification(
+        &self,
+        id: &str,
+        update: &NotificationUpdate,
+    ) -> Result<(), ClientError> {
+        let read = match update.read_at {
+            Patch::Unchanged => String::new(),
+            Patch::Set(_) => " read".to_owned(),
+            Patch::Clear => " unread".to_owned(),
+        };
+        let snooze = update
+            .snoozed_until_at
+            .map(|until| format!(" snooze {until}"))
+            .unwrap_or_default();
+        self.record_inbox(format!("update {id}{read}{snooze}"));
+        FakeClient.update_notification(id, update).await
+    }
+
+    async fn archive_notification(&self, id: &str, urgency: Urgency) -> Result<(), ClientError> {
+        self.record_inbox(format!("archive {id} {urgency:?}"));
+        FakeClient.archive_notification(id, urgency).await
+    }
+
+    async fn mark_issue_notifications_read(
+        &self,
+        issue_id: &str,
+        read_at: Timestamp,
+    ) -> Result<(), ClientError> {
+        self.record_inbox(format!("read issue {issue_id}"));
+        FakeClient
+            .mark_issue_notifications_read(issue_id, read_at)
+            .await
     }
 }
 
@@ -758,7 +938,11 @@ async fn quitting_saves_the_snapshot_the_next_launch_paints_from() {
 
     assert!(matches!(quit, Ok(Ok(()))), "{quit:?}");
     let saved = cache.load().unwrap();
-    assert_eq!(saved.store, app.state().store);
+    // What the session keeps to itself, as the Inbox, is not saved.
+    assert_eq!(
+        serde_json::to_value(&saved.store).unwrap(),
+        serde_json::to_value(&app.state().store).unwrap()
+    );
     assert!(saved.store.issues().count() > 0);
     assert!(saved.synced_at.is_some());
 }
@@ -892,4 +1076,120 @@ async fn a_rejected_key_names_the_team_load_that_failed() {
         shown.contains("│could not load your teams: Linear rejected the API key"),
         "{shown}"
     );
+}
+
+fn enter() -> io::Result<TerminalEvent> {
+    Ok(TerminalEvent::Key(KeyEvent::new(
+        KeyCode::Enter,
+        KeyModifiers::NONE,
+    )))
+}
+
+/// Opens the demo Inbox, types `keys` into the runtime against a recording
+/// client, and hands back the notification focused before the keys, the
+/// inbox mutations the client was sent and the app's time when they were.
+/// The keys wait for the runtime's first tick, which sets that time; left
+/// to race it, a key could act on the demo's time instead.
+// clippy's allow-unwrap-in-tests does not cover helpers outside #[test] functions.
+#[allow(clippy::unwrap_used)]
+async fn sent_from_the_inbox(
+    keys: Vec<io::Result<TerminalEvent>>,
+) -> (
+    linear_rat::linear::model::Notification,
+    Vec<String>,
+    Timestamp,
+) {
+    let client = CountingClient::default();
+    let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+    app.handle(Event::NotificationsLoaded {
+        since: None,
+        result: Ok(FakeClient.notifications(None).await.unwrap()),
+    })
+    .unwrap();
+    app.handle(Event::Key(KeyEvent::new(
+        KeyCode::Char('6'),
+        KeyModifiers::NONE,
+    )))
+    .unwrap();
+    let focused = linear_rat::app::focused_notification(app.state())
+        .unwrap()
+        .clone();
+
+    let mut keys = Some(keys);
+    let after_the_first_tick = Box::pin(
+        stream::once(tokio::time::sleep(Duration::from_millis(1)))
+            .flat_map(move |()| stream::iter(keys.take().unwrap_or_default()))
+            .chain(stream::pending()),
+    );
+    let running = runtime::run(
+        &mut app,
+        Some(&client),
+        None,
+        after_the_first_tick,
+        future::pending(),
+    );
+    let stopped = tokio::time::timeout(Duration::from_millis(200), running).await;
+
+    assert!(stopped.is_err(), "the runtime stopped: {stopped:?}");
+    let sent = client.inbox.lock().unwrap().clone();
+    (focused, sent, app.state().now())
+}
+
+#[tokio::test(start_paused = true)]
+async fn m_sends_the_notification_read_and_again_unread() {
+    let (focused, sent, _) = sent_from_the_inbox(vec![press('m'), press('m')]).await;
+
+    assert_eq!(
+        sent,
+        [
+            format!("update {} read", focused.id),
+            format!("update {} unread", focused.id)
+        ]
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn shift_m_sends_the_issue_to_mark_read() {
+    let (focused, sent, _) = sent_from_the_inbox(vec![press('M')]).await;
+
+    assert_eq!(sent, [format!("read issue {}", focused.issue_id)]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn z_sends_the_snooze_until_the_preset() {
+    let (focused, sent, now) = sent_from_the_inbox(vec![press('z'), enter()]).await;
+
+    let until = now + jiff::SignedDuration::from_hours(1);
+    assert_eq!(sent, [format!("update {} snooze {until}", focused.id)]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn shift_a_archives_the_notification_as_the_viewer_waits() {
+    let (focused, sent, _) = sent_from_the_inbox(vec![press('A')]).await;
+
+    assert_eq!(sent, [format!("archive {} Urgent", focused.id)]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn archive_all_read_sends_each_archive_in_the_background() {
+    let read: Vec<String> = FakeClient
+        .notifications(None)
+        .await
+        .unwrap()
+        .notifications
+        .into_iter()
+        .filter(|n| n.read_at.is_some())
+        .map(|n| format!("archive {} Background", n.id))
+        .collect();
+    let mut keys = vec![press(':')];
+    keys.extend("archive all read".chars().map(press));
+    keys.push(enter());
+
+    let (_, mut sent, _) = sent_from_the_inbox(keys).await;
+
+    sent.sort();
+    let mut read = read;
+    read.sort();
+    assert!(!read.is_empty());
+    assert_eq!(sent, read);
 }

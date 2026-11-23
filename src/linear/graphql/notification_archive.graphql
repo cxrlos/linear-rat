@@ -1,0 +1,7 @@
+# budget: 5
+# Archives one notification.
+mutation NotificationArchive($id: String!) {
+  notificationArchive(id: $id) {
+    success
+  }
+}

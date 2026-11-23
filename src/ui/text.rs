@@ -1,6 +1,7 @@
 //! Measuring and cutting text for the terminal. Every width here is in
 //! terminal cells, so wide characters (CJK, most emoji) count as two. Text
-//! cut to fit ends in `…`, which counts toward the width it fits.
+//! cut to fit ends in `…`, which counts toward the width it fits, with the
+//! whitespace before the cut dropped.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -16,7 +17,8 @@ pub fn width(text: &str) -> usize {
 }
 
 /// `text` as it fits in `room` cells: whole when it fits, otherwise cut
-/// and ending in `…`, never wider than `room`.
+/// and ending in `…` after the last non-blank character, never wider than
+/// `room`.
 pub fn fit(text: &str, room: usize) -> String {
     if width(text) <= room {
         return text.to_owned();
@@ -25,6 +27,7 @@ pub fn fit(text: &str, room: usize) -> String {
         return String::new();
     }
     let mut cut = take(text, room - 1);
+    cut.truncate(cut.trim_end().len());
     cut.push(ELLIPSIS);
     cut
 }
@@ -55,6 +58,7 @@ pub fn fit_line(line: Line<'_>, room: usize) -> Line<'_> {
         if !cut.is_empty() {
             kept.push(Span::styled(cut, span.style));
         }
+        trim_end(&mut kept);
         if room > 0 {
             kept.push(Span::styled(ELLIPSIS.to_string(), span.style));
         }
@@ -70,6 +74,20 @@ pub fn fit_line(line: Line<'_>, room: usize) -> Line<'_> {
 /// Draws `line` on the first row of `area`, cut to its width with `…`.
 pub fn draw<'a>(frame: &mut Frame, line: impl Into<Line<'a>>, area: Rect) {
     frame.render_widget(fit_line(line.into(), usize::from(area.width)), area);
+}
+
+/// Drops the whitespace that ends `spans`, so a cut reads "1…", not "1 …".
+fn trim_end(spans: &mut Vec<Span<'_>>) {
+    while let Some(last) = spans.last_mut() {
+        let kept = last.content.trim_end().len();
+        if kept > 0 {
+            if kept < last.content.len() {
+                last.content = last.content[..kept].to_owned().into();
+            }
+            return;
+        }
+        spans.pop();
+    }
 }
 
 /// The longest start of `text` that takes at most `room` cells.
@@ -118,6 +136,29 @@ mod tests {
         assert_eq!(fitted.spans[0].content, "ENG-1 ");
         assert_eq!(fitted.spans[1].content, "Grate");
         assert_eq!(fitted.spans[2], "…".red());
+    }
+
+    #[test]
+    fn a_cut_drops_the_trailing_space_before_the_ellipsis() {
+        assert_eq!(fit("❤️ 1  👍 2", 7), "❤️ 1…");
+        assert_eq!(fit("one two", 5), "one…");
+    }
+
+    #[test]
+    fn a_line_cut_after_a_space_drops_it_across_spans() {
+        let line = Line::from(vec!["abc".into(), "  ".red(), "def".into()]);
+
+        let fitted = fit_line(line, 6);
+
+        assert_eq!(fitted.to_string(), "abc…");
+        assert_eq!(fitted.spans.last(), Some(&"…".into()));
+    }
+
+    #[test]
+    fn a_line_cut_inside_a_spaced_span_trims_that_span() {
+        let line = Line::from(vec!["ENG-1 ".into(), "Grate the cheddar".red()]);
+
+        assert_eq!(fit_line(line, 13).to_string(), "ENG-1 Grate…");
     }
 
     #[test]

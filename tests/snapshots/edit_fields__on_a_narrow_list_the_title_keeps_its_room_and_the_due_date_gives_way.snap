@@ -2,7 +2,7 @@
 source: tests/edit_fields.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] │ [3] │ [4] │ [5]                          "
+" [1] My Issues │ [2] │ [3] │ [4] │ [5] │ [6]                    "
 "┌My Issues─────────────────────────────────────────────────────┐"
 "│◐ Started (9)                                                 │"
 "│▸ DES-34 Design QA for t… ◐ In Progress ▮▮▮ High    3 Cycle 7 │"

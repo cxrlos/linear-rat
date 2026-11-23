@@ -4,7 +4,7 @@
 
 These are lrat's default keys. Press `?` in lrat to see the keys of the screen you are on, with the ones that cannot run now muted. Keys are written in the vim notation `config.toml` uses, and each table heading names the config table that rebinds its actions; see [Configuration](https://github.com/cxrlos/linear-rat/blob/main/docs/config.md#keys).
 
-The Team Issues list also takes the Issue list keys, and the Cycles screen the Cycles and Projects keys. While an overlay has a text field, as the pickers, the palette and the search do, a character typed without Ctrl or Alt goes into the field instead, except a picker's number keys.
+The Team Issues list also takes the Issue list keys, the Cycles screen the Cycles and Projects keys, and a focused comment the Issue detail keys. While a comment is focused, a Comment key wins over any other key it shares, such as trashing the issue, until `close` drops the focus. While an overlay has a text field, as the pickers, the palette and the search do, a character typed without Ctrl or Alt goes into the field instead, except a picker's number keys.
 
 ## Everywhere (`[keys.global]`)
 
@@ -15,6 +15,7 @@ The Team Issues list also takes the Issue list keys, and the Cycles screen the C
 | `show-analytics` | `3` | Show Analytics |
 | `show-cycles` | `4` | Show Cycles |
 | `show-projects` | `5` | Show Projects |
+| `show-inbox` | `6` | Show the Inbox |
 | `refresh` | `r` | Refresh now |
 | `show-cheatsheet` | `?` | Show every key for this context |
 | `show-palette` | `:`, `<C-k>` | Find an action or loaded issue |
@@ -55,6 +56,8 @@ The Team Issues list also takes the Issue list keys, and the Cycles screen the C
 | `edit-due-date` | `d` | Set or clear the due date |
 | `edit-text` | `E` | Edit the title and description |
 | `comment` | `c` | Comment in $EDITOR |
+| `attach-file` | `F` | Attach a file |
+| `attach-link` | `W` | Attach a link |
 | `archive` | `A` | Archive the issue |
 | `unarchive` | `U` | Unarchive the issue |
 | `trash` | `X` | Move the issue to the trash |
@@ -111,6 +114,8 @@ The Team Issues list also takes the Issue list keys, and the Cycles screen the C
 | `edit-due-date` | `d` | Set or clear the due date |
 | `edit-text` | `E` | Edit the title and description |
 | `comment` | `c` | Comment in $EDITOR |
+| `attach-file` | `F` | Attach a file |
+| `attach-link` | `W` | Attach a link |
 | `archive` | `A` | Archive the issue |
 | `unarchive` | `U` | Unarchive the issue |
 | `trash` | `X` | Move the issue to the trash |
@@ -121,6 +126,9 @@ The Team Issues list also takes the Issue list keys, and the Cycles screen the C
 | `add-relation` | `R` | Add a relation to other issues |
 | `remove-relation` | `Dr` | Remove relations to other issues |
 | `go-to-related` | `gr` | Go to a related issue |
+| `next-comment` | `}` | Focus the next comment |
+| `previous-comment` | `{` | Focus the previous comment |
+| `react` | `+` | React to the focused comment, or the issue |
 | `close` | `<Esc>` | Close the top overlay or step back |
 
 ## Overlays (`[keys.overlay]`)
@@ -174,3 +182,30 @@ The Team Issues list also takes the Issue list keys, and the Cycles screen the C
 | Action | Keys | Description |
 | --- | --- | --- |
 | `switch-cycles-team` | `t` | Switch the team of the Cycles screen |
+
+## Comment (`[keys.comment]`)
+
+| Action | Keys | Description |
+| --- | --- | --- |
+| `reply-to-comment` | `r` | Reply in the focused comment's thread |
+| `edit-comment` | `E` | Edit your focused comment |
+| `delete-comment` | `X` | Delete your focused comment |
+| `toggle-resolved` | `x` | Resolve or unresolve the focused thread |
+| `react` | `+` | React to the focused comment, or the issue |
+
+## Inbox (`[keys.inbox]`)
+
+| Action | Keys | Description |
+| --- | --- | --- |
+| `move-down` | `j` | Move down |
+| `move-up` | `k` | Move up |
+| `move-to-top` | `gg` | Move to the top |
+| `move-to-bottom` | `G` | Move to the bottom |
+| `half-page-down` | `<C-d>` | Move down half a page |
+| `half-page-up` | `<C-u>` | Move up half a page |
+| `open-notification` | `<Enter>` | Open the notification's issue and mark it read |
+| `toggle-read` | `m` | Mark the notification read or unread |
+| `mark-issue-read` | `M` | Mark every notification about the issue read |
+| `archive-notification` | `A` | Archive the notification |
+| `snooze` | `z` | Snooze the notification until a preset time |
+| `archive-all-read` |  | Archive every read notification in the Inbox |

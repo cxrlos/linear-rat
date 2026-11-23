@@ -1,0 +1,17 @@
+# budget: 5
+# Asks Linear for a short-lived URL to PUT one file to, and the headers that
+# PUT must carry. The file is private to the workspace (`makePublic` is left
+# at its default, false).
+mutation FileUpload($contentType: String!, $filename: String!, $size: Int!) {
+  fileUpload(contentType: $contentType, filename: $filename, size: $size) {
+    success
+    uploadFile {
+      uploadUrl
+      assetUrl
+      headers {
+        key
+        value
+      }
+    }
+  }
+}

@@ -2,10 +2,11 @@ use crossterm::event::{KeyCode, KeyEventKind};
 use ratatui::layout::Size;
 
 use super::edit::{self, Editable};
+use super::reactions;
 use super::{
     Action, Copyable, Effect, Event, Load, Modal, Palette, Pane, Purpose, Screen, State,
-    analytics_screen, browse, compose, create, detail, issue_picker, lifecycle, links, palette,
-    rearrange, relations, release, results, search, sync, team_issues,
+    analytics_screen, attach, browse, comments, compose, create, detail, inbox, issue_picker,
+    lifecycle, links, palette, rearrange, relations, release, results, search, sync, team_issues,
 };
 use crate::keys::{self, Key, Resolution};
 use crate::linear::SearchQuery;
@@ -241,6 +242,13 @@ fn apply(state: &mut State, event: Event) -> Update {
         Event::EditorClosed { writing, result } => compose::closed(state, writing, result),
         Event::CommentCreated { comment, result } => compose::commented(state, &comment, result),
         Event::IssueCreated { issue, result } => compose::created(state, &issue, result),
+        Event::UploadProgress { upload, sent } => attach::progressed(state, upload, sent),
+        Event::Attached { attachment, result } => attach::attached(state, &attachment, result),
+        Event::CommentChanged { write, result } => comments::changed(state, &write, result),
+        Event::Reacted { write, result } => reactions::reacted(state, &write, result),
+        Event::NotificationsLoaded { since, result } => inbox::loaded(state, since, result),
+        Event::InboxWritten { write, result } => inbox::finished(state, &write, result),
+        Event::InboxBatchWritten(answers) => inbox::batch_finished(state, answers),
     }
 }
 
@@ -338,7 +346,7 @@ pub fn perform(state: &mut State, action: Action) -> Update {
                 Screen::Analytics => analytics_screen::request_missing(state),
                 Screen::Cycles => browse::open_cycles(state),
                 Screen::Projects => browse::open_projects(state),
-                Screen::MyIssues | Screen::Results => Vec::new(),
+                Screen::MyIssues | Screen::Results | Screen::Inbox => Vec::new(),
             };
             Update {
                 redraw: true,
@@ -371,10 +379,14 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             Some(Modal::DueDate(_)) => edit::accept_due_date(state),
             Some(Modal::Confirm(_)) => lifecycle::confirm(state),
             Some(Modal::IssuePicker(_)) => issue_picker::choose(state, None),
+            Some(Modal::Attach(_)) => attach::accept(state),
             _ => Update::default(),
         },
 
         Action::Close if state.modals.pop().is_some() => Update::redraw(),
+        Action::Close if detail::has_focus(state) && comments::focused_comment(state).is_some() => {
+            comments::unfocus(state)
+        }
         Action::MoveDown
         | Action::MoveUp
         | Action::MoveToTop
@@ -438,7 +450,10 @@ pub fn perform(state: &mut State, action: Action) -> Update {
         }
         Action::Close if state.screen == Screen::Results && state.results.pane() == Pane::List => {
             results::close(state);
-            Update::redraw()
+            Update {
+                redraw: true,
+                effects: browse::shown(state),
+            }
         }
         Action::MoveDown
         | Action::MoveUp
@@ -477,6 +492,26 @@ pub fn perform(state: &mut State, action: Action) -> Update {
                 effects: Vec::new(),
             }
         }
+        Action::MoveDown
+        | Action::MoveUp
+        | Action::MoveToTop
+        | Action::MoveToBottom
+        | Action::HalfPageDown
+        | Action::HalfPageUp
+            if state.screen == Screen::Inbox =>
+        {
+            let rows = ui::list_rows(state, state.viewport);
+            Update {
+                redraw: inbox::perform(state, action, rows),
+                effects: Vec::new(),
+            }
+        }
+        Action::ToggleRead => inbox::toggle_read(state),
+        Action::MarkIssueRead => inbox::mark_issue_read(state),
+        Action::ArchiveNotification => inbox::archive(state),
+        Action::Snooze => inbox::open_snooze(state),
+        Action::OpenNotification => inbox::open(state),
+        Action::ArchiveAllRead => inbox::archive_all_read(state),
         Action::ListIssues => {
             let effects = browse::list_issues(state);
             Update {
@@ -546,6 +581,8 @@ pub fn perform(state: &mut State, action: Action) -> Update {
         Action::ToggleEntry => match state.modals.top() {
             Some(Modal::Search(_)) => search::toggle_comments(state),
             Some(Modal::IssuePicker(_)) => issue_picker::toggle(state, None),
+            Some(Modal::Choice(_)) => relations::toggle(state, None),
+            Some(Modal::Attach(_)) => attach::complete(state),
             _ => edit::toggle(state, None),
         },
         Action::ToggleSearchScope => search::toggle_scope(state),
@@ -561,6 +598,15 @@ pub fn perform(state: &mut State, action: Action) -> Update {
         Action::RemoveRelation => relations::open_remove(state),
         Action::ClearParent => relations::clear_parent(state),
         Action::GoToRelated => relations::open_related(state),
+        Action::AttachFile => attach::open_file(state),
+        Action::AttachLink => attach::open_link(state),
+        Action::NextComment => comments::move_focus(state, true),
+        Action::PreviousComment => comments::move_focus(state, false),
+        Action::ReplyToComment => comments::reply(state),
+        Action::EditComment => comments::edit(state),
+        Action::DeleteComment => comments::ask_to_delete(state),
+        Action::ToggleResolved => comments::toggle_resolved(state),
+        Action::React => reactions::open(state),
         Action::ToggleBlocked if state.screen == Screen::TeamIssues => Update {
             redraw: true,
             effects: team_issues::toggle_blocked(state),
@@ -604,6 +650,15 @@ fn choose(state: &mut State, nth: Option<usize>) -> Update {
     };
     if choice.purpose == Purpose::RelationKind {
         return relations::kind_chosen(state, nth);
+    }
+    if matches!(choice.purpose, Purpose::RemoveRelations { .. }) {
+        return relations::removal_chosen(state, nth);
+    }
+    if choice.purpose == Purpose::Reaction {
+        return reactions::chosen(state, nth);
+    }
+    if choice.purpose == Purpose::Snooze {
+        return inbox::snooze_chosen(state, nth);
     }
     if choice.purpose == Purpose::CyclesTeam {
         browse::pick_team(state, nth).map_or_else(Update::default, |effects| Update {

@@ -1,0 +1,7 @@
+# budget: 5
+# Opens a resolved thread again.
+mutation CommentUnresolve($id: String!) {
+  commentUnresolve(id: $id) {
+    success
+  }
+}

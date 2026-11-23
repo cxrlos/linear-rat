@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use super::{Effect, Failure, State, TextOpened, Update, WriteClass, edit_text};
+use super::{Effect, Failure, State, TextOpened, Update, WriteClass, comments, edit_text};
 use crate::linear::ErrorKind;
 use crate::linear::model::{Issue, Priority, WorkflowState};
 use crate::linear::{IssueCreate, PostedComment};
@@ -25,6 +25,18 @@ pub enum Writing {
     /// The title and description of an existing issue, as the editor
     /// opened on them.
     Text(TextOpened),
+    /// A reply in the thread the comment `parent_id` starts.
+    Reply {
+        issue_id: String,
+        identifier: String,
+        parent_id: String,
+    },
+    /// The new text of the viewer's comment `comment_id`.
+    EditComment {
+        issue_id: String,
+        identifier: String,
+        comment_id: String,
+    },
 }
 
 /// A new issue as the create form left it, waiting for its description.
@@ -45,6 +57,10 @@ pub struct NewComment {
     pub issue_id: String,
     pub identifier: String,
     pub body: String,
+    /// The comment it replies to, for a reply.
+    pub parent_id: Option<String>,
+    /// The id of the stand-in a reply shows under until Linear answers.
+    pub local_id: Option<String>,
 }
 
 /// A new issue on its way to Linear, and the id of the stand-in the screens
@@ -62,6 +78,41 @@ pub struct Drafts {
     comments: BTreeMap<String, String>,
     description: Option<String>,
     stand_ins: u64,
+    /// Replies by the id of the comment their thread starts with.
+    replies: BTreeMap<String, String>,
+    /// New texts of comments by comment id.
+    edits: BTreeMap<String, String>,
+}
+
+impl Drafts {
+    /// What the next reply in the thread `parent_id` starts from.
+    pub(super) fn reply(&self, parent_id: &str) -> String {
+        self.replies.get(parent_id).cloned().unwrap_or_default()
+    }
+
+    pub(super) fn forget_reply(&mut self, parent_id: &str) {
+        self.replies.remove(parent_id);
+    }
+
+    /// What the next edit of the comment `comment_id` starts from, if an
+    /// earlier one was not taken.
+    pub(super) fn edit(&self, comment_id: &str) -> Option<String> {
+        self.edits.get(comment_id).cloned()
+    }
+
+    pub(super) fn keep_edit(&mut self, comment_id: &str, text: &str) {
+        self.edits.insert(comment_id.to_owned(), text.to_owned());
+    }
+
+    pub(super) fn forget_edit(&mut self, comment_id: &str) {
+        self.edits.remove(comment_id);
+    }
+
+    /// A new stand-in id for a `what`, as `local-reply-3`.
+    pub(super) fn next_stand_in(&mut self, what: &str) -> String {
+        self.stand_ins += 1;
+        format!("{LOCAL_PREFIX}{what}-{}", self.stand_ins)
+    }
 }
 
 /// Stand-in issues carry ids with this prefix. Linear's ids are UUIDs, so
@@ -140,6 +191,8 @@ pub(super) fn closed(
                 issue_id,
                 identifier,
                 body: text.to_owned(),
+                parent_id: None,
+                local_id: None,
             })
         }
         Writing::Description(draft) => {
@@ -151,6 +204,16 @@ pub(super) fn closed(
             Effect::CreateIssue(show_stand_in(state, draft, text))
         }
         Writing::Text(opened) => return edit_text::closed(state, opened, saved),
+        Writing::Reply {
+            issue_id,
+            identifier,
+            parent_id,
+        } => return comments::replied(state, issue_id, identifier, parent_id, text),
+        Writing::EditComment {
+            issue_id,
+            identifier,
+            comment_id,
+        } => return comments::edited(state, issue_id, identifier, comment_id, text),
     };
     Update {
         redraw: true,
@@ -217,6 +280,9 @@ pub(super) fn commented(
     comment: &NewComment,
     result: Result<PostedComment, Failure>,
 ) -> Update {
+    if let Some(parent_id) = &comment.parent_id {
+        return replied(state, comment, parent_id, result);
+    }
     if let Some(team_id) = state
         .store
         .issue(&comment.issue_id)
@@ -239,6 +305,54 @@ pub(super) fn commented(
             state.notice = Some(format!(
                 "Could not comment on {}: {failure}. The next comment on it starts from \
                  what you wrote",
+                comment.identifier
+            ));
+            state.record(failure);
+        }
+    }
+    Update::redraw()
+}
+
+/// Takes in Linear's answer to the reply `comment` in the thread
+/// `parent_id` starts: the stored reply replaces its stand-in, or the
+/// stand-in goes, the error shows and the text is kept for the next reply
+/// in the thread.
+fn replied(
+    state: &mut State,
+    comment: &NewComment,
+    parent_id: &str,
+    result: Result<PostedComment, Failure>,
+) -> Update {
+    if let Some(local_id) = &comment.local_id {
+        comments::drop_reply(state, local_id);
+    }
+    if let Some(team_id) = state
+        .store
+        .issue(&comment.issue_id)
+        .map(|issue| issue.team_id.clone())
+    {
+        let outcome = result.as_ref().map(|_| ()).map_err(|failure| &failure.kind);
+        state.learn_write(&team_id, WriteClass::CreateComment, outcome);
+    }
+    match result {
+        Ok(posted) => {
+            state.drafts.forget_reply(parent_id);
+            if let Some(local_id) = &comment.local_id {
+                state
+                    .detail
+                    .replace_focus(&comment.issue_id, local_id, &posted.comment.id);
+            }
+            state.store.add_comment(posted);
+            state.notice = Some(format!("Replied on {}", comment.identifier));
+        }
+        Err(failure) => {
+            state
+                .drafts
+                .replies
+                .insert(parent_id.to_owned(), comment.body.clone());
+            state.notice = Some(format!(
+                "Could not reply on {}: {failure}. The next reply in the thread starts \
+                 from what you wrote",
                 comment.identifier
             ));
             state.record(failure);

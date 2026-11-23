@@ -8,6 +8,7 @@ mod detail;
 mod error;
 mod hints;
 pub mod icons;
+mod inbox;
 pub(crate) mod markdown;
 mod messages;
 mod my_issues;
@@ -26,7 +27,7 @@ use ratatui::layout::{Constraint, Layout, Rect, Size};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph, Tabs};
 
-use crate::app::{Action, Load, Modal, Screen, State};
+use crate::app::{Action, Indicator, Load, Modal, Screen, State};
 use crate::keys::{self, Context};
 
 const MAX_NOTICE_ROWS: usize = 3;
@@ -64,6 +65,7 @@ pub fn render(state: &State, frame: &mut Frame) {
         Screen::Analytics => analytics::render(state, frame, body_area),
         Screen::Cycles => browse::render_cycles(state, frame, body_area),
         Screen::Projects => browse::render_projects(state, frame, body_area),
+        Screen::Inbox => inbox::render(state, frame, body_area),
         Screen::Results => results::render(state, frame, body_area),
     }
     frame.render_widget(
@@ -86,6 +88,7 @@ pub fn render(state: &State, frame: &mut Frame) {
             Modal::DueDate(prompt) => picker::render_due_date(state, prompt, frame, body_area),
             Modal::Confirm(confirm) => confirm::render(state, confirm, frame, body_area),
             Modal::Messages { scroll } => messages::render(state, *scroll, frame, body_area),
+            Modal::Attach(prompt) => picker::render_attach(state, prompt, frame, body_area),
         }
     }
 }
@@ -95,10 +98,7 @@ pub fn render(state: &State, frame: &mut Frame) {
 /// only their key, as `[2]`.
 fn tab_titles(state: &State, width: u16) -> [String; Screen::ALL.len()] {
     let full = Screen::ALL.map(|screen| tab_title(state, screen, false));
-    let indicator = state
-        .sync_status
-        .indicator()
-        .map_or(0, |indicator| text::width(&indicator.text) + 2);
+    let indicator = indicator(state).map_or(0, |indicator| text::width(&indicator.text) + 2);
     let room = usize::from(width).saturating_sub(indicator);
     if usize::from(titles_width(&full)) <= room {
         return full;
@@ -109,9 +109,9 @@ fn tab_titles(state: &State, width: u16) -> [String; Screen::ALL.len()] {
 /// The screen's title after the first key that shows it from here, as
 /// `[1] My Issues`, or only the key when `short`, as `[1]`. The bare title
 /// if no key reaches it (unbound, or shadowed by a binding of the current
-/// screen).
+/// screen). The Inbox adds its unread count, as `[6] Inbox 3`.
 fn tab_title(state: &State, screen: Screen, short: bool) -> String {
-    match state
+    let title = match state
         .keymap
         .keys_for(Action::ShowScreen(screen), &keys::screen_contexts(state))
         .first()
@@ -119,6 +119,10 @@ fn tab_title(state: &State, screen: Screen, short: bool) -> String {
         Some(key) if short => format!("[{key}]"),
         Some(key) => format!("[{key}] {}", screen.title()),
         None => screen.title().to_owned(),
+    };
+    match crate::app::unread_count(state) {
+        unread if screen == Screen::Inbox && unread > 0 => format!("{title} {unread}"),
+        _ => title,
     }
 }
 
@@ -134,7 +138,7 @@ fn titles_width(titles: &[String]) -> u16 {
 /// fine and accented when it is failing or throttled. Left out when it
 /// would touch the tabs. Returns how many columns it took.
 fn render_sync_indicator(state: &State, frame: &mut Frame, area: Rect, tabs_width: u16) -> u16 {
-    let Some(indicator) = state.sync_status.indicator() else {
+    let Some(indicator) = indicator(state) else {
         return 0;
     };
     let text = format!("{} ", indicator.text);
@@ -151,6 +155,33 @@ fn render_sync_indicator(state: &State, frame: &mut Frame, area: Rect, tabs_widt
         Layout::horizontal([Constraint::Fill(1), Constraint::Length(width)]).areas(area);
     frame.render_widget(Span::styled(text, style), right);
     width
+}
+
+/// The longest file name the upload indicator shows before cutting it.
+const UPLOAD_NAME_WIDTH: usize = 24;
+
+/// What the indicator shows: the uploads in flight while there are any, as
+/// `uploading rind.log 42%`, else how sync is doing.
+fn indicator(state: &State) -> Option<Indicator> {
+    let uploads = state.uploads.active();
+    let text = match uploads {
+        [] => return state.sync_status.indicator(),
+        [upload] => format!(
+            "uploading {} {}%",
+            text::fit(&upload.name, UPLOAD_NAME_WIDTH),
+            upload.percent()
+        ),
+        several => {
+            let size: u64 = several.iter().map(|upload| upload.size).sum();
+            let sent: u64 = several
+                .iter()
+                .map(|upload| upload.sent.min(upload.size))
+                .sum();
+            let percent = (sent * 100).checked_div(size).unwrap_or(100);
+            format!("uploading {} files {percent}%", several.len())
+        }
+    };
+    Some(Indicator { text, alert: false })
 }
 
 /// The release notice, muted, between the tabs and the sync indicator,
@@ -236,7 +267,7 @@ pub fn detail_rows(state: &State, viewport: Size) -> (usize, usize) {
         Screen::MyIssues => my_issues::detail_area(state, body_area, state.my_issues.pane()),
         Screen::TeamIssues => team_issues::detail_area(state, body_area),
         Screen::Results => my_issues::detail_area(state, body_area, state.results.pane()),
-        Screen::Analytics | Screen::Cycles | Screen::Projects => None,
+        Screen::Analytics | Screen::Cycles | Screen::Projects | Screen::Inbox => None,
     };
     let Some(pane) = pane else {
         return (0, 0);
@@ -245,6 +276,22 @@ pub fn detail_rows(state: &State, viewport: Size) -> (usize, usize) {
     let lines =
         detail::issue(state).map_or(0, |issue| detail::lines(state, issue, inner.width).len());
     (usize::from(inner.height), lines)
+}
+
+/// Where the focused comment is in the focused issue's detail in a
+/// `viewport`-sized terminal: its first line and the line after its last.
+/// `None` when no comment is focused or no detail is on screen.
+pub fn focused_comment_lines(state: &State, viewport: Size) -> Option<(usize, usize)> {
+    let area = Rect::from((ratatui::layout::Position::ORIGIN, viewport));
+    let [_, body_area, _, _] = areas(area, notice_rows(state, viewport.width).len());
+    let pane = match state.screen {
+        Screen::MyIssues => my_issues::detail_area(state, body_area, state.my_issues.pane()),
+        Screen::TeamIssues => team_issues::detail_area(state, body_area),
+        Screen::Results => my_issues::detail_area(state, body_area, state.results.pane()),
+        Screen::Analytics | Screen::Cycles | Screen::Projects | Screen::Inbox => None,
+    }?;
+    let inner = Block::bordered().inner(pane);
+    detail::focused_comment_lines(state, detail::issue(state)?, inner.width)
 }
 
 /// How many issue rows fit in the Team Issues list of a `viewport`-sized

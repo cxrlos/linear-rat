@@ -13,6 +13,7 @@ use std::cell::RefCell;
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
+use std::path::PathBuf;
 
 use futures_util::Stream;
 use jiff::civil::Date;
@@ -21,9 +22,10 @@ use jiff::{SignedDuration, Timestamp};
 pub use error::{ClientError, ErrorKind, GraphQlError, Response};
 pub use governor::{SystemTimer, Timer, Urgency};
 pub use http::{ClientConfig, Dial, HttpClient, LIVE_ENDPOINT, LiveConfig, Pipe};
+use model::Reaction;
 use model::{
-    Attachment, Comment, Cycle, Issue, IssueRelation, Label, Member, Priority, Project,
-    ProjectMilestone, ProjectOverview, RelationType, StateSpan, StateType, Team, Viewer,
+    Attachment, Comment, Cycle, Issue, IssueRelation, Label, Member, Notification, Priority,
+    Project, ProjectMilestone, ProjectOverview, RelationType, StateSpan, StateType, Team, Viewer,
     WorkflowState, Workspace,
 };
 
@@ -95,6 +97,52 @@ pub trait LinearClient {
         &self,
         issue_id: &str,
     ) -> impl Future<Output = Result<(), ClientError>> + Send;
+
+    /// The viewer's issue notifications. With `since` `None`, the newest 50
+    /// unarchived ones, as the viewer waits on them; otherwise every one
+    /// updated after `since`, archived ones included, in the background.
+    /// A client without an inbox, as the test doubles are, has none.
+    fn notifications(
+        &self,
+        since: Option<Timestamp>,
+    ) -> impl Future<Output = Result<NotificationsLoaded, ClientError>> + Send {
+        let _ = since;
+        async { Ok(NotificationsLoaded::default()) }
+    }
+
+    /// Sends one `notificationUpdate` marking the notification with id `id`
+    /// read or unread, or snoozing it.
+    fn update_notification(
+        &self,
+        id: &str,
+        update: &NotificationUpdate,
+    ) -> impl Future<Output = Result<(), ClientError>> + Send {
+        let _ = (id, update);
+        async { Err(no_inbox()) }
+    }
+
+    /// Sends one `notificationArchive` for the notification with id `id`.
+    /// Archive all read sends them in the background, so the governor
+    /// spaces them.
+    fn archive_notification(
+        &self,
+        id: &str,
+        urgency: Urgency,
+    ) -> impl Future<Output = Result<(), ClientError>> + Send {
+        let _ = (id, urgency);
+        async { Err(no_inbox()) }
+    }
+
+    /// Sends one `notificationMarkReadAll` marking every notification about
+    /// the issue with id `issue_id` read at `read_at`.
+    fn mark_issue_notifications_read(
+        &self,
+        issue_id: &str,
+        read_at: Timestamp,
+    ) -> impl Future<Output = Result<(), ClientError>> + Send {
+        let _ = (issue_id, read_at);
+        async { Err(no_inbox()) }
+    }
 
     /// Moves the issue with id `issue_id` and its sub-issues to the trash,
     /// where Linear keeps them for 30 days. There is no permanent delete.
@@ -213,12 +261,44 @@ pub trait LinearClient {
     fn delete_relation(&self, id: &str) -> impl Future<Output = Result<(), ClientError>> + Send;
 
     /// Sends one `commentCreate` adding `body` to the issue with id
-    /// `issue_id`, and returns the comment as Linear stored it.
+    /// `issue_id`, as a reply to the comment `parent_id` when given, and
+    /// returns the comment as Linear stored it.
     fn create_comment(
         &self,
         issue_id: &str,
         body: &str,
+        parent_id: Option<&str>,
     ) -> impl Future<Output = Result<PostedComment, ClientError>> + Send;
+
+    /// Sends one `commentUpdate` replacing the text of the comment `id`.
+    fn update_comment(
+        &self,
+        id: &str,
+        body: &str,
+    ) -> impl Future<Output = Result<(), ClientError>> + Send;
+
+    /// Sends one `commentDelete` for the comment `id`, which deletes its
+    /// replies too.
+    fn delete_comment(&self, id: &str) -> impl Future<Output = Result<(), ClientError>> + Send;
+
+    /// Sends one `commentResolve`, or `commentUnresolve` when `resolved` is
+    /// false, for the thread the comment `id` starts.
+    fn resolve_comment(
+        &self,
+        id: &str,
+        resolved: bool,
+    ) -> impl Future<Output = Result<(), ClientError>> + Send;
+
+    /// Sends one `reactionCreate` adding the viewer's `emoji` to `target`,
+    /// and returns the reaction as Linear stored it.
+    fn add_reaction(
+        &self,
+        target: &ReactionTarget,
+        emoji: &str,
+    ) -> impl Future<Output = Result<Reaction, ClientError>> + Send;
+
+    /// Sends one `reactionDelete` for the reaction `id`.
+    fn remove_reaction(&self, id: &str) -> impl Future<Output = Result<(), ClientError>> + Send;
 
     /// Sends one `issueCreate` and returns the issue as Linear stored it.
     fn create_issue(
@@ -270,6 +350,37 @@ pub trait LinearClient {
     /// What `lrat doctor` reports about the key beyond its viewer: the
     /// viewer's role, Linear's `rateLimitStatus` and Linear's clock.
     fn diagnostics(&self) -> impl Future<Output = Result<Diagnostics, ClientError>> + Send;
+
+    /// Uploads `file` to the URL Linear's `fileUpload` signs for it, with
+    /// only the headers Linear returns, then attaches the uploaded file to
+    /// the issue with id `issue_id`, titled with its name. `progress` hears
+    /// how many bytes have gone out so far, as they go.
+    fn attach_file(
+        &self,
+        issue_id: &str,
+        file: &FileUpload,
+        progress: impl FnMut(u64) + Send + Sync + 'static,
+    ) -> impl Future<Output = Result<Attachment, ClientError>> + Send;
+
+    /// Attaches `url` to the issue with id `issue_id`, titled `title`, or as
+    /// Linear names it when `None`.
+    fn attach_link(
+        &self,
+        issue_id: &str,
+        url: &str,
+        title: Option<&str>,
+    ) -> impl Future<Output = Result<Attachment, ClientError>> + Send;
+}
+
+/// A file the viewer chose to attach, as lrat found it before uploading.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileUpload {
+    pub path: PathBuf,
+    /// The file's name, which titles the attachment.
+    pub name: String,
+    /// The MIME type guessed from the extension.
+    pub content_type: String,
+    pub size: u64,
 }
 
 /// The viewer's role, the rate limits and Linear's clock, as `lrat doctor`
@@ -325,6 +436,50 @@ pub enum LiveEvent {
     Issue(TeamChanges),
     /// A comment was added to an issue.
     Comment(PostedComment),
+    /// An issue was archived. Like [`LiveEvent::Issue`], it moves no
+    /// watermark.
+    Archived(TeamChanges),
+    /// An issue was brought back from the archive.
+    Unarchived(TeamChanges),
+    /// A comment on an issue was edited, resolved or reacted to.
+    CommentUpdated(PostedComment),
+    /// A comment on an issue was deleted.
+    CommentDeleted {
+        issue_id: String,
+        comment_id: String,
+    },
+    /// An issue notification was created, read, snoozed or archived, for
+    /// the person with id `recipient_id`, who may not be the viewer.
+    Notification {
+        recipient_id: String,
+        loaded: NotificationsLoaded,
+    },
+}
+
+/// Issue notifications Linear sent, with the issues they are about and the
+/// people and teams those refer to.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct NotificationsLoaded {
+    pub notifications: Vec<Notification>,
+    pub issues: Vec<Issue>,
+    pub cycles: Vec<Cycle>,
+    /// Who did what the notifications are about, and the people of their
+    /// issues.
+    pub members: Vec<Member>,
+    pub teams: Vec<Team>,
+    /// How many notifications were about something other than an issue,
+    /// and were left out.
+    pub skipped: usize,
+    pub as_of: Timestamp,
+}
+
+/// The fields one `notificationUpdate` changes.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct NotificationUpdate {
+    /// Marks it read at a time, or unread.
+    pub read_at: Patch<Timestamp>,
+    /// Hides it until this time.
+    pub snoozed_until_at: Option<Timestamp>,
 }
 
 /// A comment Linear has stored, and its author.
@@ -332,6 +487,13 @@ pub enum LiveEvent {
 pub struct PostedComment {
     pub comment: Comment,
     pub author: Option<Member>,
+}
+
+/// What a reaction is on: an issue or a comment, by id.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ReactionTarget {
+    Issue(String),
+    Comment(String),
 }
 
 /// Every field of a new issue that lrat's create form sets.
@@ -779,6 +941,8 @@ pub struct IssueDetail {
     /// The teams and cycles of `related_issues`.
     pub teams: Vec<Team>,
     pub cycles: Vec<Cycle>,
+    /// The issue's own reactions, oldest first.
+    pub reactions: Vec<Reaction>,
     /// What Linear could not give, as in [`AssignedIssues::problems`].
     pub problems: Vec<String>,
 }
@@ -845,6 +1009,11 @@ impl IssueDetail {
                 .into_iter()
                 .filter(|attachment| attachment.issue_id == issue_id)
                 .collect(),
+            reactions: data
+                .issue_reactions
+                .get(issue_id)
+                .cloned()
+                .unwrap_or_default(),
             problems: Vec::new(),
         }
     }
@@ -859,11 +1028,153 @@ pub struct FakeClient;
 thread_local! {
     static DEMO_EDITS: RefCell<BTreeMap<String, Issue>> = const { RefCell::new(BTreeMap::new()) };
     static DEMO_COMMENTS: RefCell<Vec<Comment>> = const { RefCell::new(Vec::new()) };
+    /// Comments edited, resolved and deleted through this client.
+    static DEMO_COMMENT_CHANGES: RefCell<DemoCommentChanges> =
+        RefCell::new(DemoCommentChanges::default());
+    /// Reactions added through this client and on what, and the ids of
+    /// those removed.
+    static DEMO_REACTIONS: RefCell<DemoReactions> =
+        const { RefCell::new((Vec::new(), Vec::new())) };
     static DEMO_CREATED: RefCell<u32> = const { RefCell::new(0) };
     static DEMO_TRASHED: RefCell<BTreeSet<String>> = const { RefCell::new(BTreeSet::new()) };
     /// Relations created through this client, and the ids of those deleted.
     static DEMO_RELATIONS: RefCell<(Vec<IssueRelation>, Vec<String>)> =
         const { RefCell::new((Vec::new(), Vec::new())) };
+    static DEMO_ATTACHMENTS: RefCell<Vec<Attachment>> = const { RefCell::new(Vec::new()) };
+    /// Notifications as writes through this client left them.
+    static DEMO_NOTIFICATIONS: RefCell<BTreeMap<String, Notification>> =
+        const { RefCell::new(BTreeMap::new()) };
+}
+
+/// Attaches `url` to the demo issue with id `issue_id` as Linear does: an
+/// attachment with the same URL on the issue is replaced.
+fn demo_attach(issue_id: &str, url: &str, title: &str) -> Result<Attachment, ClientError> {
+    if !demo_has_issue(&demo::workspace(), issue_id) {
+        return Err(not_found("issue", issue_id));
+    }
+    Ok(DEMO_ATTACHMENTS.with_borrow_mut(|attachments| {
+        attachments.retain(|known| known.issue_id != issue_id || known.url != url);
+        let attachment = Attachment {
+            id: format!("demo-attachment-new-{}", attachments.len() + 1),
+            issue_id: issue_id.to_owned(),
+            url: url.to_owned(),
+            title: title.to_owned(),
+            subtitle: None,
+            source_type: None,
+            status: None,
+        };
+        attachments.push(attachment.clone());
+        attachment
+    }))
+}
+
+/// The comments changed through the fake client: their newest copies by
+/// id, and the ids of those deleted.
+#[derive(Default)]
+struct DemoCommentChanges {
+    changed: BTreeMap<String, Comment>,
+    deleted: Vec<String>,
+}
+
+impl DemoCommentChanges {
+    /// `comments` as the changes left them: changed ones replaced, deleted
+    /// ones and their replies gone.
+    fn apply(&self, comments: &mut Vec<Comment>) {
+        comments.retain(|comment| {
+            !self.deleted.contains(&comment.id)
+                && !comment
+                    .parent_id
+                    .as_ref()
+                    .is_some_and(|parent| self.deleted.contains(parent))
+        });
+        for comment in comments {
+            if let Some(changed) = self.changed.get(&comment.id) {
+                comment.clone_from(changed);
+            }
+        }
+    }
+}
+
+/// The demo comment with id `id` as changes through the fake client left
+/// it, unless it was deleted.
+fn demo_comment(id: &str) -> Result<Comment, ClientError> {
+    let mut comments = demo::workspace().comments;
+    DEMO_COMMENTS.with_borrow(|created| comments.extend(created.iter().cloned()));
+    DEMO_COMMENT_CHANGES.with_borrow(|changes| changes.apply(&mut comments));
+    comments
+        .into_iter()
+        .find(|comment| comment.id == id)
+        .ok_or_else(|| not_found("comment", id))
+}
+
+/// Applies `change` to the demo comment with id `id` and remembers it.
+fn demo_change_comment(id: &str, change: impl FnOnce(&mut Comment)) -> Result<(), ClientError> {
+    let mut comment = demo_comment(id)?;
+    change(&mut comment);
+    DEMO_COMMENT_CHANGES.with_borrow_mut(|changes| changes.changed.insert(id.to_owned(), comment));
+    Ok(())
+}
+
+/// Reactions added through the fake client and what each is on, and the
+/// ids of those removed.
+type DemoReactions = (Vec<(ReactionTarget, Reaction)>, Vec<String>);
+
+/// `detail`'s reactions, and those of its comments, as reactions added and
+/// removed through the fake client left them.
+fn apply_demo_reactions(issue_id: &str, detail: &mut IssueDetail) {
+    DEMO_REACTIONS.with_borrow(|(added, removed)| {
+        for (target, reaction) in added {
+            let reactions = match target {
+                ReactionTarget::Issue(id) if id == issue_id => &mut detail.reactions,
+                ReactionTarget::Comment(id) => {
+                    match detail.comments.iter_mut().find(|c| &c.id == id) {
+                        Some(comment) => &mut comment.reactions,
+                        None => continue,
+                    }
+                }
+                ReactionTarget::Issue(_) => continue,
+            };
+            reactions.push(reaction.clone());
+        }
+        detail
+            .reactions
+            .retain(|reaction| !removed.contains(&reaction.id));
+        for comment in &mut detail.comments {
+            comment
+                .reactions
+                .retain(|reaction| !removed.contains(&reaction.id));
+        }
+    });
+}
+
+/// The demo inbox as writes through the fake client left it, archived
+/// notifications included.
+fn demo_notifications() -> Vec<Notification> {
+    let mut notifications = demo::notifications(&demo::workspace());
+    DEMO_NOTIFICATIONS.with_borrow(|edits| {
+        for notification in &mut notifications {
+            if let Some(edited) = edits.get(&notification.id) {
+                notification.clone_from(edited);
+            }
+        }
+    });
+    notifications
+}
+
+/// Applies `change` to the demo notification with id `id` and remembers it,
+/// one second newer.
+fn demo_notification_change(
+    id: &str,
+    change: impl FnOnce(&mut Notification),
+) -> Result<(), ClientError> {
+    let mut notification = demo_notifications()
+        .into_iter()
+        .find(|notification| notification.id == id)
+        .ok_or_else(|| not_found("notification", id))?;
+    change(&mut notification);
+    notification.updated_at += SignedDuration::from_secs(1);
+    DEMO_NOTIFICATIONS.with_borrow_mut(|edits| edits.insert(id.to_owned(), notification));
+    Ok(())
 }
 
 /// The demo issue with id `issue_id` as edits through the fake client left
@@ -1068,6 +1379,11 @@ fn demo_update(
     Ok(issue)
 }
 
+/// What a client without an inbox answers a notification write with.
+fn no_inbox() -> ClientError {
+    ClientError::Decode("this client has no inbox".to_owned())
+}
+
 fn not_found(what: &str, id: &str) -> ClientError {
     ClientError::GraphQl(vec![GraphQlError {
         message: format!("Entity not found: {what} {id}"),
@@ -1179,6 +1495,80 @@ impl LinearClient for FakeClient {
         demo_change(issue_id, |issue| issue.archived_at = None)
     }
 
+    async fn notifications(
+        &self,
+        since: Option<Timestamp>,
+    ) -> Result<NotificationsLoaded, ClientError> {
+        let data = demo::workspace();
+        let notifications: Vec<Notification> = match since {
+            None => demo_notifications()
+                .into_iter()
+                .filter(|notification| notification.archived_at.is_none())
+                .collect(),
+            Some(since) => demo_notifications()
+                .into_iter()
+                .filter(|notification| notification.updated_at > since)
+                .collect(),
+        };
+        let mut issues: Vec<Issue> = Vec::new();
+        for notification in &notifications {
+            if !issues.iter().any(|issue| issue.id == notification.issue_id) {
+                issues.push(demo_issue(&data, &notification.issue_id)?);
+            }
+        }
+        Ok(NotificationsLoaded {
+            notifications,
+            issues,
+            cycles: data.cycles,
+            members: data.members,
+            teams: data.teams,
+            skipped: 0,
+            as_of: demo::NOW,
+        })
+    }
+
+    async fn update_notification(
+        &self,
+        id: &str,
+        update: &NotificationUpdate,
+    ) -> Result<(), ClientError> {
+        demo_notification_change(id, |notification| {
+            match &update.read_at {
+                Patch::Unchanged => {}
+                Patch::Clear => notification.read_at = None,
+                Patch::Set(at) => notification.read_at = Some(*at),
+            }
+            if let Some(until) = update.snoozed_until_at {
+                notification.snoozed_until_at = Some(until);
+            }
+        })
+    }
+
+    async fn archive_notification(&self, id: &str, _: Urgency) -> Result<(), ClientError> {
+        demo_notification_change(id, |notification| {
+            notification.archived_at = Some(demo::NOW);
+        })
+    }
+
+    async fn mark_issue_notifications_read(
+        &self,
+        issue_id: &str,
+        read_at: Timestamp,
+    ) -> Result<(), ClientError> {
+        let ids: Vec<String> = demo_notifications()
+            .into_iter()
+            .filter(|notification| notification.issue_id == issue_id)
+            .filter(|notification| notification.read_at.is_none())
+            .map(|notification| notification.id)
+            .collect();
+        for id in ids {
+            demo_notification_change(&id, |notification| {
+                notification.read_at = Some(read_at);
+            })?;
+        }
+        Ok(())
+    }
+
     /// Remembers the issue as trashed: later edits and existence checks no
     /// longer find it.
     async fn trash_issue(&self, issue_id: &str) -> Result<(), ClientError> {
@@ -1237,6 +1627,16 @@ impl LinearClient for FakeClient {
                     .cloned(),
             );
         });
+        DEMO_ATTACHMENTS.with_borrow(|attachments| {
+            for attachment in attachments.iter().filter(|a| a.issue_id == issue_id) {
+                detail
+                    .attachments
+                    .retain(|known| known.url != attachment.url);
+                detail.attachments.push(attachment.clone());
+            }
+        });
+        DEMO_COMMENT_CHANGES.with_borrow(|changes| changes.apply(&mut detail.comments));
+        apply_demo_reactions(issue_id, &mut detail);
         Ok(detail)
     }
 
@@ -1385,6 +1785,7 @@ impl LinearClient for FakeClient {
         &self,
         issue_id: &str,
         body: &str,
+        parent_id: Option<&str>,
     ) -> Result<PostedComment, ClientError> {
         let data = demo::workspace();
         let known = data.issues.iter().any(|issue| issue.id == issue_id)
@@ -1404,11 +1805,78 @@ impl LinearClient for FakeClient {
                 author_id: Some(data.viewer.id.clone()),
                 body: body.to_owned(),
                 created_at: demo::NOW,
+                parent_id: parent_id.map(str::to_owned),
+                resolved_at: None,
+                edited_at: None,
+                reactions: Vec::new(),
             };
             comments.push(comment.clone());
             comment
         });
         Ok(PostedComment { comment, author })
+    }
+
+    async fn update_comment(&self, id: &str, body: &str) -> Result<(), ClientError> {
+        demo_change_comment(id, |comment| {
+            comment.body = body.to_owned();
+            comment.edited_at = Some(demo::NOW);
+        })
+    }
+
+    async fn delete_comment(&self, id: &str) -> Result<(), ClientError> {
+        demo_comment(id)?;
+        DEMO_COMMENT_CHANGES.with_borrow_mut(|changes| {
+            changes.deleted.push(id.to_owned());
+        });
+        Ok(())
+    }
+
+    async fn resolve_comment(&self, id: &str, resolved: bool) -> Result<(), ClientError> {
+        demo_change_comment(id, |comment| {
+            comment.resolved_at = resolved.then_some(demo::NOW);
+        })
+    }
+
+    async fn add_reaction(
+        &self,
+        target: &ReactionTarget,
+        emoji: &str,
+    ) -> Result<Reaction, ClientError> {
+        match target {
+            ReactionTarget::Issue(id) => {
+                demo_issue(&demo::workspace(), id)?;
+            }
+            ReactionTarget::Comment(id) => {
+                demo_comment(id)?;
+            }
+        }
+        let viewer_id = demo::workspace().viewer.id;
+        DEMO_REACTIONS.with_borrow_mut(|(added, _)| {
+            let reaction = Reaction {
+                id: format!("reaction-new-{}", added.len() + 1),
+                emoji: emoji.to_owned(),
+                user_id: Some(viewer_id),
+                created_at: demo::NOW,
+            };
+            added.push((target.clone(), reaction.clone()));
+            Ok(reaction)
+        })
+    }
+
+    async fn remove_reaction(&self, id: &str) -> Result<(), ClientError> {
+        let data = demo::workspace();
+        let known = data
+            .issue_reactions
+            .values()
+            .flatten()
+            .chain(data.comments.iter().flat_map(|comment| &comment.reactions))
+            .any(|reaction| reaction.id == id)
+            || DEMO_REACTIONS.with_borrow(|(added, _)| added.iter().any(|(_, r)| r.id == id));
+        if !known {
+            return Err(not_found("reaction", id));
+        }
+        DEMO_REACTIONS.with_borrow_mut(|(_, removed)| removed.push(id.to_owned()));
+        Ok(())
     }
 
     async fn create_issue(&self, input: &IssueCreate) -> Result<Issue, ClientError> {
@@ -1503,6 +1971,37 @@ impl LinearClient for FakeClient {
             ],
             server_time: Some(demo::NOW),
         })
+    }
+
+    /// The file attached under a made-up upload URL, its bytes reported
+    /// sent at once and never read.
+    async fn attach_file(
+        &self,
+        issue_id: &str,
+        file: &FileUpload,
+        mut progress: impl FnMut(u64) + Send + Sync + 'static,
+    ) -> Result<Attachment, ClientError> {
+        let url = format!("https://uploads.linear.app/demo/{}/{}", issue_id, file.name);
+        let attachment = demo_attach(issue_id, &url, &file.name)?;
+        progress(file.size);
+        Ok(attachment)
+    }
+
+    /// The link attached, titled with its host when no title is given, as
+    /// Linear names a link.
+    async fn attach_link(
+        &self,
+        issue_id: &str,
+        url: &str,
+        title: Option<&str>,
+    ) -> Result<Attachment, ClientError> {
+        let host = url
+            .split_once("://")
+            .map_or(url, |(_, rest)| rest)
+            .split(['/', '?', '#'])
+            .next()
+            .unwrap_or(url);
+        demo_attach(issue_id, url, title.unwrap_or(host))
     }
 
     /// The `updatedAt` of the issue as edits through this client left it.

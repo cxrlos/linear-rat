@@ -2,7 +2,7 @@
 source: tests/keys.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    "
+" [1] My Issues │ [2] │ [3] │ [4] │ [5] │ [6]                                    "
 "┌My Issues─────────────────────────────────────────────────────────────────────┐"
 "│┌ Keys ─────────────────────────────────────────────────────────────────────┐ │"
 "││ Move                                │ Edit the issue                      │ │"
@@ -15,12 +15,12 @@ expression: app.backend()
 "││ Open & copy                         │  M/d        milestone / due date    │ │"
 "││  Enter  open the issue              │  E          title and description   │ │"
 "││  yi/yu  copy key / URL              │  c          comment                 │ │"
-"││  yb/ym  copy branch / link          │  A/U        archive / unarchive     │ │"
-"││  o      Linear page or PR           │  X/S        trash / subscribe       │ │"
-"││  O      other links                 │  n          new issue               │ │"
-"││  gr     related issue               │  H/Dp/R/Dr  parent / relations      │ │"
-"││                                     │                                     │ │"
-"││ App                                 │ Issue list                          │ │"
+"││  yb/ym  copy branch / link          │  F/W        attach a file / link    │ │"
+"││  o      Linear page or PR           │  A/U        archive / unarchive     │ │"
+"││  O      other links                 │  X/S        trash / subscribe       │ │"
+"││  gr     related issue               │  n          new issue               │ │"
+"││                                     │  H/Dp/R/Dr  parent / relations      │ │"
+"││ App                                 │                                     │ │"
 "│└ Esc close ────────────────────────────────────────────────────────────────┘ │"
 "└──────────────────────────────────────────────────────────────────────────────┘"
 " Move │ j/k move                                                                "

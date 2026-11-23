@@ -5,8 +5,8 @@ use crossterm::event::KeyCode;
 use super::{Context, Key};
 use crate::analytics::WeekRange;
 use crate::app::{
-    self, Action, AnalyticsView, Copyable, EditPicker, Editable, FilterField, LinkSet, Modal, Pane,
-    Phase, Screen, State, WriteClass, can_load_more,
+    self, Action, AnalyticsView, AttachStep, Copyable, EditPicker, Editable, FilterField, LinkSet,
+    Modal, Pane, Phase, Screen, State, WriteClass, can_load_more,
 };
 use crate::ui;
 
@@ -50,6 +50,19 @@ impl ActionSpec {
                 Cow::Owned(format!("What's new in v{version}"))
             }
             _ => Cow::Borrowed(self.description),
+        }
+    }
+
+    /// Where the bottom bar shows it on `state`: its hint, but with the word
+    /// the open overlay uses for it, as Tab completing a path in the attach
+    /// prompt.
+    pub fn hint_in(&self, state: &State) -> Option<Hint> {
+        match (self.action, state.modals.top()) {
+            (Action::ToggleEntry, Some(Modal::Attach(_))) => self.hint.map(|hint| Hint {
+                word: "complete",
+                ..hint
+            }),
+            _ => self.hint,
         }
     }
 
@@ -181,10 +194,19 @@ const fn views(word: &'static str) -> Option<Hint> {
 const LIST: &[Context] = &[Context::List];
 const TEAM_ISSUES: &[Context] = &[Context::TeamIssues];
 const PANES: &[Context] = &[Context::List, Context::Detail];
-/// Moves also go through the Cycles and Projects lists.
-const MOVES: &[Context] = &[Context::List, Context::Detail, Context::Browse];
+/// Moves also go through the Cycles and Projects lists and the Inbox.
+const MOVES: &[Context] = &[
+    Context::List,
+    Context::Detail,
+    Context::Browse,
+    Context::Inbox,
+];
 const BROWSE: &[Context] = &[Context::Browse];
 const CYCLES: &[Context] = &[Context::Cycles];
+const DETAIL: &[Context] = &[Context::Detail];
+const COMMENT: &[Context] = &[Context::Comment];
+const REACT: &[Context] = &[Context::Detail, Context::Comment];
+const INBOX: &[Context] = &[Context::Inbox];
 const GLOBAL: &[Context] = &[Context::Global];
 const OVERLAY: &[Context] = &[Context::Overlay];
 const ANALYTICS: &[Context] = &[Context::Analytics];
@@ -212,10 +234,12 @@ pub enum OverlayKind {
     Confirm,
     /// The error log, which scrolls.
     Messages,
+    /// The prompt a file path is typed into, which Tab completes.
+    Path,
 }
 
 impl OverlayKind {
-    pub const ALL: [OverlayKind; 9] = [
+    pub const ALL: [OverlayKind; 10] = [
         OverlayKind::Cheatsheet,
         OverlayKind::List,
         OverlayKind::MultiList,
@@ -225,6 +249,7 @@ impl OverlayKind {
         OverlayKind::Prompt,
         OverlayKind::Confirm,
         OverlayKind::Messages,
+        OverlayKind::Path,
     ];
 
     /// The kind of `modal`, or `None` for the which-key popup, which only
@@ -235,6 +260,7 @@ impl OverlayKind {
             Modal::WhichKey { .. } => return None,
             Modal::Picker(picker) if picker.list.is_multi() => OverlayKind::MultiList,
             Modal::IssuePicker(picker) if picker.list.is_multi() => OverlayKind::MultiList,
+            Modal::Choice(choice) if choice.list.is_multi() => OverlayKind::MultiList,
             Modal::Picker(_) | Modal::IssuePicker(_) | Modal::Choice(_) | Modal::Create(_) => {
                 OverlayKind::List
             }
@@ -244,6 +270,8 @@ impl OverlayKind {
             Modal::DueDate(_) => OverlayKind::Prompt,
             Modal::Confirm(_) => OverlayKind::Confirm,
             Modal::Messages { .. } => OverlayKind::Messages,
+            Modal::Attach(prompt) if prompt.step == AttachStep::File => OverlayKind::Path,
+            Modal::Attach(_) => OverlayKind::Prompt,
         })
     }
 }
@@ -272,6 +300,7 @@ const ACCEPTING: &[OverlayKind] = &[
     OverlayKind::Search,
     OverlayKind::Prompt,
     OverlayKind::Confirm,
+    OverlayKind::Path,
 ];
 
 /// Every action lrat has, in the order hints and the cheatsheet list them.
@@ -641,6 +670,32 @@ pub static ACTIONS: &[ActionSpec] = &[
         },
     },
     ActionSpec {
+        action: Action::AttachFile,
+        id: "attach-file",
+        description: "Attach a file",
+        label: "attach a file / link",
+        group: Group::Edit,
+        writes: Some(WriteClass::Attach),
+        hint: None,
+        contexts: PANES,
+        overlays: &[],
+        default_keys: &[&[Key::char('F')]],
+        available: has_saved_issue,
+    },
+    ActionSpec {
+        action: Action::AttachLink,
+        id: "attach-link",
+        description: "Attach a link",
+        label: "attach a file / link",
+        group: Group::Edit,
+        writes: Some(WriteClass::Attach),
+        hint: None,
+        contexts: PANES,
+        overlays: &[],
+        default_keys: &[&[Key::char('W')]],
+        available: has_saved_issue,
+    },
+    ActionSpec {
         action: Action::Archive,
         id: "archive",
         description: "Archive the issue",
@@ -776,6 +831,97 @@ pub static ACTIONS: &[ActionSpec] = &[
         available: has_saved_issue,
     },
     ActionSpec {
+        action: Action::NextComment,
+        id: "next-comment",
+        description: "Focus the next comment",
+        label: "next / previous comment",
+        group: Group::Move,
+        writes: None,
+        hint: moves("comment"),
+        contexts: DETAIL,
+        overlays: &[],
+        default_keys: &[&[Key::char('}')]],
+        available: app::can_focus_comments,
+    },
+    ActionSpec {
+        action: Action::PreviousComment,
+        id: "previous-comment",
+        description: "Focus the previous comment",
+        label: "next / previous comment",
+        group: Group::Move,
+        writes: None,
+        hint: moves("comment"),
+        contexts: DETAIL,
+        overlays: &[],
+        default_keys: &[&[Key::char('{')]],
+        available: app::can_focus_comments,
+    },
+    ActionSpec {
+        action: Action::ReplyToComment,
+        id: "reply-to-comment",
+        description: "Reply in the focused comment's thread",
+        label: "reply",
+        group: Group::Screen,
+        writes: Some(WriteClass::CreateComment),
+        hint: does("reply"),
+        contexts: COMMENT,
+        overlays: &[],
+        default_keys: &[&[Key::char('r')]],
+        available: has_focused_comment,
+    },
+    ActionSpec {
+        action: Action::EditComment,
+        id: "edit-comment",
+        description: "Edit your focused comment",
+        label: "edit yours",
+        group: Group::Screen,
+        writes: Some(WriteClass::ChangeComment),
+        hint: None,
+        contexts: COMMENT,
+        overlays: &[],
+        default_keys: &[&[Key::char('E')]],
+        available: app::owns_focused_comment,
+    },
+    ActionSpec {
+        action: Action::DeleteComment,
+        id: "delete-comment",
+        description: "Delete your focused comment",
+        label: "delete yours",
+        group: Group::Screen,
+        writes: Some(WriteClass::ChangeComment),
+        hint: None,
+        contexts: COMMENT,
+        overlays: &[],
+        default_keys: &[&[Key::char('X')]],
+        available: app::owns_focused_comment,
+    },
+    ActionSpec {
+        action: Action::ToggleResolved,
+        id: "toggle-resolved",
+        description: "Resolve or unresolve the focused thread",
+        label: "resolve / unresolve",
+        group: Group::Screen,
+        writes: Some(WriteClass::ChangeComment),
+        hint: does("resolve"),
+        contexts: COMMENT,
+        overlays: &[],
+        default_keys: &[&[Key::char('x')]],
+        available: has_focused_comment,
+    },
+    ActionSpec {
+        action: Action::React,
+        id: "react",
+        description: "React to the focused comment, or the issue",
+        label: "react",
+        group: Group::Screen,
+        writes: Some(WriteClass::React),
+        hint: does("react"),
+        contexts: REACT,
+        overlays: &[],
+        default_keys: &[&[Key::char('+')]],
+        available: app::can_react,
+    },
+    ActionSpec {
         action: Action::PickNumber(1),
         id: "pick-1",
         description: "Pick entry 1 of the list",
@@ -891,6 +1037,85 @@ pub static ACTIONS: &[ActionSpec] = &[
         overlays: LISTS,
         default_keys: &[&[Key::char('9')]],
         available: |state| picker_has(9, state),
+    },
+    ActionSpec {
+        action: Action::OpenNotification,
+        id: "open-notification",
+        description: "Open the notification's issue and mark it read",
+        label: "open the issue",
+        group: Group::Screen,
+        writes: None,
+        hint: does("open"),
+        contexts: INBOX,
+        overlays: &[],
+        default_keys: &[&[Key::named(KeyCode::Enter)]],
+        available: has_notification,
+    },
+    ActionSpec {
+        action: Action::ToggleRead,
+        id: "toggle-read",
+        description: "Mark the notification read or unread",
+        label: "read / issue read",
+        group: Group::Screen,
+        writes: Some(WriteClass::Inbox),
+        hint: does("read"),
+        contexts: INBOX,
+        overlays: &[],
+        default_keys: &[&[Key::char('m')]],
+        available: has_notification,
+    },
+    ActionSpec {
+        action: Action::MarkIssueRead,
+        id: "mark-issue-read",
+        description: "Mark every notification about the issue read",
+        label: "read / issue read",
+        group: Group::Screen,
+        writes: Some(WriteClass::Inbox),
+        hint: None,
+        contexts: INBOX,
+        overlays: &[],
+        default_keys: &[&[Key::char('M')]],
+        available: has_notification,
+    },
+    ActionSpec {
+        action: Action::ArchiveNotification,
+        id: "archive-notification",
+        description: "Archive the notification",
+        label: "archive / snooze",
+        group: Group::Screen,
+        writes: Some(WriteClass::Inbox),
+        hint: does("archive"),
+        contexts: INBOX,
+        overlays: &[],
+        default_keys: &[&[Key::char('A')]],
+        available: has_notification,
+    },
+    ActionSpec {
+        action: Action::Snooze,
+        id: "snooze",
+        description: "Snooze the notification until a preset time",
+        label: "archive / snooze",
+        group: Group::Screen,
+        writes: Some(WriteClass::Inbox),
+        hint: does("snooze"),
+        contexts: INBOX,
+        overlays: &[],
+        default_keys: &[&[Key::char('z')]],
+        available: has_notification,
+    },
+    // Run from the palette, so it has no key.
+    ActionSpec {
+        action: Action::ArchiveAllRead,
+        id: "archive-all-read",
+        description: "Archive every read notification in the Inbox",
+        label: "archive all read",
+        group: Group::Screen,
+        writes: Some(WriteClass::Inbox),
+        hint: None,
+        contexts: INBOX,
+        overlays: &[],
+        default_keys: &[],
+        available: app::inbox_has_read,
     },
     ActionSpec {
         action: Action::SwitchTeam,
@@ -1117,7 +1342,11 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: does("toggle"),
         contexts: OVERLAY,
-        overlays: &[OverlayKind::MultiList, OverlayKind::Search],
+        overlays: &[
+            OverlayKind::MultiList,
+            OverlayKind::Search,
+            OverlayKind::Path,
+        ],
         default_keys: &[&[Key::named(KeyCode::Tab)]],
         available: |state| match state.modals.top() {
             Some(Modal::Search(search)) => search.editable(),
@@ -1127,6 +1356,10 @@ pub static ACTIONS: &[ActionSpec] = &[
             Some(Modal::IssuePicker(picker)) => {
                 picker.list.is_multi() && picker.list.selected().is_some()
             }
+            Some(Modal::Choice(choice)) => {
+                choice.list.is_multi() && choice.list.selected().is_some()
+            }
+            Some(Modal::Attach(prompt)) => prompt.step == AttachStep::File,
             _ => false,
         },
     },
@@ -1291,6 +1524,19 @@ pub static ACTIONS: &[ActionSpec] = &[
         overlays: &[],
         default_keys: &[&[Key::char('5')]],
         available: |state| state.screen != Screen::Projects,
+    },
+    ActionSpec {
+        action: Action::ShowScreen(Screen::Inbox),
+        id: "show-inbox",
+        description: "Show the Inbox",
+        label: "inbox",
+        group: Group::App,
+        writes: None,
+        hint: None,
+        contexts: GLOBAL,
+        overlays: &[],
+        default_keys: &[&[Key::char('6')]],
+        available: |state| state.screen != Screen::Inbox,
     },
     ActionSpec {
         action: Action::Refresh,
@@ -1499,7 +1745,7 @@ fn can_accept(state: &State) -> bool {
             Phase::Typing { .. } | Phase::NothingFound { .. } => !search.query.trim().is_empty(),
             Phase::Searching { .. } => false,
         },
-        Some(Modal::Confirm(_) | Modal::DueDate(_)) => true,
+        Some(Modal::Confirm(_) | Modal::DueDate(_) | Modal::Attach(_)) => true,
         _ => false,
     }
 }
@@ -1523,6 +1769,10 @@ fn picker_has(count: usize, state: &State) -> bool {
     }
     match state.modals.top() {
         Some(Modal::Links(links)) => links.list.visible().len() >= count,
+        // A multi-select choice lists issue keys, typed like `ENG-12`.
+        Some(Modal::Choice(choice)) if choice.list.is_multi() => {
+            !continues_word(choice.list.query()) && choice.list.visible().len() >= count
+        }
         Some(Modal::Choice(choice)) => choice.list.visible().len() >= count,
         Some(Modal::Create(form)) => form.list().is_some_and(|(len, _)| len >= count),
         // A digit that continues a word, as in `ENG-12`, types into the
@@ -1543,6 +1793,11 @@ fn continues_word(query: &str) -> bool {
         .is_some_and(|c| c.is_alphanumeric() || c == '-')
 }
 
+/// Whether the Inbox is on screen with a notification focused.
+fn has_notification(state: &State) -> bool {
+    state.screen == Screen::Inbox && app::focused_notification(state).is_some()
+}
+
 fn has_team(state: &State) -> bool {
     state.team_issues.query().is_some()
 }
@@ -1556,6 +1811,10 @@ fn has_saved_issue(state: &State) -> bool {
     state
         .focused_issue()
         .is_some_and(|issue| !app::is_local(&issue.id))
+}
+
+fn has_focused_comment(state: &State) -> bool {
+    app::focused_comment(state).is_some()
 }
 
 // In the detail, moves scroll it, so they are available while it has more
@@ -1590,7 +1849,7 @@ fn in_detail(state: &State) -> bool {
         Screen::MyIssues => state.my_issues.pane() == Pane::Detail,
         Screen::TeamIssues => state.team_issues.pane() == Pane::Detail,
         Screen::Results => state.results.pane() == Pane::Detail,
-        Screen::Analytics | Screen::Cycles | Screen::Projects => false,
+        Screen::Analytics | Screen::Cycles | Screen::Projects | Screen::Inbox => false,
     }
 }
 

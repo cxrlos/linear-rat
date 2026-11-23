@@ -257,7 +257,32 @@ impl LinearClient for RejectingClient {
         &self,
         _: &str,
         _: &str,
+        _: Option<&str>,
     ) -> Result<linear_rat::linear::PostedComment, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn update_comment(&self, _: &str, _: &str) -> Result<(), ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn delete_comment(&self, _: &str) -> Result<(), ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn resolve_comment(&self, _: &str, _: bool) -> Result<(), ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn add_reaction(
+        &self,
+        _: &linear_rat::linear::ReactionTarget,
+        _: &str,
+    ) -> Result<linear_rat::linear::model::Reaction, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn remove_reaction(&self, _: &str) -> Result<(), ClientError> {
         Err(ClientError::InvalidKey)
     }
 
@@ -297,6 +322,24 @@ impl LinearClient for RejectingClient {
     }
 
     async fn issue_updated_at(&self, _: &str) -> Result<Timestamp, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn attach_file(
+        &self,
+        _: &str,
+        _: &linear_rat::linear::FileUpload,
+        _: impl FnMut(u64) + Send + Sync + 'static,
+    ) -> Result<linear_rat::linear::model::Attachment, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn attach_link(
+        &self,
+        _: &str,
+        _: &str,
+        _: Option<&str>,
+    ) -> Result<linear_rat::linear::model::Attachment, ClientError> {
         Err(ClientError::InvalidKey)
     }
 }

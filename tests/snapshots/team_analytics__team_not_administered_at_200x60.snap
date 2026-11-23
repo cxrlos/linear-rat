@@ -2,7 +2,7 @@
 source: tests/team_analytics.rs
 expression: "team_view_of(1, 200, 60).backend()"
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects                                                                                                                            "
+" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects │ [6] Inbox                                                                                                                "
 "┌Analytics─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐"
 "│v  Personal [Team]  t DES Design   Range  4 weeks [12 weeks] 26 weeks                                                                                                                                 │"
 "│                                                                                                                                                                                                      │"

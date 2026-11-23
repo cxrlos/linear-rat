@@ -2,7 +2,7 @@
 source: tests/search_results.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    "
+" [1] │ [2] │ [3] │ [4] │ [5] │ [6]                                              "
 "┌Search "cheese" (5)───────────────────────────────────────────────────────────┐"
 "│▸ ENG-3  Cheese wheel barcode scanner dr… ● Done        !!! Urgent  2 Cycle 1 │"
 "│  ENG-27 Deduplicate cheese varieties in… ● Done        ▮▯▯ Low     1 Cycle 3 │"

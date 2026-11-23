@@ -2,7 +2,7 @@
 source: tests/capabilities.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    "
+" [1] │ [2] Team Issues │ [3] │ [4] │ [5] │ [6]                                  "
 "t ENG Engineering · 0 of … · f Filters none                                     "
 "┌Team Issues───────────────────────────────────────────────────────────────────┐"
 "│Not accessible with this key                                                  │"

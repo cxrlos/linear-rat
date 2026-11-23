@@ -1,0 +1,16 @@
+# budget: 5
+# Attaches a link to an issue, titled `title`, or as Linear names it when
+# `title` is null. Returns it as the detail reads attachments.
+mutation AttachmentLinkUrl($issueId: String!, $url: String!, $title: String) {
+  attachmentLinkURL(issueId: $issueId, url: $url, title: $title) {
+    success
+    attachment {
+      id
+      url
+      title
+      subtitle
+      sourceType
+      metadata
+    }
+  }
+}

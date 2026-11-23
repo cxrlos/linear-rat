@@ -7,9 +7,11 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::assigned::{optional_timestamp, state_type, timestamp};
+use super::comment::CommentNode;
+use super::comment::ReactionNode;
 use super::{HttpClient, PageInfo, Urgency, relations};
 use crate::linear::model::{
-    Attachment, Comment, Member, Project, ProjectMilestone, StateSpan, StateType, WorkflowState,
+    Attachment, Project, ProjectMilestone, StateSpan, StateType, WorkflowState,
 };
 use crate::linear::{ClientError, IssueDetail, Response};
 
@@ -52,6 +54,7 @@ pub(super) async fn load(
         project: None,
         milestone: None,
         attachments: Vec::new(),
+        reactions: Vec::new(),
         problems: comment_errors
             .iter()
             .chain(&history_errors)
@@ -72,25 +75,21 @@ pub(super) async fn load(
         .into_iter()
         .flat_map(|page| page.issue.comments.nodes)
     {
-        if let Some(user) = &node.user
-            && !detail.members.iter().any(|known| known.id == user.id)
+        let (comment, author) = node.into_comment(issue_id);
+        if let Some(author) = author
+            && !detail.members.iter().any(|known| known.id == author.id)
         {
-            detail.members.push(Member {
-                id: user.id.clone(),
-                name: user.name.clone(),
-                display_name: user.display_name.clone(),
-            });
+            detail.members.push(author);
         }
-        detail.comments.push(Comment {
-            id: node.id,
-            issue_id: issue_id.to_owned(),
-            author_id: node.user.map(|user| user.id),
-            body: node.body,
-            created_at: node.created_at,
-        });
+        detail.comments.push(comment);
     }
-    for (index, page) in history_pages.into_iter().enumerate() {
+    for (index, mut page) in history_pages.into_iter().enumerate() {
         if index == 0 {
+            detail.reactions = std::mem::take(&mut page.issue.reactions)
+                .into_iter()
+                .map(ReactionNode::into_reaction)
+                .collect();
+            detail.reactions.sort_by_key(|reaction| reaction.created_at);
             detail.attachments = page
                 .issue
                 .attachments
@@ -167,6 +166,8 @@ struct IssueHistory {
     project_milestone: Option<MilestoneNode>,
     state_history: Connection<SpanNode>,
     attachments: Nodes<AttachmentNode>,
+    #[serde(default)]
+    reactions: Vec<ReactionNode>,
 }
 
 #[derive(Deserialize)]
@@ -188,7 +189,7 @@ struct Nodes<N> {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct AttachmentNode {
+pub(super) struct AttachmentNode {
     id: String,
     url: String,
     title: String,
@@ -202,7 +203,7 @@ impl AttachmentNode {
     /// The attachment, with a pull request's state when the metadata holds
     /// a `status` string. Linear does not document the metadata's shape per
     /// source, so anything else there is ignored.
-    fn into_attachment(self, issue_id: &str) -> Attachment {
+    pub(super) fn into_attachment(self, issue_id: &str) -> Attachment {
         let status = self.metadata.get("status").and_then(Value::as_str);
         Attachment {
             id: self.id,
@@ -221,24 +222,6 @@ impl AttachmentNode {
 struct Connection<N> {
     nodes: Vec<N>,
     page_info: PageInfo,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct CommentNode {
-    id: String,
-    body: String,
-    #[serde(deserialize_with = "timestamp")]
-    created_at: Timestamp,
-    user: Option<UserNode>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct UserNode {
-    id: String,
-    name: String,
-    display_name: String,
 }
 
 #[derive(Deserialize)]

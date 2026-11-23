@@ -1,0 +1,28 @@
+---
+source: tests/reactions.rs
+expression: app.backend()
+---
+" [1] My Issues │ [2] │ [3] │ [4] │ [5] │ [6]                                    "
+"┌DES-34────────────────────────────────────────────────────────────────────────┐"
+"│Design QA for the autumn release                                              │"
+"│                                                                              │"
+"│State     ◐ In Progress                                                       │"
+"│Priority  ▮▮▮ Hi┌ React ────────────────────────────────────┐                 │"
+"│Estimate  3     │ > type to filter                          │                 │"
+"│                │ 1 👍 thumbs up                            │                 │" Hidden by multi-width symbols: [(22, " ")]
+"│Bring two option│ 2 👎 thumbs down                          │                 │" Hidden by multi-width symbols: [(22, " ")]
+"│👍 2  🎉 1      │ 3 😄 smile                                │                 │" Hidden by multi-width symbols: [(2, " "), (8, " "), (22, " ")]
+"│                │ 4 🎉 party · yours, removes it            │                 │" Hidden by multi-width symbols: [(22, " ")]
+"│Comments (4)    │ 5 😕 confused                             │                 │" Hidden by multi-width symbols: [(22, " ")]
+"│▸ resolved · 1 r│ 6 ❤️ heart                                │                 │" Hidden by multi-width symbols: [(22, " ")]
+"│                │ 7 🚀 rocket                               │                 │" Hidden by multi-width symbols: [(22, " ")]
+"│Nell Havarti · 6│ 8 👀 eyes                                 │                 │" Hidden by multi-width symbols: [(22, " ")]
+"│  Added screensh└ Down/Up select  Enter choose  Esc close ──┘                 │"
+"│  👀 1  👍 1                                                                  │" Hidden by multi-width symbols: [(4, " "), (10, " ")]
+"│    Mira Gouda · 5 days ago · edited                                          │"
+"│      Picking this up after standup.                                          │"
+"│                                                                              │"
+"└──────────────────────────────────────────────────────────────────────────────┘"
+" Move │ Down/Up move                                                            "
+" Do   │ Enter choose │ Esc close                                                "
+"                                                                                "

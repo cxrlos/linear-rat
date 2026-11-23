@@ -2,7 +2,7 @@
 source: tests/browse.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects                        "
+" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects │ [6] Inbox            "
 "┌Projects──────────────────────────────────────────────────────────────────────────────────────────┐"
 "│▸ Nibble 3.0                                         ◐ In Progress  2026-12-15 Mira Gouda      65%│"
 "│  Shared pantries                                    ◐ In Progress  2027-01-31 Ada Roquefort   50%│"

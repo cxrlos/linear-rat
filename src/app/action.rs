@@ -104,6 +104,37 @@ pub enum Action {
     SwitchCyclesTeam,
     /// List the issues of the focused cycle or project.
     ListIssues,
+    /// Open the prompt that attaches a local file to the focused issue.
+    AttachFile,
+    /// Open the prompt that attaches a link to the focused issue.
+    AttachLink,
+    /// Focus the next comment of the detail.
+    NextComment,
+    /// Focus the previous comment of the detail.
+    PreviousComment,
+    /// Reply in the focused comment's thread in `$EDITOR`.
+    ReplyToComment,
+    /// Edit the viewer's focused comment in `$EDITOR`.
+    EditComment,
+    /// Ask to confirm deleting the viewer's focused comment.
+    DeleteComment,
+    /// Resolve the focused comment's thread, or open it again.
+    ToggleResolved,
+    /// Pick a reaction to add to, or remove from, the focused comment or
+    /// issue.
+    React,
+    /// Marks the focused notification read, or unread when it is read.
+    ToggleRead,
+    /// Marks every notification about the focused one's issue read.
+    MarkIssueRead,
+    /// Archives the focused notification.
+    ArchiveNotification,
+    /// Snoozes the focused notification until a preset time.
+    Snooze,
+    /// Opens the focused notification's issue and marks it read.
+    OpenNotification,
+    /// Archives every read notification in the inbox.
+    ArchiveAllRead,
 }
 
 /// What [`Action::Copy`] puts on the clipboard.

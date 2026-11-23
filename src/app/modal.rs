@@ -1,3 +1,4 @@
+use super::attach::AttachPrompt;
 use super::create::CreateForm;
 use super::edit::{DuePrompt, EditPicker};
 use super::issue_picker::IssuePicker;
@@ -40,6 +41,8 @@ pub enum Modal {
     Messages { scroll: u16 },
     /// A list to choose one or several issues from, for a purpose.
     IssuePicker(IssuePicker),
+    /// The prompt that attaches a file or a link to an issue.
+    Attach(AttachPrompt),
 }
 
 impl Modal {
@@ -52,7 +55,8 @@ impl Modal {
             | Modal::Create(_)
             | Modal::Choice(_)
             | Modal::DueDate(_)
-            | Modal::IssuePicker(_) => true,
+            | Modal::IssuePicker(_)
+            | Modal::Attach(_) => true,
             Modal::Search(search) => !matches!(search.phase, Phase::Searching { .. }),
             Modal::Cheatsheet { .. }
             | Modal::WhichKey { .. }
@@ -80,6 +84,11 @@ impl Modal {
                 prompt.error = None;
                 Some(&mut prompt.text)
             }
+            Modal::Attach(prompt) => {
+                prompt.error = None;
+                prompt.matches.clear();
+                Some(&mut prompt.text)
+            }
             Modal::Cheatsheet { .. }
             | Modal::WhichKey { .. }
             | Modal::Confirm(_)
@@ -98,7 +107,7 @@ pub struct Choice {
 }
 
 /// What picking an entry of a [`Choice`] does.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Purpose {
     /// Show this team in Team Issues.
     Team,
@@ -115,17 +124,27 @@ pub enum Purpose {
     Sort,
     /// Add a relation of this kind to the focused issue.
     RelationKind,
+    /// Remove these relations of the issue `issue_id`, the one focused when
+    /// the list opened.
+    RemoveRelations { issue_id: String },
+    /// Add this reaction to the focused comment or issue, or remove it.
+    Reaction,
+    /// Snooze the focused notification until this time.
+    Snooze,
 }
 
 impl Choice {
     /// What the popup is titled.
     pub fn title(&self) -> String {
-        match self.purpose {
+        match &self.purpose {
             Purpose::Team | Purpose::AnalyticsTeam | Purpose::CyclesTeam => "Team".to_owned(),
             Purpose::Filter(field) => format!("Filter by {}", field.name().to_lowercase()),
             Purpose::Group => "Group by".to_owned(),
             Purpose::Sort => "Sort by".to_owned(),
             Purpose::RelationKind => "Add a relation".to_owned(),
+            Purpose::RemoveRelations { .. } => "Remove relations".to_owned(),
+            Purpose::Reaction => "React".to_owned(),
+            Purpose::Snooze => "Snooze until".to_owned(),
         }
     }
 

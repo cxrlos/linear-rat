@@ -232,6 +232,10 @@ fn a_live_comment_joins_the_comments_already_loaded() {
             author_id: None,
             body: "Seen live".to_owned(),
             created_at: demo::NOW,
+            parent_id: None,
+            resolved_at: None,
+            edited_at: None,
+            reactions: Vec::new(),
         },
         author: None,
     })))
@@ -268,6 +272,10 @@ fn a_live_comment_schedules_no_poll() {
             author_id: None,
             body: "Seen live".to_owned(),
             created_at: demo::NOW,
+            parent_id: None,
+            resolved_at: None,
+            edited_at: None,
+            reactions: Vec::new(),
         },
         author: None,
     })))

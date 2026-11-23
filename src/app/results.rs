@@ -18,6 +18,15 @@ pub struct Results {
     opened_as: Arrangement,
     names: Names,
     back: Screen,
+    listing: Option<Listing>,
+}
+
+/// The cycle or project whose issues the results are, so a refresh can
+/// load that list again.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Listing {
+    Cycle(String),
+    Project(String),
 }
 
 impl Default for Results {
@@ -30,6 +39,7 @@ impl Default for Results {
             opened_as: Arrangement::LINEAR_ORDER,
             names: Names::default(),
             back: Screen::default(),
+            listing: None,
         }
     }
 }
@@ -77,6 +87,21 @@ impl Results {
     /// The screen Esc from the list goes back to.
     pub fn back(&self) -> Screen {
         self.back
+    }
+
+    /// The cycle or project these are the issues of, if any.
+    pub fn listing(&self) -> Option<&Listing> {
+        self.listing.as_ref()
+    }
+
+    pub(super) fn set_listing(&mut self, listing: Listing) {
+        self.listing = Some(listing);
+    }
+
+    /// Lists `ids` instead, in the order they came. The list shows them
+    /// once it is built again.
+    pub(super) fn replace_ids(&mut self, ids: Vec<String>) {
+        self.ids = ids;
     }
 
     /// Carries out a navigation action on a list that shows `rows` rows at
@@ -147,6 +172,7 @@ pub(super) fn show_arranged(
         arrangement,
         opened_as: arrangement,
         list: IssueList::default(),
+        listing: None,
     };
     state.screen = Screen::Results;
     rebuild(state);

@@ -1,0 +1,7 @@
+# budget: 5
+# Marks every notification about one issue read.
+mutation NotificationMarkReadAll($issueId: String!, $readAt: DateTime!) {
+  notificationMarkReadAll(input: { issueId: $issueId }, readAt: $readAt) {
+    success
+  }
+}

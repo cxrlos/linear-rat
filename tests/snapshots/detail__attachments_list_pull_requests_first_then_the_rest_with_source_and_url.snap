@@ -2,12 +2,12 @@
 source: tests/detail.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    "
+" [1] My Issues │ [2] │ [3] │ [4] │ [5] │ [6]                                    "
 "┌DES-34────────────────────────────────────────────────────────────────────────┐"
 "│  Added screenshots from the cellar map.                                      │"
-"│                                                                              │"
-"│Mira Gouda · 5 days ago                                                       │"
-"│  Picking this up after standup.                                              │"
+"│  👀 1  👍 1                                                                  │" Hidden by multi-width symbols: [(4, " "), (10, " ")]
+"│    Mira Gouda · 5 days ago · edited                                          │"
+"│      Picking this up after standup.                                          │"
 "│                                                                              │"
 "│History                                                                       │"
 "│◇ Triage       10h 38m                                                        │"
@@ -39,6 +39,6 @@ expression: app.backend()
 "│Updated   2026-10-29 01:25 UTC (4 days ago)                                   │"
 "│Updates   Subscribed                                                          │"
 "└──────────────────────────────────────────────────────────────────────────────┘"
-" Move │ j down  k up  gg top  G bottom  C-d/C-u page  h/l pane  / search        "
-" Do   │ y yank  o links  Esc close  ? keys  : palette  q quit                   "
+" Move │ j down  k up  gg top  G bottom  C-d/C-u page  h/l pane  }/{ comment     "
+" Do   │ y yank  o links  + react  Esc close  ? keys  : palette  q quit          "
 " Edit │ s state  a assignee  p priority  L labels  e estimate  E text  c comment"

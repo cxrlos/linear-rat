@@ -10,13 +10,16 @@ use serde::{Deserialize, Serialize};
 use super::capabilities::Capabilities;
 use super::edit::{Edit, Write};
 use crate::analytics::AdministrableTeams;
+use crate::linear::ReactionTarget;
+use crate::linear::model::Reaction;
 use crate::linear::model::{
-    Attachment, Comment, Cycle, Issue, IssueRelation, Label, Member, Project, ProjectMilestone,
-    RelationKind, StateSpan, Team, Viewer, WorkflowState, Workspace,
+    Attachment, Comment, Cycle, Issue, IssueRelation, Label, Member, Notification, Project,
+    ProjectMilestone, RelationKind, StateSpan, Team, Viewer, WorkflowState, Workspace,
 };
 use crate::linear::{
-    AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, PostedComment, ProjectList,
-    SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions,
+    AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, NotificationsLoaded,
+    PostedComment, ProjectList, SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage,
+    TeamOptions,
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
@@ -56,6 +59,11 @@ pub struct Store {
     /// edits made them. Defaults when missing, as `attachments` does.
     #[serde(default)]
     relations: BTreeMap<String, IssueRelation>,
+    /// Issues' own reactions by issue id, oldest first, as the detail
+    /// loaded them. Kept apart from the issues so no list query has to ask
+    /// for them.
+    #[serde(default)]
+    issue_reactions: BTreeMap<String, Vec<Reaction>>,
     /// When the newest data was loaded, which decides the active cycle.
     as_of: Option<Timestamp>,
     /// The ids of the teams the viewer is a member of, in the order Linear
@@ -91,6 +99,14 @@ pub struct Store {
     /// answers. Defaults when missing, so an older snapshot still loads.
     #[serde(default)]
     capabilities: Capabilities,
+    /// The viewer's issue notifications by id, from this session's loads.
+    /// Left out of the snapshot, so a new session loads the inbox afresh.
+    #[serde(skip)]
+    notifications: BTreeMap<String, Notification>,
+    /// The newest `updatedAt` among the notifications loaded, where the
+    /// next delta starts. Only server values.
+    #[serde(skip)]
+    notifications_watermark: Option<Timestamp>,
 }
 
 impl Store {
@@ -425,6 +441,226 @@ impl Store {
         comments.sort_by_key(|comment| comment.created_at);
     }
 
+    /// Puts `comments` back among their issues' loaded comments, in order,
+    /// unless one with the same id is there. Comments not loaded yet stay
+    /// not loaded.
+    pub fn put_back_comments(&mut self, comments: Vec<Comment>) {
+        for comment in comments {
+            let Some(stored) = self.comments.get_mut(&comment.issue_id) else {
+                continue;
+            };
+            if stored.iter().all(|known| known.id != comment.id) {
+                stored.push(comment);
+                stored.sort_by_key(|comment| comment.created_at);
+            }
+        }
+    }
+
+    /// Replaces the stored comment with `comment`'s id by `comment`, in its
+    /// place, and returns what it replaced.
+    pub fn replace_comment(&mut self, comment: Comment) -> Option<Comment> {
+        let stored = self
+            .comments
+            .get_mut(&comment.issue_id)?
+            .iter_mut()
+            .find(|known| known.id == comment.id)?;
+        Some(std::mem::replace(stored, comment))
+    }
+
+    /// Stores `member`, replacing the copy with its id.
+    pub fn add_member(&mut self, member: Member) {
+        self.members.insert(member.id.clone(), member);
+    }
+
+    /// Forgets the comment with id `id` and the replies under it, as
+    /// Linear deletes them together, and returns them.
+    pub fn remove_comment(&mut self, id: &str) -> Vec<Comment> {
+        let Some(comments) = self
+            .comments
+            .values_mut()
+            .find(|comments| comments.iter().any(|comment| comment.id == id))
+        else {
+            return Vec::new();
+        };
+        let mut doomed = vec![id.to_owned()];
+        // Replies come after their parent, oldest first, so one pass finds
+        // replies to replies as well.
+        for comment in comments.iter() {
+            if comment
+                .parent_id
+                .as_ref()
+                .is_some_and(|parent| doomed.contains(parent))
+            {
+                doomed.push(comment.id.clone());
+            }
+        }
+        let (removed, kept) = std::mem::take(comments)
+            .into_iter()
+            .partition(|comment| doomed.contains(&comment.id));
+        *comments = kept;
+        removed
+    }
+
+    /// Marks the thread the comment `id` starts resolved at `at`, or not
+    /// resolved for `None`, and returns when it was resolved before. `None`
+    /// when no such comment is stored.
+    pub fn resolve_comment(
+        &mut self,
+        id: &str,
+        at: Option<Timestamp>,
+    ) -> Option<Option<Timestamp>> {
+        let comment = self
+            .comments
+            .values_mut()
+            .flat_map(|comments| comments.iter_mut())
+            .find(|comment| comment.id == id)?;
+        Some(std::mem::replace(&mut comment.resolved_at, at))
+    }
+
+    /// The reactions on `target`, oldest first; none while not loaded.
+    pub fn reactions(&self, target: &ReactionTarget) -> &[Reaction] {
+        match target {
+            ReactionTarget::Issue(id) => self.issue_reactions.get(id).map_or(&[], Vec::as_slice),
+            ReactionTarget::Comment(id) => self
+                .comments
+                .values()
+                .flatten()
+                .find(|comment| &comment.id == id)
+                .map_or(&[], |comment| comment.reactions.as_slice()),
+        }
+    }
+
+    fn reactions_mut(&mut self, target: &ReactionTarget) -> Option<&mut Vec<Reaction>> {
+        match target {
+            ReactionTarget::Issue(id) => Some(self.issue_reactions.entry(id.clone()).or_default()),
+            ReactionTarget::Comment(id) => self
+                .comments
+                .values_mut()
+                .flatten()
+                .find(|comment| &comment.id == id)
+                .map(|comment| &mut comment.reactions),
+        }
+    }
+
+    /// Adds `reaction` to `target`, unless one with its id is there.
+    pub fn add_reaction(&mut self, target: &ReactionTarget, reaction: Reaction) {
+        if let Some(reactions) = self.reactions_mut(target)
+            && reactions.iter().all(|known| known.id != reaction.id)
+        {
+            reactions.push(reaction);
+            reactions.sort_by_key(|reaction| reaction.created_at);
+        }
+    }
+
+    /// Forgets the reaction `id` on `target` and returns it.
+    pub fn remove_reaction(&mut self, target: &ReactionTarget, id: &str) -> Option<Reaction> {
+        let reactions = self.reactions_mut(target)?;
+        let at = reactions.iter().position(|reaction| reaction.id == id)?;
+        Some(reactions.remove(at))
+    }
+
+    /// Takes in loaded notifications and what they refer to. A notification
+    /// replaces the stored one only when it is strictly newer, so a load
+    /// answered before a write in flight cannot undo what the write shows;
+    /// an archived one leaves the store. Returns whether anything changed.
+    pub fn merge_notifications(&mut self, loaded: &NotificationsLoaded) -> bool {
+        let mut changed = self.merge_notification_refs(loaded);
+        for notification in &loaded.notifications {
+            changed |= self.merge_notification(notification.clone());
+            self.notifications_watermark = self
+                .notifications_watermark
+                .max(Some(notification.updated_at));
+        }
+        changed
+    }
+
+    /// Takes in the issues, cycles, teams and people `loaded` refers to.
+    /// Returns whether an issue changed.
+    fn merge_notification_refs(&mut self, loaded: &NotificationsLoaded) -> bool {
+        let mut changed = false;
+        for issue in &loaded.issues {
+            changed |= self.upsert_issue(issue.clone());
+        }
+        by_id(&mut self.cycles, &loaded.cycles, |cycle| &cycle.id);
+        by_id(&mut self.teams, &loaded.teams, |team| &team.id);
+        by_id(&mut self.members, &loaded.members, |member| &member.id);
+        changed
+    }
+
+    /// Takes in one notification as [`Store::merge_notifications`] does,
+    /// without moving the watermark. An archived one leaves unless the
+    /// stored copy is strictly newer, since archiving need not move
+    /// `updatedAt`. Returns whether it changed the store.
+    fn merge_notification(&mut self, notification: Notification) -> bool {
+        let stored = self
+            .notifications
+            .get(&notification.id)
+            .map(|stored| stored.updated_at);
+        if notification.archived_at.is_some() {
+            if stored.is_some_and(|stored| stored > notification.updated_at) {
+                return false;
+            }
+            return self.notifications.remove(&notification.id).is_some();
+        }
+        if stored.is_some_and(|stored| stored >= notification.updated_at) {
+            return false;
+        }
+        self.notifications
+            .insert(notification.id.clone(), notification);
+        true
+    }
+
+    /// Runs `change` on the stored notification with id `id`. Returns
+    /// whether there was one.
+    pub fn change_notification(
+        &mut self,
+        id: &str,
+        change: impl FnOnce(&mut Notification),
+    ) -> bool {
+        match self.notifications.get_mut(id) {
+            Some(notification) => {
+                change(notification);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Puts `notification` back as it was, unless the stored copy has moved
+    /// on since: a newer one came in, or it left the store.
+    pub fn restore_notification(&mut self, notification: Notification) {
+        if let Some(stored) = self.notifications.get_mut(&notification.id)
+            && stored.updated_at == notification.updated_at
+        {
+            *stored = notification;
+        }
+    }
+
+    pub fn notifications(&self) -> impl Iterator<Item = &Notification> {
+        self.notifications.values()
+    }
+
+    pub fn notification(&self, id: &str) -> Option<&Notification> {
+        self.notifications.get(id)
+    }
+
+    /// The newest `updatedAt` among the notifications loaded, where the next
+    /// delta starts.
+    pub fn notifications_watermark(&self) -> Option<Timestamp> {
+        self.notifications_watermark
+    }
+
+    /// Takes in notifications a live event carried, as
+    /// [`Store::merge_notifications`] does but without moving the
+    /// watermark, which only a load may move.
+    pub fn merge_live_notifications(&mut self, loaded: &NotificationsLoaded) -> bool {
+        let mut changed = self.merge_notification_refs(loaded);
+        for notification in &loaded.notifications {
+            changed |= self.merge_notification(notification.clone());
+        }
+        changed
+    }
+
     /// Replaces the comments of `issue_id`.
     pub fn set_comments(&mut self, issue_id: &str, comments: Vec<Comment>) {
         self.comments.insert(issue_id.to_owned(), comments);
@@ -515,6 +751,8 @@ impl Store {
         self.set_comments(issue_id, detail.comments.clone());
         self.attachments
             .insert(issue_id.to_owned(), detail.attachments.clone());
+        self.issue_reactions
+            .insert(issue_id.to_owned(), detail.reactions.clone());
         self.state_histories
             .insert(issue_id.to_owned(), detail.state_history.clone());
         by_id(&mut self.members, &detail.members, |member| &member.id);
@@ -666,6 +904,15 @@ impl Store {
     /// The attachments of `issue_id`, if the detail loaded them.
     pub fn attachments(&self, issue_id: &str) -> Option<&[Attachment]> {
         self.attachments.get(issue_id).map(Vec::as_slice)
+    }
+
+    /// Adds `attachment` to its issue's, replacing one with the same URL as
+    /// Linear does. Left to the detail's load when it has not loaded them.
+    pub fn add_attachment(&mut self, attachment: Attachment) {
+        if let Some(attachments) = self.attachments.get_mut(&attachment.issue_id) {
+            attachments.retain(|known| known.url != attachment.url);
+            attachments.push(attachment);
+        }
     }
 
     /// The workflow states `issue_id` has been in, if the detail loaded them.

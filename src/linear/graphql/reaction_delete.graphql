@@ -1,0 +1,7 @@
+# budget: 5
+# Removes one of the viewer's reactions.
+mutation ReactionDelete($id: String!) {
+  reactionDelete(id: $id) {
+    success
+  }
+}

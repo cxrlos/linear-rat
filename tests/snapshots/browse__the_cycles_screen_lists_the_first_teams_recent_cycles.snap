@@ -2,7 +2,7 @@
 source: tests/browse.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects                        "
+" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects │ [6] Inbox            "
 "t ENG Engineering                                                                                   "
 "┌Cycles────────────────────────────────────────────────────────────────────────────────────────────┐"
 "│▸ Cycle 7                                                      Oct 26 – Nov 9  active 4 of 12 done│"

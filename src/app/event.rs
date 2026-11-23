@@ -2,17 +2,20 @@ use crossterm::event::KeyEvent;
 use jiff::Timestamp;
 use semver::Version;
 
+use super::ReactionWrite;
+use crate::linear::model::Reaction;
+
 use super::{
-    Failure, LifecycleWrite, LoadError, NewComment, NewIssue, RelationWrite, SyncFailure, Write,
-    Writing,
+    CommentWrite, Failure, InboxWrite, LifecycleWrite, LoadError, NewAttachment, NewComment,
+    NewIssue, RelationWrite, SyncFailure, UploadId, Write, Writing,
 };
 use crate::linear::model::{
-    Cycle, Issue, IssueRelation, Label, Member, ProjectMilestone, Team, WorkflowState,
+    Attachment, Cycle, Issue, IssueRelation, Label, Member, ProjectMilestone, Team, WorkflowState,
 };
 use crate::linear::{
-    AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, LiveEvent, PostedComment,
-    ProjectList, SearchQuery, SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage,
-    TeamOptions, TeamQuery,
+    AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, LiveEvent, NotificationsLoaded,
+    PostedComment, ProjectList, SearchQuery, SearchResults, TeamAnalyticsIssues, TeamChanges,
+    TeamIssuesPage, TeamOptions, TeamQuery,
 };
 
 /// Something that happened, fed to [`update`](super::update).
@@ -201,7 +204,48 @@ pub enum Event {
         issue: NewIssue,
         result: Result<Box<Issue>, Failure>,
     },
+    /// Linear's answer to
+    /// [`Effect::ChangeComment`](super::Effect::ChangeComment).
+    CommentChanged {
+        write: CommentWrite,
+        result: Result<(), Failure>,
+    },
+    /// Linear's answer to [`Effect::React`](super::Effect::React): the
+    /// reaction as Linear stored it, for one added.
+    Reacted {
+        write: ReactionWrite,
+        result: Result<Option<Reaction>, Failure>,
+    },
     /// The result of [`Effect::CheckRelease`](super::Effect::CheckRelease):
     /// the latest release, or `None` when the check failed.
     ReleaseChecked(Option<Version>),
+    /// `sent` bytes of the upload of [`Effect::Attach`](super::Effect::Attach)
+    /// have gone out.
+    UploadProgress {
+        upload: UploadId,
+        sent: u64,
+    },
+    /// Linear's answer to [`Effect::Attach`](super::Effect::Attach): the
+    /// attachment as it stored it, or why it was not attached.
+    Attached {
+        attachment: NewAttachment,
+        result: Result<Attachment, Failure>,
+    },
+
+    /// The result of
+    /// [`Effect::LoadNotifications`](super::Effect::LoadNotifications)
+    /// from `since`.
+    NotificationsLoaded {
+        since: Option<Timestamp>,
+        result: Result<NotificationsLoaded, Failure>,
+    },
+    /// Linear's answer to [`Effect::WriteInbox`](super::Effect::WriteInbox).
+    InboxWritten {
+        write: InboxWrite,
+        result: Result<(), Failure>,
+    },
+    /// Linear's answers to
+    /// [`Effect::ArchiveNotifications`](super::Effect::ArchiveNotifications),
+    /// one per write.
+    InboxBatchWritten(Vec<(InboxWrite, Result<(), Failure>)>),
 }

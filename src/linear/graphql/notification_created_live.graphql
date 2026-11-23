@@ -1,0 +1,91 @@
+# budget: 15
+# Every notification created, with what the notifications query
+# reads and the recipient, for live updates. Linear offers no filter here,
+# so the client keeps only the viewer's issue notifications.
+subscription NotificationCreatedLive {
+  notificationCreated {
+    __typename
+    id
+    type
+    createdAt
+    updatedAt
+    readAt
+    snoozedUntilAt
+    archivedAt
+    actor {
+      id
+      name
+      displayName
+    }
+    ... on IssueNotification {
+      commentId
+      reactionEmoji
+      issue {
+        id
+        identifier
+        title
+        description
+        url
+        branchName
+        priority
+        estimate
+        labelIds
+        createdAt
+        updatedAt
+        startedAt
+        completedAt
+        canceledAt
+        triagedAt
+        team {
+          id
+          key
+          name
+          issueEstimationType
+        }
+        state {
+          id
+          name
+          type
+          position
+        }
+        assignee {
+          id
+          name
+          displayName
+        }
+        creator {
+          id
+          name
+          displayName
+        }
+        cycle {
+          id
+          number
+          name
+          startsAt
+          endsAt
+          completedAt
+        }
+        project {
+          id
+        }
+        projectMilestone {
+          id
+        }
+        parent {
+          id
+        }
+        dueDate
+        archivedAt
+        subscribers(first: 1, filter: { isMe: { eq: true } }) {
+          nodes {
+            id
+          }
+        }
+      }
+    }
+    user {
+      id
+    }
+  }
+}
