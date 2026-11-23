@@ -17,8 +17,8 @@ use ratatui::backend::Backend;
 use tokio::time::{Instant, MissedTickBehavior};
 
 use crate::app::{
-    App, Effect, Event, Failure, Lifecycle, LifecycleWrite, LoadError, NewComment, NewIssue,
-    RelationWrite, SEARCH_PAUSE, SyncFailure, TeamPoll, Write,
+    App, CommentChange, CommentWrite, Effect, Event, Failure, Lifecycle, LifecycleWrite, LoadError,
+    NewComment, NewIssue, RelationWrite, SEARCH_PAUSE, SyncFailure, TeamPoll, Write,
 };
 use crate::linear::{
     AnalyticsWindow, ClientError, ErrorKind, LinearClient, LiveEvent, RelationCreate, SearchQuery,
@@ -584,6 +584,10 @@ where
             in_flight.push(Box::pin(create_comment(reach.client, comment)));
             Ok(())
         }
+        Effect::ChangeComment(write) => {
+            in_flight.push(Box::pin(change_comment(reach.client, write)));
+            Ok(())
+        }
         Effect::CreateIssue(issue) => {
             in_flight.push(Box::pin(create_issue(reach.client, issue)));
             Ok(())
@@ -860,7 +864,11 @@ async fn create_comment<C: LinearClient>(client: Option<&C>, comment: NewComment
     let action = format!("comment on {}", comment.identifier);
     let result = match client {
         Some(client) => client
-            .create_comment(&comment.issue_id, &comment.body)
+            .create_comment(
+                &comment.issue_id,
+                &comment.body,
+                comment.parent_id.as_deref(),
+            )
             .await
             .map_err(|error| Failure::from_client(&action, &error)),
         None => Err(no_client(&action)),
@@ -872,6 +880,34 @@ async fn create_comment<C: LinearClient>(client: Option<&C>, comment: NewComment
         }
     }
     Event::CommentCreated { comment, result }
+}
+
+async fn change_comment<C: LinearClient>(client: Option<&C>, write: CommentWrite) -> Event {
+    let action = match write.change {
+        CommentChange::Edit(_) => "edit a comment",
+        CommentChange::Delete => "delete a comment",
+        CommentChange::Resolve => "resolve a thread",
+        CommentChange::Unresolve => "unresolve a thread",
+    };
+    let action = format!("{action} on {}", write.identifier);
+    let id = write.comment_id.as_str();
+    let result = match client {
+        Some(client) => match &write.change {
+            CommentChange::Edit(body) => client.update_comment(id, body).await,
+            CommentChange::Delete => client.delete_comment(id).await,
+            CommentChange::Resolve => client.resolve_comment(id, true).await,
+            CommentChange::Unresolve => client.resolve_comment(id, false).await,
+        }
+        .map_err(|error| Failure::from_client(&action, &error)),
+        None => Err(no_client(&action)),
+    };
+    match &result {
+        Ok(()) => tracing::info!(issue = %write.identifier, "Linear changed a comment"),
+        Err(error) => {
+            tracing::warn!(issue = %write.identifier, %error, "Linear did not change a comment");
+        }
+    }
+    Event::CommentChanged { write, result }
 }
 
 async fn create_issue<C: LinearClient>(client: Option<&C>, issue: NewIssue) -> Event {

@@ -5,6 +5,7 @@ mod analytics_screen;
 mod arrange;
 mod browse;
 mod capabilities;
+mod comments;
 mod compose;
 mod create;
 mod detail;
@@ -44,6 +45,10 @@ pub use analytics_screen::{AnalyticsScreen, AnalyticsView};
 pub use arrange::{Arrangement, Group, GroupKey, Grouping, Sort, SortKey, arrange, linear_order};
 pub use browse::{Cycles, Projects, cycle_counts, cycle_title};
 pub use capabilities::{Capabilities, Capability, WriteClass};
+pub use comments::{
+    CommentChange, CommentWrite, can_focus_comments, focused_comment, is_collapsed,
+    owns_focused_comment, threads,
+};
 pub use compose::{Drafts, IssueDraft, NewComment, NewIssue, Writing, is_local};
 pub use create::{CreateForm, Step};
 pub use detail::{Detail, DetailLoad};

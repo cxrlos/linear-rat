@@ -3,8 +3,8 @@ use jiff::Timestamp;
 use semver::Version;
 
 use super::{
-    Failure, LifecycleWrite, LoadError, NewComment, NewIssue, RelationWrite, SyncFailure, Write,
-    Writing,
+    CommentWrite, Failure, LifecycleWrite, LoadError, NewComment, NewIssue, RelationWrite,
+    SyncFailure, Write, Writing,
 };
 use crate::linear::model::{
     Cycle, Issue, IssueRelation, Label, Member, ProjectMilestone, Team, WorkflowState,
@@ -200,6 +200,12 @@ pub enum Event {
     IssueCreated {
         issue: NewIssue,
         result: Result<Box<Issue>, Failure>,
+    },
+    /// Linear's answer to
+    /// [`Effect::ChangeComment`](super::Effect::ChangeComment).
+    CommentChanged {
+        write: CommentWrite,
+        result: Result<(), Failure>,
     },
     /// The result of [`Effect::CheckRelease`](super::Effect::CheckRelease):
     /// the latest release, or `None` when the check failed.

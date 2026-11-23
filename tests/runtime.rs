@@ -199,7 +199,20 @@ impl LinearClient for RejectingClient {
         &self,
         _: &str,
         _: &str,
+        _: Option<&str>,
     ) -> Result<linear_rat::linear::PostedComment, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn update_comment(&self, _: &str, _: &str) -> Result<(), ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn delete_comment(&self, _: &str) -> Result<(), ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn resolve_comment(&self, _: &str, _: bool) -> Result<(), ClientError> {
         Err(ClientError::InvalidKey)
     }
 
@@ -399,7 +412,20 @@ async fn q_quits_while_the_load_is_still_in_flight() {
             &self,
             _: &str,
             _: &str,
+            _: Option<&str>,
         ) -> Result<linear_rat::linear::PostedComment, ClientError> {
+            future::pending().await
+        }
+
+        async fn update_comment(&self, _: &str, _: &str) -> Result<(), ClientError> {
+            future::pending().await
+        }
+
+        async fn delete_comment(&self, _: &str) -> Result<(), ClientError> {
+            future::pending().await
+        }
+
+        async fn resolve_comment(&self, _: &str, _: bool) -> Result<(), ClientError> {
             future::pending().await
         }
 
@@ -590,8 +616,21 @@ impl LinearClient for CountingClient {
         &self,
         issue_id: &str,
         body: &str,
+        parent_id: Option<&str>,
     ) -> Result<linear_rat::linear::PostedComment, ClientError> {
-        FakeClient.create_comment(issue_id, body).await
+        FakeClient.create_comment(issue_id, body, parent_id).await
+    }
+
+    async fn update_comment(&self, id: &str, body: &str) -> Result<(), ClientError> {
+        FakeClient.update_comment(id, body).await
+    }
+
+    async fn delete_comment(&self, id: &str) -> Result<(), ClientError> {
+        FakeClient.delete_comment(id).await
+    }
+
+    async fn resolve_comment(&self, id: &str, resolved: bool) -> Result<(), ClientError> {
+        FakeClient.resolve_comment(id, resolved).await
     }
 
     async fn create_issue(

@@ -185,6 +185,8 @@ const PANES: &[Context] = &[Context::List, Context::Detail];
 const MOVES: &[Context] = &[Context::List, Context::Detail, Context::Browse];
 const BROWSE: &[Context] = &[Context::Browse];
 const CYCLES: &[Context] = &[Context::Cycles];
+const DETAIL: &[Context] = &[Context::Detail];
+const COMMENT: &[Context] = &[Context::Comment];
 const GLOBAL: &[Context] = &[Context::Global];
 const OVERLAY: &[Context] = &[Context::Overlay];
 const ANALYTICS: &[Context] = &[Context::Analytics];
@@ -774,6 +776,84 @@ pub static ACTIONS: &[ActionSpec] = &[
         overlays: &[],
         default_keys: &[&[Key::char('g'), Key::char('r')]],
         available: has_saved_issue,
+    },
+    ActionSpec {
+        action: Action::NextComment,
+        id: "next-comment",
+        description: "Focus the next comment",
+        label: "next / previous comment",
+        group: Group::Move,
+        writes: None,
+        hint: moves("comment"),
+        contexts: DETAIL,
+        overlays: &[],
+        default_keys: &[&[Key::char('}')]],
+        available: app::can_focus_comments,
+    },
+    ActionSpec {
+        action: Action::PreviousComment,
+        id: "previous-comment",
+        description: "Focus the previous comment",
+        label: "next / previous comment",
+        group: Group::Move,
+        writes: None,
+        hint: moves("comment"),
+        contexts: DETAIL,
+        overlays: &[],
+        default_keys: &[&[Key::char('{')]],
+        available: app::can_focus_comments,
+    },
+    ActionSpec {
+        action: Action::ReplyToComment,
+        id: "reply-to-comment",
+        description: "Reply in the focused comment's thread",
+        label: "reply",
+        group: Group::Screen,
+        writes: Some(WriteClass::CreateComment),
+        hint: does("reply"),
+        contexts: COMMENT,
+        overlays: &[],
+        default_keys: &[&[Key::char('r')]],
+        available: has_focused_comment,
+    },
+    ActionSpec {
+        action: Action::EditComment,
+        id: "edit-comment",
+        description: "Edit your focused comment",
+        label: "edit yours",
+        group: Group::Screen,
+        writes: Some(WriteClass::ChangeComment),
+        hint: None,
+        contexts: COMMENT,
+        overlays: &[],
+        default_keys: &[&[Key::char('E')]],
+        available: app::owns_focused_comment,
+    },
+    ActionSpec {
+        action: Action::DeleteComment,
+        id: "delete-comment",
+        description: "Delete your focused comment",
+        label: "delete yours",
+        group: Group::Screen,
+        writes: Some(WriteClass::ChangeComment),
+        hint: None,
+        contexts: COMMENT,
+        overlays: &[],
+        default_keys: &[&[Key::char('X')]],
+        available: app::owns_focused_comment,
+    },
+    ActionSpec {
+        action: Action::ToggleResolved,
+        id: "toggle-resolved",
+        description: "Resolve or unresolve the focused thread",
+        label: "resolve / unresolve",
+        group: Group::Screen,
+        writes: Some(WriteClass::ChangeComment),
+        hint: does("resolve"),
+        contexts: COMMENT,
+        overlays: &[],
+        default_keys: &[&[Key::char('x')]],
+        available: has_focused_comment,
     },
     ActionSpec {
         action: Action::PickNumber(1),
@@ -1556,6 +1636,10 @@ fn has_saved_issue(state: &State) -> bool {
     state
         .focused_issue()
         .is_some_and(|issue| !app::is_local(&issue.id))
+}
+
+fn has_focused_comment(state: &State) -> bool {
+    app::focused_comment(state).is_some()
 }
 
 // In the detail, moves scroll it, so they are available while it has more

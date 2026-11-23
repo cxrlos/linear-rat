@@ -1,6 +1,8 @@
 use jiff::Timestamp;
 
-use super::{LifecycleWrite, NewComment, NewIssue, RelationWrite, TeamPoll, Write, Writing};
+use super::{
+    CommentWrite, LifecycleWrite, NewComment, NewIssue, RelationWrite, TeamPoll, Write, Writing,
+};
 use crate::linear::{AnalyticsWindow, SearchQuery, TeamQuery, Urgency};
 use crate::release::Record;
 
@@ -149,6 +151,10 @@ pub enum Effect {
         seen: Timestamp,
         text: String,
     },
+    /// Send the one mutation that edits, deletes, resolves or unresolves a
+    /// comment; the result comes back as
+    /// [`Event::CommentChanged`](super::Event::CommentChanged).
+    ChangeComment(CommentWrite),
     /// Ask GitHub for the latest release; the answer comes back as
     /// [`Event::ReleaseChecked`](super::Event::ReleaseChecked).
     CheckRelease,

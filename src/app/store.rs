@@ -425,6 +425,77 @@ impl Store {
         comments.sort_by_key(|comment| comment.created_at);
     }
 
+    /// Puts `comments` back among their issues' loaded comments, in order,
+    /// unless one with the same id is there. Comments not loaded yet stay
+    /// not loaded.
+    pub fn put_back_comments(&mut self, comments: Vec<Comment>) {
+        for comment in comments {
+            let Some(stored) = self.comments.get_mut(&comment.issue_id) else {
+                continue;
+            };
+            if stored.iter().all(|known| known.id != comment.id) {
+                stored.push(comment);
+                stored.sort_by_key(|comment| comment.created_at);
+            }
+        }
+    }
+
+    /// Replaces the stored comment with `comment`'s id by `comment`, in its
+    /// place, and returns what it replaced.
+    pub fn replace_comment(&mut self, comment: Comment) -> Option<Comment> {
+        let stored = self
+            .comments
+            .get_mut(&comment.issue_id)?
+            .iter_mut()
+            .find(|known| known.id == comment.id)?;
+        Some(std::mem::replace(stored, comment))
+    }
+
+    /// Forgets the comment with id `id` and the replies under it, as
+    /// Linear deletes them together, and returns them.
+    pub fn remove_comment(&mut self, id: &str) -> Vec<Comment> {
+        let Some(comments) = self
+            .comments
+            .values_mut()
+            .find(|comments| comments.iter().any(|comment| comment.id == id))
+        else {
+            return Vec::new();
+        };
+        let mut doomed = vec![id.to_owned()];
+        // Replies come after their parent, oldest first, so one pass finds
+        // replies to replies as well.
+        for comment in comments.iter() {
+            if comment
+                .parent_id
+                .as_ref()
+                .is_some_and(|parent| doomed.contains(parent))
+            {
+                doomed.push(comment.id.clone());
+            }
+        }
+        let (removed, kept) = std::mem::take(comments)
+            .into_iter()
+            .partition(|comment| doomed.contains(&comment.id));
+        *comments = kept;
+        removed
+    }
+
+    /// Marks the thread the comment `id` starts resolved at `at`, or not
+    /// resolved for `None`, and returns when it was resolved before. `None`
+    /// when no such comment is stored.
+    pub fn resolve_comment(
+        &mut self,
+        id: &str,
+        at: Option<Timestamp>,
+    ) -> Option<Option<Timestamp>> {
+        let comment = self
+            .comments
+            .values_mut()
+            .flat_map(|comments| comments.iter_mut())
+            .find(|comment| comment.id == id)?;
+        Some(std::mem::replace(&mut comment.resolved_at, at))
+    }
+
     /// Replaces the comments of `issue_id`.
     pub fn set_comments(&mut self, issue_id: &str, comments: Vec<Comment>) {
         self.comments.insert(issue_id.to_owned(), comments);

@@ -247,6 +247,22 @@ pub fn detail_rows(state: &State, viewport: Size) -> (usize, usize) {
     (usize::from(inner.height), lines)
 }
 
+/// Where the focused comment is in the focused issue's detail in a
+/// `viewport`-sized terminal: its first line and the line after its last.
+/// `None` when no comment is focused or no detail is on screen.
+pub fn focused_comment_lines(state: &State, viewport: Size) -> Option<(usize, usize)> {
+    let area = Rect::from((ratatui::layout::Position::ORIGIN, viewport));
+    let [_, body_area, _, _] = areas(area, notice_rows(state, viewport.width).len());
+    let pane = match state.screen {
+        Screen::MyIssues => my_issues::detail_area(state, body_area, state.my_issues.pane()),
+        Screen::TeamIssues => team_issues::detail_area(state, body_area),
+        Screen::Results => my_issues::detail_area(state, body_area, state.results.pane()),
+        Screen::Analytics | Screen::Cycles | Screen::Projects => None,
+    }?;
+    let inner = Block::bordered().inner(pane);
+    detail::focused_comment_lines(state, detail::issue(state)?, inner.width)
+}
+
 /// How many issue rows fit in the Team Issues list of a `viewport`-sized
 /// terminal, under its header.
 pub fn team_list_rows(state: &State, viewport: Size) -> usize {

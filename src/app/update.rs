@@ -4,8 +4,8 @@ use ratatui::layout::Size;
 use super::edit::{self, Editable};
 use super::{
     Action, Copyable, Effect, Event, Load, Modal, Palette, Pane, Purpose, Screen, State,
-    analytics_screen, browse, compose, create, detail, issue_picker, lifecycle, links, palette,
-    rearrange, relations, release, results, search, sync, team_issues,
+    analytics_screen, browse, comments, compose, create, detail, issue_picker, lifecycle, links,
+    palette, rearrange, relations, release, results, search, sync, team_issues,
 };
 use crate::keys::{self, Key, Resolution};
 use crate::linear::SearchQuery;
@@ -241,6 +241,7 @@ fn apply(state: &mut State, event: Event) -> Update {
         Event::EditorClosed { writing, result } => compose::closed(state, writing, result),
         Event::CommentCreated { comment, result } => compose::commented(state, &comment, result),
         Event::IssueCreated { issue, result } => compose::created(state, &issue, result),
+        Event::CommentChanged { write, result } => comments::changed(state, &write, result),
     }
 }
 
@@ -375,6 +376,9 @@ pub fn perform(state: &mut State, action: Action) -> Update {
         },
 
         Action::Close if state.modals.pop().is_some() => Update::redraw(),
+        Action::Close if detail::has_focus(state) && comments::focused_comment(state).is_some() => {
+            comments::unfocus(state)
+        }
         Action::MoveDown
         | Action::MoveUp
         | Action::MoveToTop
@@ -561,6 +565,12 @@ pub fn perform(state: &mut State, action: Action) -> Update {
         Action::RemoveRelation => relations::open_remove(state),
         Action::ClearParent => relations::clear_parent(state),
         Action::GoToRelated => relations::open_related(state),
+        Action::NextComment => comments::move_focus(state, true),
+        Action::PreviousComment => comments::move_focus(state, false),
+        Action::ReplyToComment => comments::reply(state),
+        Action::EditComment => comments::edit(state),
+        Action::DeleteComment => comments::ask_to_delete(state),
+        Action::ToggleResolved => comments::toggle_resolved(state),
         Action::ToggleBlocked if state.screen == Screen::TeamIssues => Update {
             redraw: true,
             effects: team_issues::toggle_blocked(state),

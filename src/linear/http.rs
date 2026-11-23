@@ -6,6 +6,7 @@ mod assigned;
 mod browse;
 mod changes;
 mod comment;
+mod comment_change;
 mod create;
 mod detail;
 mod diagnostics;
@@ -458,8 +459,21 @@ impl LinearClient for HttpClient {
         &self,
         issue_id: &str,
         body: &str,
+        parent_id: Option<&str>,
     ) -> Result<PostedComment, ClientError> {
-        create::create_comment(self, issue_id, body).await
+        create::create_comment(self, issue_id, body, parent_id).await
+    }
+
+    async fn update_comment(&self, id: &str, body: &str) -> Result<(), ClientError> {
+        comment_change::update(self, id, body).await
+    }
+
+    async fn delete_comment(&self, id: &str) -> Result<(), ClientError> {
+        comment_change::delete(self, id).await
+    }
+
+    async fn resolve_comment(&self, id: &str, resolved: bool) -> Result<(), ClientError> {
+        comment_change::resolve(self, id, resolved).await
     }
 
     async fn create_issue(&self, input: &IssueCreate) -> Result<Issue, ClientError> {

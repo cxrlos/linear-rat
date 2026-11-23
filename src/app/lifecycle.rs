@@ -87,7 +87,14 @@ pub struct Confirm {
 /// moved under the modal cannot change what it runs on.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OnConfirm {
-    Trash { issue_id: String },
+    Trash {
+        issue_id: String,
+    },
+    /// Delete the viewer's comment `comment_id` on the issue `issue_id`.
+    DeleteComment {
+        issue_id: String,
+        comment_id: String,
+    },
 }
 
 /// Whether the focused issue is archived, so it can be unarchived.
@@ -184,6 +191,10 @@ pub(super) fn confirm(state: &mut State) -> Update {
     state.modals.pop();
     match on_confirm {
         OnConfirm::Trash { issue_id } => trash(state, &issue_id),
+        OnConfirm::DeleteComment {
+            issue_id,
+            comment_id,
+        } => super::comments::delete(state, &issue_id, &comment_id),
     }
 }
 

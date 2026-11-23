@@ -213,12 +213,33 @@ pub trait LinearClient {
     fn delete_relation(&self, id: &str) -> impl Future<Output = Result<(), ClientError>> + Send;
 
     /// Sends one `commentCreate` adding `body` to the issue with id
-    /// `issue_id`, and returns the comment as Linear stored it.
+    /// `issue_id`, as a reply to the comment `parent_id` when given, and
+    /// returns the comment as Linear stored it.
     fn create_comment(
         &self,
         issue_id: &str,
         body: &str,
+        parent_id: Option<&str>,
     ) -> impl Future<Output = Result<PostedComment, ClientError>> + Send;
+
+    /// Sends one `commentUpdate` replacing the text of the comment `id`.
+    fn update_comment(
+        &self,
+        id: &str,
+        body: &str,
+    ) -> impl Future<Output = Result<(), ClientError>> + Send;
+
+    /// Sends one `commentDelete` for the comment `id`, which deletes its
+    /// replies too.
+    fn delete_comment(&self, id: &str) -> impl Future<Output = Result<(), ClientError>> + Send;
+
+    /// Sends one `commentResolve`, or `commentUnresolve` when `resolved` is
+    /// false, for the thread the comment `id` starts.
+    fn resolve_comment(
+        &self,
+        id: &str,
+        resolved: bool,
+    ) -> impl Future<Output = Result<(), ClientError>> + Send;
 
     /// Sends one `issueCreate` and returns the issue as Linear stored it.
     fn create_issue(
@@ -859,11 +880,61 @@ pub struct FakeClient;
 thread_local! {
     static DEMO_EDITS: RefCell<BTreeMap<String, Issue>> = const { RefCell::new(BTreeMap::new()) };
     static DEMO_COMMENTS: RefCell<Vec<Comment>> = const { RefCell::new(Vec::new()) };
+    /// Comments edited, resolved and deleted through this client.
+    static DEMO_COMMENT_CHANGES: RefCell<DemoCommentChanges> =
+        RefCell::new(DemoCommentChanges::default());
     static DEMO_CREATED: RefCell<u32> = const { RefCell::new(0) };
     static DEMO_TRASHED: RefCell<BTreeSet<String>> = const { RefCell::new(BTreeSet::new()) };
     /// Relations created through this client, and the ids of those deleted.
     static DEMO_RELATIONS: RefCell<(Vec<IssueRelation>, Vec<String>)> =
         const { RefCell::new((Vec::new(), Vec::new())) };
+}
+
+/// The comments changed through the fake client: their newest copies by
+/// id, and the ids of those deleted.
+#[derive(Default)]
+struct DemoCommentChanges {
+    changed: BTreeMap<String, Comment>,
+    deleted: Vec<String>,
+}
+
+impl DemoCommentChanges {
+    /// `comments` as the changes left them: changed ones replaced, deleted
+    /// ones and their replies gone.
+    fn apply(&self, comments: &mut Vec<Comment>) {
+        comments.retain(|comment| {
+            !self.deleted.contains(&comment.id)
+                && !comment
+                    .parent_id
+                    .as_ref()
+                    .is_some_and(|parent| self.deleted.contains(parent))
+        });
+        for comment in comments {
+            if let Some(changed) = self.changed.get(&comment.id) {
+                comment.clone_from(changed);
+            }
+        }
+    }
+}
+
+/// The demo comment with id `id` as changes through the fake client left
+/// it, unless it was deleted.
+fn demo_comment(id: &str) -> Result<Comment, ClientError> {
+    let mut comments = demo::workspace().comments;
+    DEMO_COMMENTS.with_borrow(|created| comments.extend(created.iter().cloned()));
+    DEMO_COMMENT_CHANGES.with_borrow(|changes| changes.apply(&mut comments));
+    comments
+        .into_iter()
+        .find(|comment| comment.id == id)
+        .ok_or_else(|| not_found("comment", id))
+}
+
+/// Applies `change` to the demo comment with id `id` and remembers it.
+fn demo_change_comment(id: &str, change: impl FnOnce(&mut Comment)) -> Result<(), ClientError> {
+    let mut comment = demo_comment(id)?;
+    change(&mut comment);
+    DEMO_COMMENT_CHANGES.with_borrow_mut(|changes| changes.changed.insert(id.to_owned(), comment));
+    Ok(())
 }
 
 /// The demo issue with id `issue_id` as edits through the fake client left
@@ -1237,6 +1308,7 @@ impl LinearClient for FakeClient {
                     .cloned(),
             );
         });
+        DEMO_COMMENT_CHANGES.with_borrow(|changes| changes.apply(&mut detail.comments));
         Ok(detail)
     }
 
@@ -1385,6 +1457,7 @@ impl LinearClient for FakeClient {
         &self,
         issue_id: &str,
         body: &str,
+        parent_id: Option<&str>,
     ) -> Result<PostedComment, ClientError> {
         let data = demo::workspace();
         let known = data.issues.iter().any(|issue| issue.id == issue_id)
@@ -1404,7 +1477,7 @@ impl LinearClient for FakeClient {
                 author_id: Some(data.viewer.id.clone()),
                 body: body.to_owned(),
                 created_at: demo::NOW,
-                parent_id: None,
+                parent_id: parent_id.map(str::to_owned),
                 resolved_at: None,
                 edited_at: None,
                 reactions: Vec::new(),
@@ -1413,6 +1486,27 @@ impl LinearClient for FakeClient {
             comment
         });
         Ok(PostedComment { comment, author })
+    }
+
+    async fn update_comment(&self, id: &str, body: &str) -> Result<(), ClientError> {
+        demo_change_comment(id, |comment| {
+            comment.body = body.to_owned();
+            comment.edited_at = Some(demo::NOW);
+        })
+    }
+
+    async fn delete_comment(&self, id: &str) -> Result<(), ClientError> {
+        demo_comment(id)?;
+        DEMO_COMMENT_CHANGES.with_borrow_mut(|changes| {
+            changes.deleted.push(id.to_owned());
+        });
+        Ok(())
+    }
+
+    async fn resolve_comment(&self, id: &str, resolved: bool) -> Result<(), ClientError> {
+        demo_change_comment(id, |comment| {
+            comment.resolved_at = resolved.then_some(demo::NOW);
+        })
     }
 
     async fn create_issue(&self, input: &IssueCreate) -> Result<Issue, ClientError> {

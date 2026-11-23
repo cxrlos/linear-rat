@@ -18,8 +18,8 @@ pub fn keymap_reference() -> String {
          that rebinds its actions; see \
          [Configuration](https://github.com/cxrlos/linear-rat/blob/main/docs/config.md#keys).\n\
          \n\
-         The Team Issues list also takes the Issue list keys, and the Cycles screen the \
-         Cycles and Projects keys. While an overlay has a text \
+         The Team Issues list also takes the Issue list keys, the Cycles screen the \
+         Cycles and Projects keys, and a focused comment the Issue detail keys. While an overlay has a text \
          field, as the pickers, the palette and the search do, a character typed without \
          Ctrl or Alt goes into the field instead, except a picker's number keys.\n",
     );

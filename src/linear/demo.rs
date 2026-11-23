@@ -105,6 +105,7 @@ pub fn workspace() -> DemoWorkspace {
         add_team(&mut data, spec, &mut rng);
     }
     add_links(&mut data);
+    add_threads(&mut data);
     add_milestones(&mut data);
     add_schedule(&mut data);
     add_relations(&mut data);
@@ -372,6 +373,62 @@ fn add_links(data: &mut DemoWorkspace) {
     {
         comment.body.push_str(DES_16_COMMENT);
     }
+}
+
+/// Turns DES-34's comments into conversations: the viewer's comment
+/// becomes an edited reply to the one before it, and a resolved thread with
+/// the viewer's reply comes ahead of both. Added after the generated data,
+/// so the seed's draws stay as they were.
+fn add_threads(data: &mut DemoWorkspace) {
+    let issue_id = "issue-des-34";
+    let mut ids = data
+        .comments
+        .iter()
+        .filter(|comment| comment.issue_id == issue_id)
+        .map(|comment| comment.id.clone());
+    let (Some(first), Some(second)) = (ids.next(), ids.next()) else {
+        return;
+    };
+    let Some(at) = data.comments.iter().position(|comment| comment.id == first) else {
+        return;
+    };
+    if let Some(reply) = data
+        .comments
+        .iter_mut()
+        .find(|comment| comment.id == second)
+    {
+        reply.parent_id = Some(first);
+        reply.edited_at = Some(ts(unix(reply.created_at) + HOUR));
+    }
+    let asked = unix(NOW) - 8 * DAY - 5 * HOUR;
+    let resolved = [
+        (
+            "comment-des-34-rind",
+            None,
+            "pia",
+            asked,
+            "Should the rind colour follow the theme, or stay fixed?",
+        ),
+        (
+            "comment-des-34-rind-reply",
+            Some("comment-des-34-rind"),
+            VIEWER,
+            asked + 4 * HOUR,
+            "It follows the theme now, same as the borders.",
+        ),
+    ]
+    .map(|(id, parent, author, created, body)| Comment {
+        id: id.to_owned(),
+        issue_id: issue_id.to_owned(),
+        author_id: Some(member_id(author)),
+        body: body.to_owned(),
+        created_at: ts(created),
+        parent_id: parent.map(str::to_owned),
+        resolved_at: parent.is_none().then(|| ts(asked + 5 * HOUR)),
+        edited_at: None,
+        reactions: Vec::new(),
+    });
+    data.comments.splice(at..at, resolved);
 }
 
 /// The ids of the members of the demo team with id `team_id`.

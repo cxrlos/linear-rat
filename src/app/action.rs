@@ -104,6 +104,18 @@ pub enum Action {
     SwitchCyclesTeam,
     /// List the issues of the focused cycle or project.
     ListIssues,
+    /// Focus the next comment of the detail.
+    NextComment,
+    /// Focus the previous comment of the detail.
+    PreviousComment,
+    /// Reply in the focused comment's thread in `$EDITOR`.
+    ReplyToComment,
+    /// Edit the viewer's focused comment in `$EDITOR`.
+    EditComment,
+    /// Ask to confirm deleting the viewer's focused comment.
+    DeleteComment,
+    /// Resolve the focused comment's thread, or open it again.
+    ToggleResolved,
 }
 
 /// What [`Action::Copy`] puts on the clipboard.

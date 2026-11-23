@@ -1,0 +1,7 @@
+# budget: 5
+# Deletes one of the viewer's comments, and with it the replies under it.
+mutation CommentDelete($id: String!) {
+  commentDelete(id: $id) {
+    success
+  }
+}

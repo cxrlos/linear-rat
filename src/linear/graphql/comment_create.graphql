@@ -1,6 +1,7 @@
 # budget: 10
-# Adds a comment to an issue. Returns the comment as Linear stored it, with
-# its author, as the comments query reads them.
+# Adds a comment to an issue, or a reply under `parentId`. Returns the
+# comment as Linear stored it, with its author, as the comments query reads
+# them.
 mutation CommentCreate($input: CommentCreateInput!) {
   commentCreate(input: $input) {
     success
