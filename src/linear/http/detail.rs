@@ -180,7 +180,7 @@ struct Nodes<N> {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct AttachmentNode {
+pub(super) struct AttachmentNode {
     id: String,
     url: String,
     title: String,
@@ -194,7 +194,7 @@ impl AttachmentNode {
     /// The attachment, with a pull request's state when the metadata holds
     /// a `status` string. Linear does not document the metadata's shape per
     /// source, so anything else there is ignored.
-    fn into_attachment(self, issue_id: &str) -> Attachment {
+    pub(super) fn into_attachment(self, issue_id: &str) -> Attachment {
         let status = self.metadata.get("status").and_then(Value::as_str);
         Attachment {
             id: self.id,

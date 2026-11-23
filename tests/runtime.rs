@@ -241,6 +241,24 @@ impl LinearClient for RejectingClient {
     async fn issue_updated_at(&self, _: &str) -> Result<Timestamp, ClientError> {
         Err(ClientError::InvalidKey)
     }
+
+    async fn attach_file(
+        &self,
+        _: &str,
+        _: &linear_rat::linear::FileUpload,
+        _: impl FnMut(u64) + Send + Sync + 'static,
+    ) -> Result<linear_rat::linear::model::Attachment, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn attach_link(
+        &self,
+        _: &str,
+        _: &str,
+        _: Option<&str>,
+    ) -> Result<linear_rat::linear::model::Attachment, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
 }
 
 #[tokio::test]
@@ -441,6 +459,24 @@ async fn q_quits_while_the_load_is_still_in_flight() {
         async fn issue_updated_at(&self, _: &str) -> Result<Timestamp, ClientError> {
             future::pending().await
         }
+
+        async fn attach_file(
+            &self,
+            _: &str,
+            _: &linear_rat::linear::FileUpload,
+            _: impl FnMut(u64) + Send + Sync + 'static,
+        ) -> Result<linear_rat::linear::model::Attachment, ClientError> {
+            future::pending().await
+        }
+
+        async fn attach_link(
+            &self,
+            _: &str,
+            _: &str,
+            _: Option<&str>,
+        ) -> Result<linear_rat::linear::model::Attachment, ClientError> {
+            future::pending().await
+        }
     }
     let mut app = App::new(TestBackend::new(80, 24), State::loading(None)).unwrap();
 
@@ -635,6 +671,24 @@ impl LinearClient for CountingClient {
 
     async fn issue_updated_at(&self, issue_id: &str) -> Result<Timestamp, ClientError> {
         FakeClient.issue_updated_at(issue_id).await
+    }
+
+    async fn attach_file(
+        &self,
+        _: &str,
+        _: &linear_rat::linear::FileUpload,
+        _: impl FnMut(u64) + Send + Sync + 'static,
+    ) -> Result<linear_rat::linear::model::Attachment, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn attach_link(
+        &self,
+        _: &str,
+        _: &str,
+        _: Option<&str>,
+    ) -> Result<linear_rat::linear::model::Attachment, ClientError> {
+        Err(ClientError::InvalidKey)
     }
 }
 

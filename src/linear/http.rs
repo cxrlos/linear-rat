@@ -3,6 +3,7 @@
 
 mod analytics;
 mod assigned;
+mod attach;
 mod browse;
 mod changes;
 mod comment;
@@ -36,10 +37,10 @@ use super::model::{
 use super::paging::{Next, RepeatedCursor, Stitch};
 use super::search_bucket::SearchBucket;
 use super::{
-    AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, Diagnostics, GraphQlError,
-    IssueCreate, IssueDetail, IssueLink, IssueUpdate, LinearClient, LiveEvent, PostedComment,
-    ProjectList, RelationCreate, Response, SearchQuery, SearchResults, TeamAnalyticsIssues,
-    TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
+    AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, Diagnostics, FileUpload,
+    GraphQlError, IssueCreate, IssueDetail, IssueLink, IssueUpdate, LinearClient, LiveEvent,
+    PostedComment, ProjectList, RelationCreate, Response, SearchQuery, SearchResults,
+    TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
 };
 use crate::auth::ApiKey;
 
@@ -500,6 +501,24 @@ impl LinearClient for HttpClient {
 
     async fn issue_updated_at(&self, issue_id: &str) -> Result<Timestamp, ClientError> {
         edit::issue_updated_at(self, issue_id).await
+    }
+
+    async fn attach_file(
+        &self,
+        issue_id: &str,
+        file: &FileUpload,
+        progress: impl FnMut(u64) + Send + Sync + 'static,
+    ) -> Result<super::model::Attachment, ClientError> {
+        attach::attach_file(self, issue_id, file, progress).await
+    }
+
+    async fn attach_link(
+        &self,
+        issue_id: &str,
+        url: &str,
+        title: Option<&str>,
+    ) -> Result<super::model::Attachment, ClientError> {
+        attach::attach_link(self, issue_id, url, title).await
     }
 }
 

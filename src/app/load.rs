@@ -69,7 +69,9 @@ impl From<&ClientError> for LoadError {
             | ClientError::Status(_)
             | ClientError::RateLimited { .. }
             | ClientError::GraphQl(_)
-            | ClientError::Decode(_) => Self::Failed(failure()),
+            | ClientError::Decode(_)
+            | ClientError::Upload(_)
+            | ClientError::ReadFile(_) => Self::Failed(failure()),
         }
     }
 }

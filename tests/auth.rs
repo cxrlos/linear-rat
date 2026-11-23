@@ -299,6 +299,24 @@ impl LinearClient for RejectingClient {
     async fn issue_updated_at(&self, _: &str) -> Result<Timestamp, ClientError> {
         Err(ClientError::InvalidKey)
     }
+
+    async fn attach_file(
+        &self,
+        _: &str,
+        _: &linear_rat::linear::FileUpload,
+        _: impl FnMut(u64) + Send + Sync + 'static,
+    ) -> Result<linear_rat::linear::model::Attachment, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn attach_link(
+        &self,
+        _: &str,
+        _: &str,
+        _: Option<&str>,
+    ) -> Result<linear_rat::linear::model::Attachment, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
 }
 
 /// A workspace file path in a fresh directory for one test.

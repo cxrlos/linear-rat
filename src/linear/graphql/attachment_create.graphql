@@ -1,0 +1,17 @@
+# budget: 5
+# Attaches a URL, such as an uploaded file's asset URL, to an issue. An
+# attachment with the same URL on the issue is replaced. Returns it as the
+# detail reads attachments.
+mutation AttachmentCreate($input: AttachmentCreateInput!) {
+  attachmentCreate(input: $input) {
+    success
+    attachment {
+      id
+      url
+      title
+      subtitle
+      sourceType
+      metadata
+    }
+  }
+}
