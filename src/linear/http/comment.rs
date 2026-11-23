@@ -109,8 +109,14 @@ mod tests {
         assert!(comment.edited_at.is_some());
         assert_eq!(comment.reactions.len(), 1);
         assert_eq!(comment.reactions[0].emoji, "👍");
-        assert_eq!(comment.reactions[0].user_id.as_deref(), Some("member-emile"));
-        assert_eq!(author.map(|member| member.id).as_deref(), Some("member-ana"));
+        assert_eq!(
+            comment.reactions[0].user_id.as_deref(),
+            Some("member-emile")
+        );
+        assert_eq!(
+            author.map(|member| member.id).as_deref(),
+            Some("member-ana")
+        );
     }
 
     #[test]
