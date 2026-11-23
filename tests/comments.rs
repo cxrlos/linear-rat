@@ -535,6 +535,60 @@ fn a_detail_loaded_while_a_change_is_in_flight_keeps_the_change() {
     assert!(comment(&app, OPEN).unwrap().resolved_at.is_some());
 }
 
+/// Loads DES-34's detail again, as Linear would answer before it has
+/// taken the changes in flight.
+fn reload(app: &mut App<TestBackend>) {
+    app.handle(Event::IssueDetailLoaded {
+        issue_id: ISSUE.to_owned(),
+        result: Ok(IssueDetail::demo(ISSUE)),
+    })
+    .unwrap();
+}
+
+#[test]
+fn a_detail_loaded_while_a_delete_is_in_flight_keeps_the_comment_gone() {
+    let mut app = app();
+    focus(&mut app, RESOLVED_REPLY);
+    press(&mut app, "X");
+    let write = only_change(press(&mut app, "y"));
+
+    reload(&mut app);
+    assert_eq!(comment(&app, RESOLVED_REPLY), None);
+
+    app.handle(Event::CommentChanged {
+        write,
+        result: Ok(()),
+    })
+    .unwrap();
+    assert_eq!(comment(&app, RESOLVED_REPLY), None);
+}
+
+#[test]
+fn a_detail_loaded_while_an_edit_is_in_flight_keeps_the_new_text() {
+    let mut app = app();
+    focus(&mut app, OPEN_REPLY);
+    let writing = only_editor(press(&mut app, "E"));
+    only_change(app.handle(saved(writing, "Picked up")).unwrap());
+
+    reload(&mut app);
+
+    let edited = comment(&app, OPEN_REPLY).unwrap();
+    assert_eq!(edited.body, "Picked up");
+    assert!(edited.edited_at.is_some());
+}
+
+#[test]
+fn a_detail_loaded_while_an_unresolve_is_in_flight_keeps_the_thread_open() {
+    let mut app = app();
+    focus(&mut app, RESOLVED);
+    let write = only_change(press(&mut app, "x"));
+    assert_eq!(write.change, CommentChange::Unresolve);
+
+    reload(&mut app);
+
+    assert!(comment(&app, RESOLVED).unwrap().resolved_at.is_none());
+}
+
 #[test]
 fn r_and_e_keep_their_detail_meaning_without_a_focused_comment() {
     let mut app = app();
