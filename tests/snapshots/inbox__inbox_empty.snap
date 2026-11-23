@@ -1,0 +1,27 @@
+---
+source: tests/inbox.rs
+expression: screen(&app)
+---
+ [1] │ [2] │ [3] │ [4] │ [5] │ [6] Inbox                                        
+┌Inbox─────────────────────────────────────────────────────────────────────────┐
+│Nothing in your inbox.                                                        │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+ Move │ j down  k up  gg top  G bottom  C-d/C-u page  / search                  
+ Do   │ Enter open  m read  A archive  z snooze  ? keys  : palette  q quit

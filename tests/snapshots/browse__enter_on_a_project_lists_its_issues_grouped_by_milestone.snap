@@ -2,7 +2,7 @@
 source: tests/browse.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects                        "
+" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects │ [6] Inbox            "
 "┌Nibble 3.0 (20)───────────────────────────────────────────────────────────────────────────────────┐"
 "│Design review (7)                                                                                 │"
 "│▸ OPS-36 Plan the office cheese cave move                     ◐ In Review   ▮▯▯ Low       Cycle 7 │"

@@ -2,7 +2,7 @@
 source: tests/app.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects                                                                                                                            "
+" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects │ [6] Inbox                                                                                                                "
 "┌My Issues─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐┏DES-34━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓"
 "│◐ Started (9)                                                                                                         │┃Design QA for the autumn release                                              ┃"
 "│▸ DES-34 Design QA for the autumn release                               due Nov 6 ◐ In Progress ▮▮▮ High    3 Cycle 7 │┃                                                                              ┃"
@@ -59,6 +59,6 @@ expression: app.backend()
 "│                                                                                                                      │┃                                                                              ┃"
 "│                                                                                                                      │┃                                                                              ┃"
 "└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛"
-" Move │ j down  │ k up       │ gg top     │ G bottom │ C-d/C-u page │ h/l pane │ / search                                                                                                               "
-" Do   │ y yank  │ o links    │ Esc close  │ ? keys   │ : palette    │ q quit                                                                                                                            "
-" Edit │ s state │ a assignee │ p priority │ L labels │ e estimate   │ E text   │ c comment                                                                                                              "
+" Move │ j down  │ k up       │ gg top     │ G bottom  │ C-d/C-u page │ h/l pane  │ }/{ comment │ / search                                                                                               "
+" Do   │ y yank  │ o links    │ + react    │ Esc close │ ? keys       │ : palette │ q quit                                                                                                               "
+" Edit │ s state │ a assignee │ p priority │ L labels  │ e estimate   │ E text    │ c comment                                                                                                            "

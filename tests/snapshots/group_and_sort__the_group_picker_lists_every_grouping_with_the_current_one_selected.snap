@@ -2,7 +2,7 @@
 source: tests/group_and_sort.rs
 expression: "screen(&app).join(\"\\n\")"
 ---
- [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects                                            
+ [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects │ [6] Inbox                                
 ┏My Issues━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓┌DES-34────────────────────────────────────────┐
 ┃◐ Started (9)                                                         ┃│Design QA for the autumn release              │
 ┃▸ DES-34 Design QA for the autum… ◐ In Progress ▮▮▮ High    3 Cycle 7 ┃│                                              │

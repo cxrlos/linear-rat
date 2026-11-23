@@ -2,7 +2,7 @@
 source: tests/personal_analytics.rs
 expression: "with_range(80, 24, \"[\").backend()"
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    "
+" [1] │ [2] │ [3] Analytics │ [4] │ [5] │ [6]                                    "
 "┌Analytics─────────────────────────────────────────────────────────────────────┐"
 "│v [Personal] Team    Range [4 weeks] 12 weeks  26 weeks                       │"
 "│                                                                              │"

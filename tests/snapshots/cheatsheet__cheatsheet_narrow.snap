@@ -2,7 +2,7 @@
 source: tests/cheatsheet.rs
 expression: "text(&cheatsheet(50, 24))"
 ---
- [1] My Issues │ [2] │ [3] │ [4] │ [5]            
+ [1] My Issues │ [2] │ [3] │ [4] │ [5] │ [6]      
 ┌My Issues───────────────────────────────────────┐
 │◐ Sta┌ Keys ─────────────────────────────┐      │
 │▸ DES│ Move                              │cle 7 │

@@ -2,7 +2,7 @@
 source: tests/relations.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    "
+" [1] My Issues │ [2] │ [3] │ [4] │ [5] │ [6]                                    "
 "┌ENG-51────────────────────────────────────────────────────────────────────────┐"
 "│Add a dry-run mode to the importer                                            │"
 "│                                                                              │"
@@ -39,6 +39,6 @@ expression: app.backend()
 "│Team      Engineering                                                         │"
 "│Project   None                                                                │"
 "└──────────────────────────────────────────────────────────────────────────────┘"
-" Move │ j down  k up  gg top  G bottom  C-d/C-u page  h/l pane  / search        "
-" Do   │ y yank  o links  Esc close  ? keys  : palette  q quit                   "
+" Move │ j down  k up  gg top  G bottom  C-d/C-u page  h/l pane  }/{ comment     "
+" Do   │ y yank  o links  + react  Esc close  ? keys  : palette  q quit          "
 " Edit │ s state  a assignee  p priority  L labels  e estimate  E text  c comment"

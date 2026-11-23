@@ -2,7 +2,7 @@
 source: tests/palette.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    "
+" [1] My Issues │ [2] │ [3] │ [4] │ [5] │ [6]                                    "
 "┌My Issues─────────────────────────────────────────────────────────────────────┐"
 "│◐┌ Palette ─────────────────────────────────────────────────────────────────┐ │"
 "│▸│ : cheese cave                                                            │ │"
@@ -10,7 +10,7 @@ expression: app.backend()
 "│ │ OPS-36 Plan the office cheese cave move                      ◐ In Review │ │"
 "│ │ Archive the issue                                                      A │ │"
 "│ │ Unarchive the issue                                                    U │ │"
-"│ │                                                                          │ │"
+"│ │ Resolve or unresolve the focused thread                                x │ │"
 "│ │                                                                          │ │"
 "│ │                                                                          │ │"
 "│ │                                                                          │ │"

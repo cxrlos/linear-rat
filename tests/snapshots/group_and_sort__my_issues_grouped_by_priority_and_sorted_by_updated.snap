@@ -2,7 +2,7 @@
 source: tests/group_and_sort.rs
 expression: "screen(&app).join(\"\\n\")"
 ---
- [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects                                            
+ [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects │ [6] Inbox                                
 ┏My Issues · group: priority · sort: updated, newest first━━━━━━━━━━━━━┓┌DES-34────────────────────────────────────────┐
 ┃!!! Urgent (1)                                                        ┃│Design QA for the autumn release              │
 ┃  OPS-33 Review the disaster rec… ◇ Triage      !!! Urgent            ┃│                                              │

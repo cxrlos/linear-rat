@@ -2,7 +2,7 @@
 source: tests/cheatsheet.rs
 expression: text
 ---
- [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects                                                                                    
+ [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects │ [6] Inbox                                                                        
 t ENG Engineering · 50 of 70 m more · f Filters none                                                                                                            
 ┏Team Issues━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓┌ENG-69────────────────────────────────────────────────────────┐
 ┃▸ ENG-69 Make the importer resumable                      ● Done        ▮▮▯ Medium  8 Cycle 7 ┃│Make the importer resumable                                   │
@@ -14,20 +14,20 @@ t ENG Engineering · 50 of 70 m more · f Filters none
 ┃  ENG-64 Support multiple cellars per household           ● Done        ▮▯▯ Low     5 Cycle 7 ┃│Part of the Nibble 3.0 push. Keep the old behaviour behind a  │
 ┃┌ Keys ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐ │
 ┃│ Move                                 │ Edit the issue                       │ Open & copy                          │ App                                  │ │
-┃│  j/k      down / up                  │  s          workflow state           │  Enter  open the issue               │  1/2/3  screens    4      cycles     │ │
-┃│  gg/G     top / bottom               │  a          assignee                 │  yi/yu  copy key / URL               │  5      projects   r      refresh    │ │
-┃│  C-d/C-u  half page                  │  p          priority                 │  yb/ym  copy branch / link           │  ?      keys       :,C-k  palette    │ │
-┃│  h/l      pane left / right          │  L          labels                   │  o      Linear page or PR            │  /      search     !      messages   │ │
-┃│  Esc      close or step back         │  e          estimate                 │  O      other links                  │  q      quit       C-z    suspend    │ │
-┃│                                      │  C/P        cycle / project          │  gr     related issue                │                                      │ │
-┃│ Team Issues                          │  M/d        milestone / due date     │                                      │ Issue list                           │ │
-┃│  t   switch team                     │  E          title and description    │                                      │  vg/vs  group / sort                 │ │
-┃│  fs  filter by state                 │  c          comment                  │                                      │                                      │ │
-┃│  fa  filter by assignee              │  A/U        archive / unarchive      │                                      │                                      │ │
-┃│  fl  filter by label                 │  X/S        trash / subscribe        │                                      │                                      │ │
-┃│  fc  filter by cycle                 │  n          new issue                │                                      │                                      │ │
-┃│  fp  filter by project               │  H/Dp/R/Dr  parent / relations       │                                      │                                      │ │
-┃│  fb  blocked only                    │                                      │                                      │                                      │ │
+┃│  j/k      down / up                  │  s          workflow state           │  Enter  open the issue               │  1/2/3  screens    4  cycles         │ │
+┃│  gg/G     top / bottom               │  a          assignee                 │  yi/yu  copy key / URL               │  5      projects   6  inbox          │ │
+┃│  C-d/C-u  half page                  │  p          priority                 │  yb/ym  copy branch / link           │  r      refresh    ?  keys           │ │
+┃│  h/l      pane left / right          │  L          labels                   │  o      Linear page or PR            │  :,C-k  palette    /  search         │ │
+┃│  Esc      close or step back         │  e          estimate                 │  O      other links                  │  !      messages   q  quit           │ │
+┃│                                      │  C/P        cycle / project          │  gr     related issue                │  C-z    suspend                      │ │
+┃│ Team Issues                          │  M/d        milestone / due date     │                                      │                                      │ │
+┃│  t   switch team                     │  E          title and description    │ Issue list                           │                                      │ │
+┃│  fs  filter by state                 │  c          comment                  │  vg/vs  group / sort                 │                                      │ │
+┃│  fa  filter by assignee              │  F/W        attach a file / link     │                                      │                                      │ │
+┃│  fl  filter by label                 │  A/U        archive / unarchive      │                                      │                                      │ │
+┃│  fc  filter by cycle                 │  X/S        trash / subscribe        │                                      │                                      │ │
+┃│  fp  filter by project               │  n          new issue                │                                      │                                      │ │
+┃│  fb  blocked only                    │  H/Dp/R/Dr  parent / relations       │                                      │                                      │ │
 ┃│  m   load more                       │                                      │                                      │                                      │ │
 ┃└ Esc close ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘ │
 ┃  ENG-32 Validate humidity readings from sensors          ◌ Backlog     ▮▮▮ High    2         ┃│Cycle     Cycle 7 (active)                                    │

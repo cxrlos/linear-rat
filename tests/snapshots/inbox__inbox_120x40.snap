@@ -1,0 +1,43 @@
+---
+source: tests/inbox.rs
+expression: screen(&app)
+---
+ [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects │ [6] Inbox 5                              
+┌Inbox · 5 unread──────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│DES-16 Accessible focus rings across whisker                                                                          │
+│▸ ● comment        Theo Whisker                                                                                    20m│
+│  ● mention        Ada Roquefort                                                                                    2h│
+│  · reaction +1    Jun Emmental                                                                                     5h│
+│ENG-23 Dark mode text is unreadable on the cellar map                                                                 │
+│  ● comment        Ada Roquefort                                                                                   45m│
+│  · state change   Theo Whisker                                                                                     4d│
+│  · assigned       Ada Roquefort                                                                                    5d│
+│DES-2 Redesign the empty pantry screen                                                                                │
+│  ● assigned       Omar Stilton                                                                                     1h│
+│  · state change   Omar Stilton                                                                                     3h│
+│DES-34 Design QA for the autumn release                                                                               │
+│  · comment        Iris Comté                                                                                       6h│
+│  · comment        Nell Havarti                                                                                     1d│
+│DES-36 Map legend for shelf temperatures                                                                              │
+│  ● mention        Basil Burrow                                                                                     2d│
+│  · reaction tada  Pia Brie                                                                                         3d│
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ Move │ j down     │ k up   │ gg top    │ G bottom │ C-d/C-u page │ / search                                            
+ Do   │ Enter open │ m read │ A archive │ z snooze │ ? keys       │ : palette │ q quit

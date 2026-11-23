@@ -2,7 +2,7 @@
 source: tests/search_results.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects                                                                                                                            "
+" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects │ [6] Inbox                                                                                                                "
 "┏Search "cheese" (5)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓┌ENG-3─────────────────────────────────────────────────────────────────────────┐"
 "┃▸ ENG-3  Cheese wheel barcode scanner drops the last digit                        ● Done        ▮▮▯ Medium  2 Cycle 1 ┃│Cheese wheel barcode scanner drops the last digit                             │"
 "┃  ENG-27 Deduplicate cheese varieties in the catalog                              ● Done        ▮▯▯ Low     1 Cycle 3 ┃│                                                                              │"

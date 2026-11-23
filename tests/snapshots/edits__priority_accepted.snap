@@ -2,7 +2,7 @@
 source: tests/edits.rs
 expression: app.backend()
 ---
-" [1] My Issues │ [2] Team Issues │ [3] Analytics │ [4] Cycles │ [5] Projects    "
+" [1] My Issues │ [2] │ [3] │ [4] │ [5] │ [6]                                    "
 "┌My Issues─────────────────────────────────────────────────────────────────────┐"
 "│◐ Started (9)                                                                 │"
 "│▸ DES-34 Design QA for the autumn release ◐ In Progress !!! Urgent  3 Cycle 7 │"
