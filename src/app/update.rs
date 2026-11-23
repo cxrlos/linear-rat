@@ -2,6 +2,7 @@ use crossterm::event::{KeyCode, KeyEventKind};
 use ratatui::layout::Size;
 
 use super::edit::{self, Editable};
+use super::reactions;
 use super::{
     Action, Copyable, Effect, Event, Load, Modal, Palette, Pane, Purpose, Screen, State,
     analytics_screen, browse, comments, compose, create, detail, issue_picker, lifecycle, links,
@@ -242,6 +243,7 @@ fn apply(state: &mut State, event: Event) -> Update {
         Event::CommentCreated { comment, result } => compose::commented(state, &comment, result),
         Event::IssueCreated { issue, result } => compose::created(state, &issue, result),
         Event::CommentChanged { write, result } => comments::changed(state, &write, result),
+        Event::Reacted { write, result } => reactions::reacted(state, &write, result),
     }
 }
 
@@ -571,6 +573,7 @@ pub fn perform(state: &mut State, action: Action) -> Update {
         Action::EditComment => comments::edit(state),
         Action::DeleteComment => comments::ask_to_delete(state),
         Action::ToggleResolved => comments::toggle_resolved(state),
+        Action::React => reactions::open(state),
         Action::ToggleBlocked if state.screen == Screen::TeamIssues => Update {
             redraw: true,
             effects: team_issues::toggle_blocked(state),
@@ -614,6 +617,9 @@ fn choose(state: &mut State, nth: Option<usize>) -> Update {
     };
     if choice.purpose == Purpose::RelationKind {
         return relations::kind_chosen(state, nth);
+    }
+    if choice.purpose == Purpose::Reaction {
+        return reactions::chosen(state, nth);
     }
     if choice.purpose == Purpose::CyclesTeam {
         browse::pick_team(state, nth).map_or_else(Update::default, |effects| Update {

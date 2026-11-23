@@ -21,6 +21,7 @@ use jiff::{SignedDuration, Timestamp};
 pub use error::{ClientError, ErrorKind, GraphQlError, Response};
 pub use governor::{SystemTimer, Timer, Urgency};
 pub use http::{ClientConfig, Dial, HttpClient, LIVE_ENDPOINT, LiveConfig, Pipe};
+use model::Reaction;
 use model::{
     Attachment, Comment, Cycle, Issue, IssueRelation, Label, Member, Priority, Project,
     ProjectMilestone, ProjectOverview, RelationType, StateSpan, StateType, Team, Viewer,
@@ -241,6 +242,17 @@ pub trait LinearClient {
         resolved: bool,
     ) -> impl Future<Output = Result<(), ClientError>> + Send;
 
+    /// Sends one `reactionCreate` adding the viewer's `emoji` to `target`,
+    /// and returns the reaction as Linear stored it.
+    fn add_reaction(
+        &self,
+        target: &ReactionTarget,
+        emoji: &str,
+    ) -> impl Future<Output = Result<Reaction, ClientError>> + Send;
+
+    /// Sends one `reactionDelete` for the reaction `id`.
+    fn remove_reaction(&self, id: &str) -> impl Future<Output = Result<(), ClientError>> + Send;
+
     /// Sends one `issueCreate` and returns the issue as Linear stored it.
     fn create_issue(
         &self,
@@ -353,6 +365,13 @@ pub enum LiveEvent {
 pub struct PostedComment {
     pub comment: Comment,
     pub author: Option<Member>,
+}
+
+/// What a reaction is on: an issue or a comment, by id.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ReactionTarget {
+    Issue(String),
+    Comment(String),
 }
 
 /// Every field of a new issue that lrat's create form sets.
@@ -800,6 +819,8 @@ pub struct IssueDetail {
     /// The teams and cycles of `related_issues`.
     pub teams: Vec<Team>,
     pub cycles: Vec<Cycle>,
+    /// The issue's own reactions, oldest first.
+    pub reactions: Vec<Reaction>,
     /// What Linear could not give, as in [`AssignedIssues::problems`].
     pub problems: Vec<String>,
 }
@@ -866,6 +887,11 @@ impl IssueDetail {
                 .into_iter()
                 .filter(|attachment| attachment.issue_id == issue_id)
                 .collect(),
+            reactions: data
+                .issue_reactions
+                .get(issue_id)
+                .cloned()
+                .unwrap_or_default(),
             problems: Vec::new(),
         }
     }
@@ -883,6 +909,10 @@ thread_local! {
     /// Comments edited, resolved and deleted through this client.
     static DEMO_COMMENT_CHANGES: RefCell<DemoCommentChanges> =
         RefCell::new(DemoCommentChanges::default());
+    /// Reactions added through this client and on what, and the ids of
+    /// those removed.
+    static DEMO_REACTIONS: RefCell<DemoReactions> =
+        const { RefCell::new((Vec::new(), Vec::new())) };
     static DEMO_CREATED: RefCell<u32> = const { RefCell::new(0) };
     static DEMO_TRASHED: RefCell<BTreeSet<String>> = const { RefCell::new(BTreeSet::new()) };
     /// Relations created through this client, and the ids of those deleted.
@@ -935,6 +965,38 @@ fn demo_change_comment(id: &str, change: impl FnOnce(&mut Comment)) -> Result<()
     change(&mut comment);
     DEMO_COMMENT_CHANGES.with_borrow_mut(|changes| changes.changed.insert(id.to_owned(), comment));
     Ok(())
+}
+
+/// Reactions added through the fake client and what each is on, and the
+/// ids of those removed.
+type DemoReactions = (Vec<(ReactionTarget, Reaction)>, Vec<String>);
+
+/// `detail`'s reactions, and those of its comments, as reactions added and
+/// removed through the fake client left them.
+fn apply_demo_reactions(issue_id: &str, detail: &mut IssueDetail) {
+    DEMO_REACTIONS.with_borrow(|(added, removed)| {
+        for (target, reaction) in added {
+            let reactions = match target {
+                ReactionTarget::Issue(id) if id == issue_id => &mut detail.reactions,
+                ReactionTarget::Comment(id) => {
+                    match detail.comments.iter_mut().find(|c| &c.id == id) {
+                        Some(comment) => &mut comment.reactions,
+                        None => continue,
+                    }
+                }
+                ReactionTarget::Issue(_) => continue,
+            };
+            reactions.push(reaction.clone());
+        }
+        detail
+            .reactions
+            .retain(|reaction| !removed.contains(&reaction.id));
+        for comment in &mut detail.comments {
+            comment
+                .reactions
+                .retain(|reaction| !removed.contains(&reaction.id));
+        }
+    });
 }
 
 /// The demo issue with id `issue_id` as edits through the fake client left
@@ -1309,6 +1371,7 @@ impl LinearClient for FakeClient {
             );
         });
         DEMO_COMMENT_CHANGES.with_borrow(|changes| changes.apply(&mut detail.comments));
+        apply_demo_reactions(issue_id, &mut detail);
         Ok(detail)
     }
 
@@ -1507,6 +1570,48 @@ impl LinearClient for FakeClient {
         demo_change_comment(id, |comment| {
             comment.resolved_at = resolved.then_some(demo::NOW);
         })
+    }
+
+    async fn add_reaction(
+        &self,
+        target: &ReactionTarget,
+        emoji: &str,
+    ) -> Result<Reaction, ClientError> {
+        match target {
+            ReactionTarget::Issue(id) => {
+                demo_issue(&demo::workspace(), id)?;
+            }
+            ReactionTarget::Comment(id) => {
+                demo_comment(id)?;
+            }
+        }
+        let viewer_id = demo::workspace().viewer.id;
+        DEMO_REACTIONS.with_borrow_mut(|(added, _)| {
+            let reaction = Reaction {
+                id: format!("reaction-new-{}", added.len() + 1),
+                emoji: emoji.to_owned(),
+                user_id: Some(viewer_id),
+                created_at: demo::NOW,
+            };
+            added.push((target.clone(), reaction.clone()));
+            Ok(reaction)
+        })
+    }
+
+    async fn remove_reaction(&self, id: &str) -> Result<(), ClientError> {
+        let data = demo::workspace();
+        let known = data
+            .issue_reactions
+            .values()
+            .flatten()
+            .chain(data.comments.iter().flat_map(|comment| &comment.reactions))
+            .any(|reaction| reaction.id == id)
+            || DEMO_REACTIONS.with_borrow(|(added, _)| added.iter().any(|(_, r)| r.id == id));
+        if !known {
+            return Err(not_found("reaction", id));
+        }
+        DEMO_REACTIONS.with_borrow_mut(|(_, removed)| removed.push(id.to_owned()));
+        Ok(())
     }
 
     async fn create_issue(&self, input: &IssueCreate) -> Result<Issue, ClientError> {

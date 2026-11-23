@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 
 use super::comments::CommentWrite;
+use super::reactions::ReactionWrite;
 use super::{Action, Effect, Failure, Load, Pane, Screen, State, Update};
 use crate::linear::model::Comment;
 use crate::linear::{IssueDetail, Urgency};
@@ -24,6 +25,9 @@ pub struct Detail {
     pub(super) comment_writes: Vec<CommentWrite>,
     /// Stand-ins of replies Linear has not stored yet.
     pub(super) replies: Vec<Comment>,
+    /// Reaction changes Linear has not answered yet, put back over a detail
+    /// that loads meanwhile, as `comment_writes` are.
+    pub(super) reaction_writes: Vec<ReactionWrite>,
 }
 
 /// How far the comments and state history of one issue are.
@@ -180,6 +184,7 @@ pub(super) fn loaded(state: &mut State, issue_id: String, result: Result<IssueDe
             state.store.merge_detail(&issue_id, &detail);
             super::relations::reapply_in_flight(state);
             super::comments::reapply_in_flight(state);
+            super::reactions::reapply_in_flight(state);
             // The detail can bring newer copies of related issues.
             state.rebuild_lists();
             DetailLoad::Loaded

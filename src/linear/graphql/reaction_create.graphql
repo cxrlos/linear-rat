@@ -1,0 +1,17 @@
+# budget: 5
+# Adds the viewer's reaction to an issue (`issueId`) or a comment
+# (`commentId`). Returns the reaction as Linear stored it, as the comment
+# and detail queries read reactions.
+mutation ReactionCreate($input: ReactionCreateInput!) {
+  reactionCreate(input: $input) {
+    success
+    reaction {
+      id
+      emoji
+      createdAt
+      user {
+        id
+      }
+    }
+  }
+}

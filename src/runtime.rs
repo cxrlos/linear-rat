@@ -20,6 +20,7 @@ use crate::app::{
     App, CommentChange, CommentWrite, Effect, Event, Failure, Lifecycle, LifecycleWrite, LoadError,
     NewComment, NewIssue, RelationWrite, SEARCH_PAUSE, SyncFailure, TeamPoll, Write,
 };
+use crate::app::{ReactionChange, ReactionWrite};
 use crate::linear::{
     AnalyticsWindow, ClientError, ErrorKind, LinearClient, LiveEvent, RelationCreate, SearchQuery,
     Urgency,
@@ -588,6 +589,10 @@ where
             in_flight.push(Box::pin(change_comment(reach.client, write)));
             Ok(())
         }
+        Effect::React(write) => {
+            in_flight.push(Box::pin(react(reach.client, write)));
+            Ok(())
+        }
         Effect::CreateIssue(issue) => {
             in_flight.push(Box::pin(create_issue(reach.client, issue)));
             Ok(())
@@ -908,6 +913,30 @@ async fn change_comment<C: LinearClient>(client: Option<&C>, write: CommentWrite
         }
     }
     Event::CommentChanged { write, result }
+}
+
+async fn react<C: LinearClient>(client: Option<&C>, write: ReactionWrite) -> Event {
+    let action = format!("react on {}", write.identifier);
+    let result = match client {
+        Some(client) => match &write.change {
+            ReactionChange::Add(stand_in) => client
+                .add_reaction(&write.target, &stand_in.emoji)
+                .await
+                .map(Some),
+            ReactionChange::Remove(reaction) => {
+                client.remove_reaction(&reaction.id).await.map(|()| None)
+            }
+        }
+        .map_err(|error| Failure::from_client(&action, &error)),
+        None => Err(no_client(&action)),
+    };
+    match &result {
+        Ok(_) => tracing::info!(issue = %write.identifier, "Linear changed a reaction"),
+        Err(error) => {
+            tracing::warn!(issue = %write.identifier, %error, "Linear did not change a reaction");
+        }
+    }
+    Event::Reacted { write, result }
 }
 
 async fn create_issue<C: LinearClient>(client: Option<&C>, issue: NewIssue) -> Event {

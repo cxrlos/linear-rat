@@ -116,6 +116,9 @@ pub enum Action {
     DeleteComment,
     /// Resolve the focused comment's thread, or open it again.
     ToggleResolved,
+    /// Pick a reaction to add to, or remove from, the focused comment or
+    /// issue.
+    React,
 }
 
 /// What [`Action::Copy`] puts on the clipboard.

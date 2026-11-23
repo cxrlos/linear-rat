@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 use super::capabilities::Capabilities;
 use super::edit::{Edit, Write};
 use crate::analytics::AdministrableTeams;
+use crate::linear::ReactionTarget;
+use crate::linear::model::Reaction;
 use crate::linear::model::{
     Attachment, Comment, Cycle, Issue, IssueRelation, Label, Member, Project, ProjectMilestone,
     RelationKind, StateSpan, Team, Viewer, WorkflowState, Workspace,
@@ -56,6 +58,11 @@ pub struct Store {
     /// edits made them. Defaults when missing, as `attachments` does.
     #[serde(default)]
     relations: BTreeMap<String, IssueRelation>,
+    /// Issues' own reactions by issue id, oldest first, as the detail
+    /// loaded them. Kept apart from the issues so no list query has to ask
+    /// for them.
+    #[serde(default)]
+    issue_reactions: BTreeMap<String, Vec<Reaction>>,
     /// When the newest data was loaded, which decides the active cycle.
     as_of: Option<Timestamp>,
     /// The ids of the teams the viewer is a member of, in the order Linear
@@ -496,6 +503,48 @@ impl Store {
         Some(std::mem::replace(&mut comment.resolved_at, at))
     }
 
+    /// The reactions on `target`, oldest first; none while not loaded.
+    pub fn reactions(&self, target: &ReactionTarget) -> &[Reaction] {
+        match target {
+            ReactionTarget::Issue(id) => self.issue_reactions.get(id).map_or(&[], Vec::as_slice),
+            ReactionTarget::Comment(id) => self
+                .comments
+                .values()
+                .flatten()
+                .find(|comment| &comment.id == id)
+                .map_or(&[], |comment| comment.reactions.as_slice()),
+        }
+    }
+
+    fn reactions_mut(&mut self, target: &ReactionTarget) -> Option<&mut Vec<Reaction>> {
+        match target {
+            ReactionTarget::Issue(id) => Some(self.issue_reactions.entry(id.clone()).or_default()),
+            ReactionTarget::Comment(id) => self
+                .comments
+                .values_mut()
+                .flatten()
+                .find(|comment| &comment.id == id)
+                .map(|comment| &mut comment.reactions),
+        }
+    }
+
+    /// Adds `reaction` to `target`, unless one with its id is there.
+    pub fn add_reaction(&mut self, target: &ReactionTarget, reaction: Reaction) {
+        if let Some(reactions) = self.reactions_mut(target)
+            && reactions.iter().all(|known| known.id != reaction.id)
+        {
+            reactions.push(reaction);
+            reactions.sort_by_key(|reaction| reaction.created_at);
+        }
+    }
+
+    /// Forgets the reaction `id` on `target` and returns it.
+    pub fn remove_reaction(&mut self, target: &ReactionTarget, id: &str) -> Option<Reaction> {
+        let reactions = self.reactions_mut(target)?;
+        let at = reactions.iter().position(|reaction| reaction.id == id)?;
+        Some(reactions.remove(at))
+    }
+
     /// Replaces the comments of `issue_id`.
     pub fn set_comments(&mut self, issue_id: &str, comments: Vec<Comment>) {
         self.comments.insert(issue_id.to_owned(), comments);
@@ -586,6 +635,8 @@ impl Store {
         self.set_comments(issue_id, detail.comments.clone());
         self.attachments
             .insert(issue_id.to_owned(), detail.attachments.clone());
+        self.issue_reactions
+            .insert(issue_id.to_owned(), detail.reactions.clone());
         self.state_histories
             .insert(issue_id.to_owned(), detail.state_history.clone());
         by_id(&mut self.members, &detail.members, |member| &member.id);

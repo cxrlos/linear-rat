@@ -274,6 +274,18 @@ impl LinearClient for RejectingClient {
         Err(ClientError::InvalidKey)
     }
 
+    async fn add_reaction(
+        &self,
+        _: &linear_rat::linear::ReactionTarget,
+        _: &str,
+    ) -> Result<linear_rat::linear::model::Reaction, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn remove_reaction(&self, _: &str) -> Result<(), ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
     async fn create_issue(
         &self,
         _: &linear_rat::linear::IssueCreate,

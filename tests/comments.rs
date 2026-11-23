@@ -187,6 +187,9 @@ fn threads_render_nested_with_the_resolved_one_collapsed_on_a_narrow_terminal() 
 
     assert!(shows(&app, "▸ resolved · 1 reply"));
     assert!(shows(&app, "· edited"));
+    // A wide emoji leaves the old text in the cell it covers in the test
+    // backend; a full redraw shows the screen as a terminal would.
+    app.redraw_all().unwrap();
     assert_snapshot!(app.backend());
 }
 
@@ -197,6 +200,9 @@ fn threads_render_nested_with_the_resolved_one_collapsed_on_a_wide_terminal() {
     focus(&mut app, OPEN);
 
     assert!(shows(&app, "▸ resolved · 1 reply"));
+    // A wide emoji leaves the old text in the cell it covers in the test
+    // backend; a full redraw shows the screen as a terminal would.
+    app.redraw_all().unwrap();
     assert_snapshot!(app.backend());
 }
 
@@ -207,6 +213,9 @@ fn a_focused_resolved_thread_opens_with_its_replies() {
 
     assert!(!shows(&app, "▸ resolved"));
     assert!(shows(&app, "It follows the theme now"));
+    // A wide emoji leaves the old text in the cell it covers in the test
+    // backend; a full redraw shows the screen as a terminal would.
+    app.redraw_all().unwrap();
     assert_snapshot!(app.backend());
 }
 
@@ -226,7 +235,8 @@ fn r_replies_in_the_thread_and_the_reply_shows_until_linear_stores_it() {
         panic!("{effects:?}");
     };
     assert_eq!(reply.parent_id.as_deref(), Some(OPEN));
-    assert!(shows(&app, "sending…"));
+    press(&mut app, "}");
+    assert!(shows(&app, "sending…"), "{:#?}", screen(&app));
 
     let posted = on_fake(async |client| {
         client

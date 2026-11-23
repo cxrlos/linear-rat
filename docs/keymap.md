@@ -123,6 +123,7 @@ The Team Issues list also takes the Issue list keys, the Cycles screen the Cycle
 | `go-to-related` | `gr` | Go to a related issue |
 | `next-comment` | `}` | Focus the next comment |
 | `previous-comment` | `{` | Focus the previous comment |
+| `react` | `+` | React to the focused comment, or the issue |
 | `close` | `<Esc>` | Close the top overlay or step back |
 
 ## Overlays (`[keys.overlay]`)
@@ -185,3 +186,4 @@ The Team Issues list also takes the Issue list keys, the Cycles screen the Cycle
 | `edit-comment` | `E` | Edit your focused comment |
 | `delete-comment` | `X` | Delete your focused comment |
 | `toggle-resolved` | `x` | Resolve or unresolve the focused thread |
+| `react` | `+` | React to the focused comment, or the issue |

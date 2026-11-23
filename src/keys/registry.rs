@@ -187,6 +187,7 @@ const BROWSE: &[Context] = &[Context::Browse];
 const CYCLES: &[Context] = &[Context::Cycles];
 const DETAIL: &[Context] = &[Context::Detail];
 const COMMENT: &[Context] = &[Context::Comment];
+const REACT: &[Context] = &[Context::Detail, Context::Comment];
 const GLOBAL: &[Context] = &[Context::Global];
 const OVERLAY: &[Context] = &[Context::Overlay];
 const ANALYTICS: &[Context] = &[Context::Analytics];
@@ -854,6 +855,19 @@ pub static ACTIONS: &[ActionSpec] = &[
         overlays: &[],
         default_keys: &[&[Key::char('x')]],
         available: has_focused_comment,
+    },
+    ActionSpec {
+        action: Action::React,
+        id: "react",
+        description: "React to the focused comment, or the issue",
+        label: "react",
+        group: Group::Screen,
+        writes: Some(WriteClass::React),
+        hint: does("react"),
+        contexts: REACT,
+        overlays: &[],
+        default_keys: &[&[Key::char('+')]],
+        available: app::can_react,
     },
     ActionSpec {
         action: Action::PickNumber(1),

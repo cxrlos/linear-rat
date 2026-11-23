@@ -12,6 +12,7 @@ use unicode_width::UnicodeWidthStr;
 use super::theme::Theme;
 use super::{icons, markdown, style, text};
 use crate::app::{self, DetailLoad, State};
+use crate::linear::ReactionTarget;
 use crate::linear::model::{Attachment, Comment, Estimation, Issue, StateSpan};
 
 const FIELD_WIDTH: usize = 10;
@@ -89,6 +90,8 @@ fn build(state: &State, issue: &Issue, width: u16) -> (Vec<Line<'static>>, Optio
         }
         _ => lines.push(Line::styled("No description.", muted)),
     }
+    let target = ReactionTarget::Issue(issue.id.clone());
+    lines.extend(reaction_line(state, &target, "", width));
     lines.extend(relations(state, issue, width));
 
     let load = state.detail.load(&issue.id);
@@ -229,7 +232,49 @@ fn one_comment(
         spans.extend(line.spans);
         Line::from(spans)
     }));
+    let target = ReactionTarget::Comment(comment.id.clone());
+    lines.extend(reaction_line(state, &target, &body_indent, width));
     lines
+}
+
+/// The reactions on `target` as one line after `indent`, as `👍 2  🎉 1`
+/// in the order each emoji was first given: those the viewer gave
+/// accented, the rest muted, cut to `width`. Nothing without reactions.
+fn reaction_line(
+    state: &State,
+    target: &ReactionTarget,
+    indent: &str,
+    width: u16,
+) -> Option<Line<'static>> {
+    let viewer = state.store.viewer().map(|viewer| viewer.id.as_str());
+    let mut counts: Vec<(&str, usize, bool)> = Vec::new();
+    for reaction in state.store.reactions(target) {
+        let emoji = app::shown_emoji(&reaction.emoji);
+        let own = viewer.is_some() && reaction.user_id.as_deref() == viewer;
+        match counts.iter_mut().find(|(known, ..)| *known == emoji) {
+            Some((_, count, yours)) => {
+                *count += 1;
+                *yours |= own;
+            }
+            None => counts.push((emoji, 1, own)),
+        }
+    }
+    if counts.is_empty() {
+        return None;
+    }
+    let mut spans = vec![Span::raw(indent.to_owned())];
+    for (index, (emoji, count, own)) in counts.into_iter().enumerate() {
+        if index > 0 {
+            spans.push(Span::raw("  "));
+        }
+        let style = if own {
+            style::accent(&state.theme)
+        } else {
+            style::muted(&state.theme)
+        };
+        spans.push(Span::styled(format!("{emoji} {count}"), style));
+    }
+    Some(text::fit_line(Line::from(spans), usize::from(width)))
 }
 
 /// The Relations section: the parent, the sub-issues with how many are

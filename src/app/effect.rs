@@ -1,5 +1,7 @@
 use jiff::Timestamp;
 
+use super::ReactionWrite;
+
 use super::{
     CommentWrite, LifecycleWrite, NewComment, NewIssue, RelationWrite, TeamPoll, Write, Writing,
 };
@@ -155,6 +157,9 @@ pub enum Effect {
     /// comment; the result comes back as
     /// [`Event::CommentChanged`](super::Event::CommentChanged).
     ChangeComment(CommentWrite),
+    /// Add or remove one of the viewer's reactions; the result comes back
+    /// as [`Event::Reacted`](super::Event::Reacted).
+    React(ReactionWrite),
     /// Ask GitHub for the latest release; the answer comes back as
     /// [`Event::ReleaseChecked`](super::Event::ReleaseChecked).
     CheckRelease,

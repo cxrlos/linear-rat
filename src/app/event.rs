@@ -2,6 +2,9 @@ use crossterm::event::KeyEvent;
 use jiff::Timestamp;
 use semver::Version;
 
+use super::ReactionWrite;
+use crate::linear::model::Reaction;
+
 use super::{
     CommentWrite, Failure, LifecycleWrite, LoadError, NewComment, NewIssue, RelationWrite,
     SyncFailure, Write, Writing,
@@ -206,6 +209,12 @@ pub enum Event {
     CommentChanged {
         write: CommentWrite,
         result: Result<(), Failure>,
+    },
+    /// Linear's answer to [`Effect::React`](super::Effect::React): the
+    /// reaction as Linear stored it, for one added.
+    Reacted {
+        write: ReactionWrite,
+        result: Result<Option<Reaction>, Failure>,
     },
     /// The result of [`Effect::CheckRelease`](super::Effect::CheckRelease):
     /// the latest release, or `None` when the check failed.

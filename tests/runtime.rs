@@ -216,6 +216,18 @@ impl LinearClient for RejectingClient {
         Err(ClientError::InvalidKey)
     }
 
+    async fn add_reaction(
+        &self,
+        _: &linear_rat::linear::ReactionTarget,
+        _: &str,
+    ) -> Result<linear_rat::linear::model::Reaction, ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
+    async fn remove_reaction(&self, _: &str) -> Result<(), ClientError> {
+        Err(ClientError::InvalidKey)
+    }
+
     async fn create_issue(
         &self,
         _: &linear_rat::linear::IssueCreate,
@@ -429,6 +441,18 @@ async fn q_quits_while_the_load_is_still_in_flight() {
             future::pending().await
         }
 
+        async fn add_reaction(
+            &self,
+            _: &linear_rat::linear::ReactionTarget,
+            _: &str,
+        ) -> Result<linear_rat::linear::model::Reaction, ClientError> {
+            future::pending().await
+        }
+
+        async fn remove_reaction(&self, _: &str) -> Result<(), ClientError> {
+            future::pending().await
+        }
+
         async fn create_issue(
             &self,
             _: &linear_rat::linear::IssueCreate,
@@ -631,6 +655,18 @@ impl LinearClient for CountingClient {
 
     async fn resolve_comment(&self, id: &str, resolved: bool) -> Result<(), ClientError> {
         FakeClient.resolve_comment(id, resolved).await
+    }
+
+    async fn add_reaction(
+        &self,
+        target: &linear_rat::linear::ReactionTarget,
+        emoji: &str,
+    ) -> Result<linear_rat::linear::model::Reaction, ClientError> {
+        FakeClient.add_reaction(target, emoji).await
+    }
+
+    async fn remove_reaction(&self, id: &str) -> Result<(), ClientError> {
+        FakeClient.remove_reaction(id).await
     }
 
     async fn create_issue(
