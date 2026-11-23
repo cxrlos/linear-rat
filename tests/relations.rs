@@ -9,7 +9,9 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
-use linear_rat::app::{App, Edit, Effect, Event, Failure, Modal, RelationWrite, State, Write};
+use linear_rat::app::{
+    App, Edit, Effect, Event, Failure, Modal, RelationWrite, State, Write, WriteClass,
+};
 use linear_rat::linear::model::{Issue, IssueRelation, RelationKind, RelationType};
 use linear_rat::linear::{
     ErrorKind, FakeClient, IssueDetail, LinearClient, Patch, RelationCreate, SearchQuery,
@@ -498,6 +500,26 @@ fn a_removal_linear_rejects_puts_the_relation_back() {
             .unwrap()
             .starts_with("Could not remove the relation from ENG-51")
     );
+}
+
+#[test]
+fn a_removal_linear_forbids_denies_relations_in_the_team() {
+    let mut app = focused_with_detail("ENG-51");
+    let effects = press(&mut app, "DrENG-27\n");
+    let write = deletes(&effects).remove(0);
+    assert!(app.state().write_denied(WriteClass::Relations).is_none());
+
+    app.handle(Event::RelationDeleted {
+        write,
+        result: Err(Failure::new(
+            ErrorKind::Forbidden,
+            "remove the relation from ENG-51",
+            "this API key may not do that",
+        )),
+    })
+    .unwrap();
+
+    assert!(app.state().write_denied(WriteClass::Relations).is_some());
 }
 
 #[test]
