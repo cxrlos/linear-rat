@@ -15,9 +15,9 @@ use linear_rat::linear::model::{
 };
 use linear_rat::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, Diagnostics, FakeClient,
-    IssueDetail, IssueLink, IssueUpdate, LinearClient, LiveEvent, ProjectList, RelationCreate,
-    SearchQuery, SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions,
-    TeamQuery, Urgency, demo,
+    IssueDetail, IssueLink, IssueUpdate, LinearClient, LiveEvent, NotificationUpdate,
+    NotificationsLoaded, Patch, ProjectList, RelationCreate, SearchQuery, SearchResults,
+    TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery, Urgency, demo,
 };
 use linear_rat::runtime;
 use linear_rat::snapshot::SnapshotCache;
@@ -466,6 +466,16 @@ struct CountingClient {
     updates: Mutex<Vec<IssueUpdate>>,
     live: Vec<LiveEvent>,
     went_live: Mutex<Vec<Vec<String>>>,
+    /// Each inbox mutation sent, as `archive <id> <urgency>`.
+    inbox: Mutex<Vec<String>>,
+}
+
+impl CountingClient {
+    fn record_inbox(&self, call: String) {
+        if let Ok(mut inbox) = self.inbox.lock() {
+            inbox.push(call);
+        }
+    }
 }
 
 impl LinearClient for CountingClient {
@@ -635,6 +645,47 @@ impl LinearClient for CountingClient {
 
     async fn issue_updated_at(&self, issue_id: &str) -> Result<Timestamp, ClientError> {
         FakeClient.issue_updated_at(issue_id).await
+    }
+
+    async fn notifications(
+        &self,
+        since: Option<Timestamp>,
+    ) -> Result<NotificationsLoaded, ClientError> {
+        FakeClient.notifications(since).await
+    }
+
+    async fn update_notification(
+        &self,
+        id: &str,
+        update: &NotificationUpdate,
+    ) -> Result<(), ClientError> {
+        let read = match update.read_at {
+            Patch::Unchanged => String::new(),
+            Patch::Set(_) => " read".to_owned(),
+            Patch::Clear => " unread".to_owned(),
+        };
+        let snooze = update
+            .snoozed_until_at
+            .map(|until| format!(" snooze {until}"))
+            .unwrap_or_default();
+        self.record_inbox(format!("update {id}{read}{snooze}"));
+        FakeClient.update_notification(id, update).await
+    }
+
+    async fn archive_notification(&self, id: &str, urgency: Urgency) -> Result<(), ClientError> {
+        self.record_inbox(format!("archive {id} {urgency:?}"));
+        FakeClient.archive_notification(id, urgency).await
+    }
+
+    async fn mark_issue_notifications_read(
+        &self,
+        issue_id: &str,
+        read_at: Timestamp,
+    ) -> Result<(), ClientError> {
+        self.record_inbox(format!("read issue {issue_id}"));
+        FakeClient
+            .mark_issue_notifications_read(issue_id, read_at)
+            .await
     }
 }
 
@@ -896,4 +947,108 @@ async fn a_rejected_key_names_the_team_load_that_failed() {
         shown.contains("│could not load your teams: Linear rejected the API key"),
         "{shown}"
     );
+}
+
+fn enter() -> io::Result<TerminalEvent> {
+    Ok(TerminalEvent::Key(KeyEvent::new(
+        KeyCode::Enter,
+        KeyModifiers::NONE,
+    )))
+}
+
+/// Opens the demo Inbox, types `keys` into the runtime against a recording
+/// client, and hands back the notification focused before the keys and
+/// the inbox mutations the client was sent.
+// clippy's allow-unwrap-in-tests does not cover helpers outside #[test] functions.
+#[allow(clippy::unwrap_used)]
+async fn sent_from_the_inbox(
+    keys: Vec<io::Result<TerminalEvent>>,
+) -> (linear_rat::linear::model::Notification, Vec<String>) {
+    let client = CountingClient::default();
+    let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+    app.handle(Event::NotificationsLoaded {
+        since: None,
+        result: Ok(FakeClient.notifications(None).await.unwrap()),
+    })
+    .unwrap();
+    app.handle(Event::Key(KeyEvent::new(
+        KeyCode::Char('6'),
+        KeyModifiers::NONE,
+    )))
+    .unwrap();
+    let focused = linear_rat::app::focused_notification(app.state())
+        .unwrap()
+        .clone();
+
+    let running = runtime::run(
+        &mut app,
+        Some(&client),
+        None,
+        input(keys),
+        future::pending(),
+    );
+    let stopped = tokio::time::timeout(Duration::from_millis(200), running).await;
+
+    assert!(stopped.is_err(), "the runtime stopped: {stopped:?}");
+    let sent = client.inbox.lock().unwrap().clone();
+    (focused, sent)
+}
+
+#[tokio::test(start_paused = true)]
+async fn m_sends_the_notification_read_and_again_unread() {
+    let (focused, sent) = sent_from_the_inbox(vec![press('m'), press('m')]).await;
+
+    assert_eq!(
+        sent,
+        [
+            format!("update {} read", focused.id),
+            format!("update {} unread", focused.id)
+        ]
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn shift_m_sends_the_issue_to_mark_read() {
+    let (focused, sent) = sent_from_the_inbox(vec![press('M')]).await;
+
+    assert_eq!(sent, [format!("read issue {}", focused.issue_id)]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn z_sends_the_snooze_until_the_preset() {
+    let (focused, sent) = sent_from_the_inbox(vec![press('z'), enter()]).await;
+
+    let until = demo::NOW + jiff::SignedDuration::from_hours(1);
+    assert_eq!(sent, [format!("update {} snooze {until}", focused.id)]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn shift_a_archives_the_notification_as_the_viewer_waits() {
+    let (focused, sent) = sent_from_the_inbox(vec![press('A')]).await;
+
+    assert_eq!(sent, [format!("archive {} Urgent", focused.id)]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn archive_all_read_sends_each_archive_in_the_background() {
+    let read: Vec<String> = FakeClient
+        .notifications(None)
+        .await
+        .unwrap()
+        .notifications
+        .into_iter()
+        .filter(|n| n.read_at.is_some())
+        .map(|n| format!("archive {} Background", n.id))
+        .collect();
+    let mut keys = vec![press(':')];
+    keys.extend("archive all read".chars().map(press));
+    keys.push(enter());
+
+    let (_, mut sent) = sent_from_the_inbox(keys).await;
+
+    sent.sort();
+    let mut read = read;
+    read.sort();
+    assert!(!read.is_empty());
+    assert_eq!(sent, read);
 }
