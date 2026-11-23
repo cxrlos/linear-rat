@@ -970,7 +970,7 @@ pub static ACTIONS: &[ActionSpec] = &[
         description: "Archive every read notification in the Inbox",
         label: "archive all read",
         group: Group::Screen,
-        writes: None,
+        writes: Some(WriteClass::Inbox),
         hint: None,
         contexts: INBOX,
         overlays: &[],

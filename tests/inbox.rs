@@ -366,6 +366,24 @@ async fn archive_all_read_runs_from_the_palette_one_mutation_each() {
 }
 
 #[tokio::test]
+async fn archive_all_read_is_held_back_once_inbox_writes_are_denied() {
+    let mut app = inbox().await;
+    let write = only_write(press(&mut app, "m"));
+    app.handle(rejected(write)).unwrap();
+
+    press(&mut app, ":");
+    let effects = press(&mut app, "archive all read\n");
+
+    assert!(
+        !effects
+            .iter()
+            .any(|effect| matches!(effect, Effect::ArchiveNotifications(_))),
+        "{effects:?}"
+    );
+    assert!(linear_rat::app::inbox_has_read(app.state()));
+}
+
+#[tokio::test]
 async fn enter_opens_the_issue_with_the_comment_focused_and_marks_it_read() {
     let mut app = inbox().await;
     let notification = focused(&app);
