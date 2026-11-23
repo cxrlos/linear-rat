@@ -337,6 +337,49 @@ fn the_viewers_reaction_on_a_comment_toggles_off() {
     );
 }
 
+/// Loads DES-34's detail again, as Linear would answer before it has
+/// taken the reactions in flight.
+fn reload(app: &mut App<TestBackend>) {
+    app.handle(Event::IssueDetailLoaded {
+        issue_id: ISSUE.to_owned(),
+        result: Ok(IssueDetail::demo(ISSUE)),
+    })
+    .unwrap();
+}
+
+#[test]
+fn a_detail_loaded_while_an_addition_is_in_flight_keeps_it() {
+    let mut app = app();
+    focus(&mut app, OPEN);
+    let comment = ReactionTarget::Comment(OPEN.to_owned());
+    let write = react(&mut app, 7);
+
+    reload(&mut app);
+    assert_eq!(emoji(&app, &comment), ["👀", "👍", "🚀"]);
+
+    let stored = on_fake(async |client| client.add_reaction(&write.target, "🚀").await.unwrap());
+    app.handle(Event::Reacted {
+        write,
+        result: Ok(Some(stored)),
+    })
+    .unwrap();
+    assert_eq!(
+        emoji(&app, &comment),
+        ["👀", "👍", "🚀"],
+        "no stand-in left"
+    );
+}
+
+#[test]
+fn a_detail_loaded_while_a_removal_is_in_flight_keeps_it_gone() {
+    let mut app = app();
+    react(&mut app, 4);
+
+    reload(&mut app);
+
+    assert_eq!(emoji(&app, &issue()), ["👍", "👍"]);
+}
+
 #[test]
 fn a_shortcode_from_linear_counts_as_the_pickers_emoji() {
     let mut app = app();
