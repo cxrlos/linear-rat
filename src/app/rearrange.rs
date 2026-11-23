@@ -97,7 +97,8 @@ pub(super) fn pick(state: &mut State, nth: Option<usize>) -> Option<Vec<Effect>>
         | Purpose::AnalyticsTeam
         | Purpose::CyclesTeam
         | Purpose::Filter(_)
-        | Purpose::RelationKind => {
+        | Purpose::RelationKind
+        | Purpose::RemoveRelations => {
             return None;
         }
     }

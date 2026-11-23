@@ -27,12 +27,13 @@ fn key_event(c: char) -> Event {
     let code = match c {
         '\n' => KeyCode::Enter,
         '\x1b' => KeyCode::Esc,
+        '\t' => KeyCode::Tab,
         c => KeyCode::Char(c),
     };
     Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
 }
 
-/// Presses each key of `keys` (`\n` is Enter, `\x1b` Esc) and returns every
+/// Presses each key of `keys` (`\n` is Enter, `\x1b` Esc, `\t` Tab) and returns every
 /// effect they asked for.
 fn press(app: &mut App<TestBackend>, keys: &str) -> Vec<Effect> {
     keys.chars()
@@ -358,18 +359,40 @@ fn the_picker_for_a_new_relation_leaves_out_the_issue_and_those_already_related_
     assert!(!picker.scope().excluded.contains(&"issue-eng-6".to_owned()));
 }
 
+/// The relation ids the remove-relation picker on top offers, in order.
+fn removable(app: &App<TestBackend>) -> Vec<String> {
+    match app.state().modals.top() {
+        Some(Modal::Choice(choice)) => choice.list.values().flatten().cloned().collect(),
+        other => panic!("no remove-relation picker: {other:?}"),
+    }
+}
+
+/// Relates ENG-51 to ENG-27 a second way, and has Linear confirm it as
+/// `relation-9`.
+fn second_relation_to_eng_27(app: &mut App<TestBackend>) {
+    let effects = press(app, "R3ENG-27\n");
+    let [write] = creates(&effects).try_into().unwrap();
+    let stored = IssueRelation {
+        id: "relation-9".to_owned(),
+        ..write.relation.clone()
+    };
+    app.handle(Event::RelationCreated {
+        write,
+        result: Ok(stored),
+    })
+    .unwrap();
+}
+
 #[test]
-fn removing_a_relation_lists_only_related_issues_and_deletes_it() {
+fn removing_lists_each_relation_and_deletes_the_chosen_one() {
     let mut app = focused_with_detail("ENG-51");
 
     press(&mut app, "Dr");
-    assert!(
-        shows(&app, "Remove relations of ENG-51"),
-        "{:#?}",
-        screen(&app)
-    );
-    assert!(shows(&app, "Blocks · ENG-27"), "{:#?}", screen(&app));
-    assert!(!shows(&app, "ENG-60"), "{:#?}", screen(&app));
+    assert!(shows(&app, "Remove relations"), "{:#?}", screen(&app));
+    assert!(shows(&app, "blocks ENG-27"), "{:#?}", screen(&app));
+    assert!(shows(&app, "blocked by ENG-6"), "{:#?}", screen(&app));
+    assert!(shows(&app, "related to ENG-8"), "{:#?}", screen(&app));
+    assert_eq!(removable(&app), ["relation-2", "relation-1", "relation-3"]);
     let effects = press(&mut app, "ENG-27\n");
 
     let writes = deletes(&effects);
@@ -389,6 +412,70 @@ fn removing_a_relation_lists_only_related_issues_and_deletes_it() {
     })
     .unwrap();
     assert_eq!(relations(&app, DRY_RUN).len(), 2);
+}
+
+#[test]
+fn of_two_relations_with_one_issue_removing_one_leaves_the_other() {
+    let mut app = focused_with_detail("ENG-51");
+    second_relation_to_eng_27(&mut app);
+
+    let effects = press(&mut app, "Drrelated ENG-27\n");
+
+    let ids: Vec<String> = deletes(&effects)
+        .into_iter()
+        .map(|write| write.relation.id)
+        .collect();
+    assert_eq!(ids, ["relation-9"]);
+    assert_eq!(
+        relations(&app, DRY_RUN)
+            .into_iter()
+            .filter(|(_, other)| other == "issue-eng-27")
+            .collect::<Vec<_>>(),
+        [(RelationKind::Blocks, "issue-eng-27".to_owned())]
+    );
+}
+
+#[test]
+fn tab_marks_several_relations_and_enter_removes_only_those() {
+    let mut app = focused_with_detail("ENG-51");
+
+    let effects = press(&mut app, "Dr\t3\n");
+
+    let ids: Vec<String> = deletes(&effects)
+        .into_iter()
+        .map(|write| write.relation.id)
+        .collect();
+    assert_eq!(ids, ["relation-2", "relation-3"]);
+    assert_eq!(
+        relations(&app, DRY_RUN),
+        [(RelationKind::BlockedBy, "issue-eng-6".to_owned())]
+    );
+}
+
+#[test]
+fn an_issue_without_relations_says_so_and_opens_nothing() {
+    let mut app = App::new(TestBackend::new(80, 40), State::demo()).unwrap();
+    let id = app.state().focused_issue().unwrap().id.clone();
+    let identifier = app.state().focused_issue().unwrap().identifier.clone();
+    detail_loaded(&mut app, &id);
+    assert!(relations(&app, &id).is_empty());
+
+    press(&mut app, "Dr");
+
+    assert!(app.state().modals.top().is_none());
+    assert_eq!(
+        app.state().notice.as_deref(),
+        Some(format!("{identifier} has no relations").as_str())
+    );
+}
+
+#[test]
+fn the_remove_relation_picker() {
+    let mut app = focused_with_detail("ENG-51");
+
+    press(&mut app, "Dr\t");
+
+    assert_snapshot!(app.backend());
 }
 
 #[test]
@@ -864,23 +951,15 @@ fn the_demo_blocked_filter_follows_relations_made_and_removed_in_the_demo() {
 }
 
 #[test]
-fn a_stand_in_relation_is_never_deleted() {
+fn a_stand_in_relation_is_not_offered_for_removal() {
     let mut app = focused_with_detail("ENG-51");
     let created = press(&mut app, "R3ENG-60\n");
     assert_eq!(creates(&created).len(), 1);
 
-    let effects = press(&mut app, "DrENG-60\n");
+    press(&mut app, "Dr");
 
-    assert!(deletes(&effects).is_empty(), "{effects:?}");
-    let relation: Vec<IssueRelation> = app
-        .state()
-        .store
-        .relations(DRY_RUN)
-        .into_iter()
-        .map(|(_, relation, _)| relation.clone())
-        .filter(|relation| relation.related_issue_id == "issue-eng-60")
-        .collect();
-    assert_eq!(relation.len(), 1);
+    assert_eq!(removable(&app), ["relation-2", "relation-1", "relation-3"]);
+    assert!(!shows(&app, "related to ENG-60"), "{:#?}", screen(&app));
 }
 
 #[test]

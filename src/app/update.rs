@@ -546,6 +546,7 @@ pub fn perform(state: &mut State, action: Action) -> Update {
         Action::ToggleEntry => match state.modals.top() {
             Some(Modal::Search(_)) => search::toggle_comments(state),
             Some(Modal::IssuePicker(_)) => issue_picker::toggle(state, None),
+            Some(Modal::Choice(_)) => relations::toggle(state, None),
             _ => edit::toggle(state, None),
         },
         Action::ToggleSearchScope => search::toggle_scope(state),
@@ -604,6 +605,9 @@ fn choose(state: &mut State, nth: Option<usize>) -> Update {
     };
     if choice.purpose == Purpose::RelationKind {
         return relations::kind_chosen(state, nth);
+    }
+    if choice.purpose == Purpose::RemoveRelations {
+        return relations::removal_chosen(state, nth);
     }
     if choice.purpose == Purpose::CyclesTeam {
         browse::pick_team(state, nth).map_or_else(Update::default, |effects| Update {

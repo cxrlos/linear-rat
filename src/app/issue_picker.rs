@@ -39,9 +39,6 @@ pub enum IssuePurpose {
         issue_id: String,
         kind: RelationKind,
     },
-    /// Remove every relation between the issue with this id and each
-    /// chosen issue.
-    RemoveRelation { issue_id: String },
 }
 
 impl IssuePurpose {
@@ -66,32 +63,25 @@ impl IssuePurpose {
                 };
                 format!("{} {phrase}", key(issue_id))
             }
-            IssuePurpose::RemoveRelation { issue_id } => {
-                format!("Remove relations of {}", key(issue_id))
-            }
         }
     }
 
     /// What a row says before the issue `other_id`: how it relates to the
-    /// purpose's issue, for the purposes that list related issues.
+    /// purpose's issue, when the purpose lists related issues.
     fn prefix(&self, store: &Store, other_id: &str) -> Option<String> {
-        let (issue_id, family) = match self {
-            IssuePurpose::GoToRelated { issue_id } => (issue_id, true),
-            IssuePurpose::RemoveRelation { issue_id } => (issue_id, false),
-            _ => return None,
+        let IssuePurpose::GoToRelated { issue_id } = self else {
+            return None;
         };
         let mut names: Vec<&str> = Vec::new();
-        if family {
-            let issue = store.issue(issue_id);
-            if issue.and_then(|issue| issue.parent_id.as_deref()) == Some(other_id) {
-                names.push("Parent");
-            }
-            if store
-                .issue(other_id)
-                .is_some_and(|other| other.parent_id.as_deref() == Some(issue_id.as_str()))
-            {
-                names.push("Sub-issue");
-            }
+        let issue = store.issue(issue_id);
+        if issue.and_then(|issue| issue.parent_id.as_deref()) == Some(other_id) {
+            names.push("Parent");
+        }
+        if store
+            .issue(other_id)
+            .is_some_and(|other| other.parent_id.as_deref() == Some(issue_id.as_str()))
+        {
+            names.push("Sub-issue");
         }
         for (kind, _, other) in store.relations(issue_id) {
             if other == other_id && !names.contains(&kind.name()) {
@@ -447,6 +437,5 @@ fn carry_out(state: &mut State, purpose: IssuePurpose, chosen: Vec<String>) -> U
         IssuePurpose::AddRelation { issue_id, kind } => {
             relations::add(state, &issue_id, kind, &chosen)
         }
-        IssuePurpose::RemoveRelation { issue_id } => relations::remove(state, &issue_id, &chosen),
     }
 }
