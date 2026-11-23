@@ -9,6 +9,7 @@ use std::collections::VecDeque;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
+use jiff::SignedDuration;
 use linear_rat::app::{App, Edit, Effect, Event, Failure, Screen, State, cycle_title};
 use linear_rat::linear::model::Priority;
 use linear_rat::linear::{ErrorKind, FakeClient, LinearClient, demo};
@@ -332,4 +333,264 @@ async fn a_cycle_with_many_issues_shows_its_whole_count() {
     .unwrap();
 
     assert!(shows(&app, " 123 of 140 done"), "{:#?}", screen(&app));
+}
+
+/// Moves the clock to `seconds` after the demo's now.
+fn tick(app: &mut App<TestBackend>, seconds: i64) -> Vec<Effect> {
+    let now = demo::NOW
+        .checked_add(SignedDuration::from_secs(seconds))
+        .unwrap();
+    app.handle(Event::Tick(now)).unwrap()
+}
+
+/// The loads of the Cycles and Projects screens among `effects`.
+fn browse_loads(effects: Vec<Effect>) -> Vec<Effect> {
+    effects
+        .into_iter()
+        .filter(|effect| {
+            matches!(
+                effect,
+                Effect::LoadCycles(_)
+                    | Effect::LoadProjects
+                    | Effect::LoadCycleIssues(_)
+                    | Effect::LoadProjectIssues(_)
+            )
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn refresh_on_the_cycles_screen_reloads_the_teams_cycles_keeping_the_rows() {
+    let mut app = sized(100, 24);
+    run(&mut app, "4").await;
+    let team_id = app.state().cycles.team_id().unwrap().to_owned();
+    let before = screen(&app);
+
+    let effects = press(&mut app, "r");
+
+    assert_eq!(browse_loads(effects), [Effect::LoadCycles(team_id)]);
+    assert_eq!(screen(&app), before);
+    assert!(browse_loads(press(&mut app, "r")).is_empty());
+}
+
+#[tokio::test]
+async fn refresh_on_the_projects_screen_reloads_the_projects() {
+    let mut app = sized(100, 24);
+    run(&mut app, "5").await;
+
+    let effects = press(&mut app, "r");
+
+    assert_eq!(browse_loads(effects), [Effect::LoadProjects]);
+    assert!(shows(&app, "Nibble 3.0"), "{:#?}", screen(&app));
+}
+
+#[tokio::test]
+async fn refresh_on_a_cycles_issue_list_reloads_that_list_keeping_the_focus() {
+    let mut app = sized(100, 24);
+    run(&mut app, "4").await;
+    let cycle_id = app.state().cycles.focused().unwrap().id.clone();
+    run(&mut app, "\n").await;
+    press(&mut app, "j");
+    let focused = app.state().results.focused_id().unwrap().to_owned();
+    assert_ne!(app.state().results.list().focused_index(), 0);
+
+    let effects = press(&mut app, "r");
+
+    assert_eq!(
+        browse_loads(effects.clone()),
+        [Effect::LoadCycleIssues(cycle_id)]
+    );
+    settle(&mut app, effects).await;
+    assert_eq!(app.state().screen, Screen::Results);
+    assert_eq!(app.state().results.focused_id(), Some(focused.as_str()));
+    assert_ne!(app.state().results.list().focused_index(), 0);
+}
+
+#[tokio::test]
+async fn refresh_on_a_projects_issue_list_reloads_that_list() {
+    let mut app = sized(100, 24);
+    run(&mut app, "5").await;
+    let project_id = app.state().projects.focused().unwrap().project.id.clone();
+    run(&mut app, "\n").await;
+
+    let effects = press(&mut app, "r");
+
+    assert_eq!(
+        browse_loads(effects),
+        [Effect::LoadProjectIssues(project_id)]
+    );
+}
+
+#[tokio::test]
+async fn a_cycle_list_reloaded_after_going_back_does_not_open_again() {
+    let mut app = sized(100, 24);
+    run(&mut app, "4").await;
+    run(&mut app, "\n").await;
+    let effects = press(&mut app, "r");
+
+    press(&mut app, "\x1b");
+    settle(&mut app, effects).await;
+
+    assert_eq!(app.state().screen, Screen::Cycles);
+}
+
+#[tokio::test]
+async fn showing_the_cycles_screen_again_reloads_only_once_the_poll_interval_passed() {
+    let mut app = sized(100, 24);
+    tick(&mut app, 0);
+    run(&mut app, "4").await;
+
+    tick(&mut app, 10);
+    assert!(browse_loads(press(&mut app, "14")).is_empty());
+
+    tick(&mut app, 20);
+    let team_id = app.state().cycles.team_id().unwrap().to_owned();
+    let effects = press(&mut app, "14");
+    assert_eq!(browse_loads(effects), [Effect::LoadCycles(team_id)]);
+    assert!(shows(&app, "active"), "{:#?}", screen(&app));
+}
+
+#[tokio::test]
+async fn showing_the_projects_screen_again_reloads_only_once_the_poll_interval_passed() {
+    let mut app = sized(100, 24);
+    tick(&mut app, 0);
+    run(&mut app, "5").await;
+
+    tick(&mut app, 10);
+    assert!(browse_loads(press(&mut app, "15")).is_empty());
+
+    tick(&mut app, 20);
+    assert_eq!(browse_loads(press(&mut app, "15")), [Effect::LoadProjects]);
+    assert!(shows(&app, "Nibble 3.0"), "{:#?}", screen(&app));
+}
+
+#[tokio::test]
+async fn going_back_to_a_stale_cycles_screen_reloads_it() {
+    let mut app = sized(100, 24);
+    tick(&mut app, 0);
+    run(&mut app, "4").await;
+    run(&mut app, "\n").await;
+    tick(&mut app, 20);
+
+    let effects = press(&mut app, "\x1b");
+
+    assert_eq!(browse_loads(effects).len(), 1);
+}
+
+#[tokio::test]
+async fn a_reload_keeps_the_focused_project_by_id() {
+    let mut app = sized(100, 24);
+    run(&mut app, "5").await;
+    press(&mut app, "j");
+    let focused = app.state().projects.focused().unwrap().project.id.clone();
+    press(&mut app, "r");
+
+    let mut list = FakeClient.viewer_projects().await.unwrap();
+    list.projects.reverse();
+    app.handle(Event::ProjectsLoaded(Ok(list))).unwrap();
+
+    let now = app.state().projects.focused().unwrap();
+    assert_eq!(now.project.id, focused);
+}
+
+#[tokio::test]
+async fn a_reload_keeps_the_focused_cycle_by_id() {
+    let mut app = sized(100, 24);
+    run(&mut app, "4").await;
+    press(&mut app, "j");
+    let team_id = app.state().cycles.team_id().unwrap().to_owned();
+    let focused = app.state().cycles.focused().unwrap().id.clone();
+    press(&mut app, "r");
+
+    let mut cycles = FakeClient.recent_cycles(&team_id).await.unwrap();
+    let newest = cycles.iter().map(|cycle| cycle.starts_at).max().unwrap();
+    let mut next = cycles[0].clone();
+    next.id = "cycle-next".to_owned();
+    next.starts_at = newest
+        .checked_add(SignedDuration::from_hours(24 * 14))
+        .unwrap();
+    cycles.push(next);
+    app.handle(Event::CyclesLoaded {
+        team_id,
+        result: Ok(cycles),
+    })
+    .unwrap();
+
+    assert_eq!(app.state().cycles.focused().unwrap().id, focused);
+    assert_eq!(app.state().cycles.cycles()[2].id, focused);
+}
+
+#[tokio::test]
+async fn a_failed_cycles_reload_keeps_the_rows_and_marks_sync_failing() {
+    let mut app = sized(100, 24);
+    run(&mut app, "4").await;
+    let team_id = app.state().cycles.team_id().unwrap().to_owned();
+    let count = app.state().cycles.cycles().len();
+    let title = cycle_title(&app.state().cycles.cycles()[0]);
+    press(&mut app, "r");
+
+    app.handle(Event::CyclesLoaded {
+        team_id,
+        result: Err(Failure::new(
+            ErrorKind::Other,
+            "load the cycles",
+            "Linear could not be reached",
+        )),
+    })
+    .unwrap();
+
+    assert_eq!(app.state().cycles.cycles().len(), count);
+    assert!(shows(&app, &title), "{:#?}", screen(&app));
+    assert!(app.state().sync_status.indicator().unwrap().alert);
+}
+
+#[tokio::test]
+async fn a_cycle_list_reloaded_late_does_not_replace_another_cycles_list() {
+    let mut app = sized(100, 24);
+    run(&mut app, "4").await;
+    run(&mut app, "\n").await;
+    let first = press(&mut app, "r");
+    press(&mut app, "\x1b");
+    run(&mut app, "j\n").await;
+    let wanted = app.state().results.ids().to_vec();
+    let title = app.state().results.title().to_owned();
+
+    settle(&mut app, first).await;
+
+    assert_eq!(app.state().screen, Screen::Results);
+    assert_eq!(app.state().results.title(), title);
+    assert_eq!(app.state().results.ids(), wanted.as_slice());
+}
+
+#[tokio::test]
+async fn a_reload_shows_in_the_sync_indicator_like_a_poll() {
+    let mut app = sized(100, 24);
+    run(&mut app, "5").await;
+    tick(&mut app, 30);
+    press(&mut app, "r");
+
+    let list = FakeClient.viewer_projects().await.unwrap();
+    app.handle(Event::ProjectsLoaded(Ok(list))).unwrap();
+
+    let at = demo::NOW
+        .checked_add(SignedDuration::from_secs(30))
+        .unwrap();
+    assert_eq!(app.state().sync_status.last_synced(), Some(at));
+}
+
+#[tokio::test]
+async fn a_failed_reload_keeps_the_rows_and_marks_sync_failing() {
+    let mut app = sized(100, 24);
+    run(&mut app, "5").await;
+    press(&mut app, "r");
+
+    app.handle(Event::ProjectsLoaded(Err(Failure::new(
+        ErrorKind::Other,
+        "load the projects",
+        "Linear could not be reached",
+    ))))
+    .unwrap();
+
+    assert!(shows(&app, "Nibble 3.0"), "{:#?}", screen(&app));
+    assert!(app.state().sync_status.indicator().unwrap().alert);
 }

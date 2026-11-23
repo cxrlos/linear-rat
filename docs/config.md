@@ -110,7 +110,7 @@ noop = ["gg", "<C-d>"]                 # these keys do nothing, and leave every 
 
 ## `[sync]`
 
-lrat polls Linear for changed issues on these intervals, and `r` polls at once. You count as idle after two minutes without a key press.
+lrat polls Linear for changed issues on these intervals, and `r` polls at once. You count as idle after two minutes without a key press. On the Cycles and Projects screens, and on a cycle's or project's issues, `r` loads what the screen shows again instead; showing Cycles or Projects once their rows are older than `active-poll-seconds` reloads them in the background, keeping the rows on screen until the new ones arrive.
 
 With `live = true`, lrat also opens Linear's websocket once My Issues has loaded, and an issue created or updated in one of your teams, or a new comment on an issue whose comments are on screen, shows as soon as Linear sends it. Polling keeps running: a poll follows five seconds after the latest live update, and another follows every connection, so nothing missed while the socket was down stays missing. After a disconnect lrat reconnects by itself, waiting a little longer after each failure, up to a minute. With `live = false`, the default, no websocket is opened.
 

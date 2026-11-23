@@ -115,6 +115,8 @@ pub enum Purpose {
     Sort,
     /// Add a relation of this kind to the focused issue.
     RelationKind,
+    /// Remove these relations of the focused issue.
+    RemoveRelations,
 }
 
 impl Choice {
@@ -126,6 +128,7 @@ impl Choice {
             Purpose::Group => "Group by".to_owned(),
             Purpose::Sort => "Sort by".to_owned(),
             Purpose::RelationKind => "Add a relation".to_owned(),
+            Purpose::RemoveRelations => "Remove relations".to_owned(),
         }
     }
 

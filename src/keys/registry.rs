@@ -235,6 +235,7 @@ impl OverlayKind {
             Modal::WhichKey { .. } => return None,
             Modal::Picker(picker) if picker.list.is_multi() => OverlayKind::MultiList,
             Modal::IssuePicker(picker) if picker.list.is_multi() => OverlayKind::MultiList,
+            Modal::Choice(choice) if choice.list.is_multi() => OverlayKind::MultiList,
             Modal::Picker(_) | Modal::IssuePicker(_) | Modal::Choice(_) | Modal::Create(_) => {
                 OverlayKind::List
             }
@@ -1127,6 +1128,9 @@ pub static ACTIONS: &[ActionSpec] = &[
             Some(Modal::IssuePicker(picker)) => {
                 picker.list.is_multi() && picker.list.selected().is_some()
             }
+            Some(Modal::Choice(choice)) => {
+                choice.list.is_multi() && choice.list.selected().is_some()
+            }
             _ => false,
         },
     },
@@ -1523,6 +1527,10 @@ fn picker_has(count: usize, state: &State) -> bool {
     }
     match state.modals.top() {
         Some(Modal::Links(links)) => links.list.visible().len() >= count,
+        // A multi-select choice lists issue keys, typed like `ENG-12`.
+        Some(Modal::Choice(choice)) if choice.list.is_multi() => {
+            !continues_word(choice.list.query()) && choice.list.visible().len() >= count
+        }
         Some(Modal::Choice(choice)) => choice.list.visible().len() >= count,
         Some(Modal::Create(form)) => form.list().is_some_and(|(len, _)| len >= count),
         // A digit that continues a word, as in `ENG-12`, types into the

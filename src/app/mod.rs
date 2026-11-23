@@ -71,7 +71,7 @@ pub use picker::{Entry, Note, Picker};
 pub use rearrange::{can_rearrange, own_order};
 pub use relations::{RelationWrite, RelationsInFlight};
 pub use release::Release;
-pub use results::Results;
+pub use results::{Listing, Results};
 pub use search::{Phase, Scope, Search};
 pub use state::{Screen, State};
 pub use store::{Store, Trashed};
