@@ -1514,4 +1514,106 @@ mod tests {
             )))
         );
     }
+
+    /// Starts attaching the crate's `Cargo.toml` to the focused issue, as
+    /// Shift-F, its path and Enter do, and hands back the attach asked for.
+    fn start_upload(app: &mut App<TestBackend>) -> NewAttachment {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+        let key = |code| Event::Key(KeyEvent::new(code, KeyModifiers::NONE));
+        let mut effects = Vec::new();
+        for c in "FCargo.toml".chars() {
+            effects.extend(app.handle(key(KeyCode::Char(c))).unwrap());
+        }
+        effects.extend(app.handle(key(KeyCode::Enter)).unwrap());
+        match effects.as_slice() {
+            [Effect::Attach(attachment)] => attachment.clone(),
+            other => panic!("expected one attachment, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn an_attach_joins_the_requests_in_flight_and_reports_its_progress() {
+        let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+        let attachment = start_upload(&mut app);
+        let Attaching::File { upload, file } = &attachment.what else {
+            panic!("{attachment:?}");
+        };
+        let (progress, mut progressed) = mpsc::unbounded_channel();
+        let mut in_flight = FuturesUnordered::new();
+        let reach = Reach {
+            client: Some(&FakeClient),
+            snapshots: None,
+            releases: None,
+            live: Cell::new(None),
+            progress,
+        };
+
+        let flow = execute(
+            &mut app,
+            Effect::Attach(attachment.clone()),
+            &reach,
+            &mut in_flight,
+            &mut Fake::default(),
+        )
+        .unwrap();
+        let event = in_flight.next().await.unwrap();
+
+        assert_eq!(flow, ControlFlow::Continue(()));
+        let Event::Attached {
+            attachment: answered,
+            result,
+        } = event
+        else {
+            panic!("{event:?}");
+        };
+        assert_eq!(answered, attachment);
+        assert_eq!(result.unwrap().title, "Cargo.toml");
+        assert_eq!(
+            progressed.try_recv().unwrap(),
+            Event::UploadProgress {
+                upload: *upload,
+                sent: file.size,
+            }
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn upload_progress_reaches_the_indicator_while_the_loop_waits() {
+        let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+        let attachment = start_upload(&mut app);
+        let Attaching::File { upload, file } = &attachment.what else {
+            panic!("{attachment:?}");
+        };
+        let (progress, progressed) = mpsc::unbounded_channel();
+        progress
+            .send(Event::UploadProgress {
+                upload: *upload,
+                sent: file.size * 42 / 100 + 1,
+            })
+            .unwrap();
+        let reach = Reach {
+            client: Some(&FakeClient),
+            snapshots: None,
+            releases: None,
+            live: Cell::new(None),
+            progress,
+        };
+
+        let running = run_loop(
+            &mut app,
+            &reach,
+            progressed,
+            futures_util::stream::pending(),
+            std::future::pending(),
+            futures_util::stream::pending(),
+        );
+        let stopped = tokio::time::timeout(Duration::from_millis(200), running).await;
+
+        assert!(stopped.is_err(), "the loop stopped: {stopped:?}");
+        assert!(
+            screen(&app).contains("uploading Cargo.toml 42%"),
+            "{}",
+            screen(&app)
+        );
+    }
 }
