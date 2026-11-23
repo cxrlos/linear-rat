@@ -76,6 +76,10 @@ _Avoid_: project state (Linear's deprecated field)
 A named stage within one project, in that project's own order; an issue belongs to at most one.
 _Avoid_: milestone on its own when the project is unclear, epic
 
+**Mention**:
+A reference in comment or description text to a person or an issue, which Linear links; a person mentioned is notified.
+_Avoid_: tag, ping
+
 **Notification**:
 Something Linear put in the viewer's inbox about an issue: a comment, a mention, an assignment, a workflow state change or a reaction. lrat shows only notifications about issues.
 
