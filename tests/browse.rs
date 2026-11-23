@@ -545,6 +545,24 @@ async fn a_failed_cycles_reload_keeps_the_rows_and_marks_sync_failing() {
 }
 
 #[tokio::test]
+async fn a_cycle_list_reloaded_late_does_not_replace_another_cycles_list() {
+    let mut app = sized(100, 24);
+    run(&mut app, "4").await;
+    run(&mut app, "\n").await;
+    let first = press(&mut app, "r");
+    press(&mut app, "\x1b");
+    run(&mut app, "j\n").await;
+    let wanted = app.state().results.ids().to_vec();
+    let title = app.state().results.title().to_owned();
+
+    settle(&mut app, first).await;
+
+    assert_eq!(app.state().screen, Screen::Results);
+    assert_eq!(app.state().results.title(), title);
+    assert_eq!(app.state().results.ids(), wanted.as_slice());
+}
+
+#[tokio::test]
 async fn a_reload_shows_in_the_sync_indicator_like_a_poll() {
     let mut app = sized(100, 24);
     run(&mut app, "5").await;
