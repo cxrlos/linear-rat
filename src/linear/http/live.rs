@@ -16,7 +16,6 @@ use std::time::Duration;
 
 use anyhow::{Context, anyhow, bail};
 use futures_util::{SinkExt, Stream, StreamExt};
-use jiff::Timestamp;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -30,8 +29,8 @@ use tokio_tungstenite::tungstenite::http::header::{
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, client_async_tls};
 
 use super::HttpClient;
-use super::assigned::{Decoded, IssueNode, PersonNode, timestamp};
-use crate::linear::model::Comment;
+use super::assigned::{Decoded, IssueNode};
+use super::comment::CommentNode;
 use crate::linear::{LiveEvent, PostedComment, TeamChanges};
 
 /// Linear's websocket endpoint.
@@ -394,16 +393,9 @@ fn decode(payload: Value, client: &HttpClient, team_ids: &[String]) -> Option<Li
         }));
     }
     let comment = data.comment_created?;
-    Some(LiveEvent::Comment(PostedComment {
-        comment: Comment {
-            id: comment.id,
-            issue_id: comment.issue_id?,
-            author_id: comment.user.as_ref().map(|user| user.id.clone()),
-            body: comment.body,
-            created_at: comment.created_at,
-        },
-        author: comment.user.map(PersonNode::into_member),
-    }))
+    let issue_id = comment.issue_id.clone()?;
+    let (comment, author) = comment.into_comment(&issue_id);
+    Some(LiveEvent::Comment(PostedComment { comment, author }))
 }
 
 async fn send(socket: &mut Socket, message: Value) -> anyhow::Result<()> {
@@ -434,7 +426,7 @@ struct NextPayload {
 struct NextData {
     issue_created: Option<LiveIssueNode>,
     issue_updated: Option<LiveIssueNode>,
-    comment_created: Option<LiveCommentNode>,
+    comment_created: Option<CommentNode>,
 }
 
 #[derive(Deserialize)]
@@ -442,17 +434,6 @@ struct LiveIssueNode {
     #[serde(flatten)]
     issue: IssueNode,
     trashed: Option<bool>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct LiveCommentNode {
-    id: String,
-    body: String,
-    #[serde(deserialize_with = "timestamp")]
-    created_at: Timestamp,
-    issue_id: Option<String>,
-    user: Option<PersonNode>,
 }
 
 /// Waits that double from the first to the most, each cut by a jitter so

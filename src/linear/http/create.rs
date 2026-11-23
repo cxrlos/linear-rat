@@ -1,14 +1,14 @@
 //! What the viewer writes in `$EDITOR`: one `commentCreate` and one
 //! `issueCreate`.
 
-use jiff::Timestamp;
 use serde::Deserialize;
 use serde_json::json;
 
 use super::HttpClient;
-use super::assigned::{IssueNode, PersonNode, timestamp};
+use super::assigned::IssueNode;
+use super::comment::CommentNode;
 use super::edit::priority_number;
-use crate::linear::model::{Comment, Issue};
+use crate::linear::model::Issue;
 use crate::linear::{ClientError, GraphQlError, IssueCreate, PostedComment, Response};
 
 const COMMENT_CREATE: &str = include_str!("../graphql/comment_create.graphql");
@@ -29,17 +29,8 @@ pub(super) async fn create_comment(
     if !payload.success {
         return Err(unconfirmed(response.errors, "comment"));
     }
-    let node = payload.comment;
-    Ok(PostedComment {
-        comment: Comment {
-            id: node.id,
-            issue_id: issue_id.to_owned(),
-            author_id: node.user.as_ref().map(|user| user.id.clone()),
-            body: node.body,
-            created_at: node.created_at,
-        },
-        author: node.user.map(PersonNode::into_member),
-    })
+    let (comment, author) = payload.comment.into_comment(issue_id);
+    Ok(PostedComment { comment, author })
 }
 
 pub(super) async fn create_issue(
@@ -86,16 +77,6 @@ struct CommentData {
 struct CommentPayload {
     success: bool,
     comment: CommentNode,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct CommentNode {
-    id: String,
-    body: String,
-    #[serde(deserialize_with = "timestamp")]
-    created_at: Timestamp,
-    user: Option<PersonNode>,
 }
 
 #[derive(Deserialize)]

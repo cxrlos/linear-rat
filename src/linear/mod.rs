@@ -1404,6 +1404,10 @@ impl LinearClient for FakeClient {
                 author_id: Some(data.viewer.id.clone()),
                 body: body.to_owned(),
                 created_at: demo::NOW,
+                parent_id: None,
+                resolved_at: None,
+                edited_at: None,
+                reactions: Vec::new(),
             };
             comments.push(comment.clone());
             comment

@@ -21,6 +21,15 @@ pub enum WriteClass {
     CreateComment,
     ArchiveOrTrash,
     Relations,
+    /// Edit, delete, resolve or unresolve a comment.
+    ChangeComment,
+    /// Add or remove a reaction.
+    React,
+    /// Attach a file or a link to an issue.
+    Attach,
+    /// Mark notifications read, snooze or archive them, learned under the
+    /// team of the notification's issue.
+    Inbox,
 }
 
 impl WriteClass {
@@ -32,6 +41,10 @@ impl WriteClass {
             WriteClass::CreateComment => "comment on issues",
             WriteClass::ArchiveOrTrash => "archive or trash issues",
             WriteClass::Relations => "change issue relations",
+            WriteClass::ChangeComment => "change comments",
+            WriteClass::React => "react",
+            WriteClass::Attach => "attach to issues",
+            WriteClass::Inbox => "change notifications",
         }
     }
 }

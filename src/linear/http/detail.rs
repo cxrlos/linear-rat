@@ -7,9 +7,10 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::assigned::{optional_timestamp, state_type, timestamp};
+use super::comment::CommentNode;
 use super::{HttpClient, PageInfo, Urgency, relations};
 use crate::linear::model::{
-    Attachment, Comment, Member, Project, ProjectMilestone, StateSpan, StateType, WorkflowState,
+    Attachment, Project, ProjectMilestone, StateSpan, StateType, WorkflowState,
 };
 use crate::linear::{ClientError, IssueDetail, Response};
 
@@ -72,22 +73,13 @@ pub(super) async fn load(
         .into_iter()
         .flat_map(|page| page.issue.comments.nodes)
     {
-        if let Some(user) = &node.user
-            && !detail.members.iter().any(|known| known.id == user.id)
+        let (comment, author) = node.into_comment(issue_id);
+        if let Some(author) = author
+            && !detail.members.iter().any(|known| known.id == author.id)
         {
-            detail.members.push(Member {
-                id: user.id.clone(),
-                name: user.name.clone(),
-                display_name: user.display_name.clone(),
-            });
+            detail.members.push(author);
         }
-        detail.comments.push(Comment {
-            id: node.id,
-            issue_id: issue_id.to_owned(),
-            author_id: node.user.map(|user| user.id),
-            body: node.body,
-            created_at: node.created_at,
-        });
+        detail.comments.push(comment);
     }
     for (index, page) in history_pages.into_iter().enumerate() {
         if index == 0 {
@@ -221,24 +213,6 @@ impl AttachmentNode {
 struct Connection<N> {
     nodes: Vec<N>,
     page_info: PageInfo,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct CommentNode {
-    id: String,
-    body: String,
-    #[serde(deserialize_with = "timestamp")]
-    created_at: Timestamp,
-    user: Option<UserNode>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct UserNode {
-    id: String,
-    name: String,
-    display_name: String,
 }
 
 #[derive(Deserialize)]

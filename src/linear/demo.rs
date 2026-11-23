@@ -852,6 +852,10 @@ fn finish(
                 author_id: Some(author),
                 body: body.to_owned(),
                 created_at: ts(at),
+                parent_id: None,
+                resolved_at: None,
+                edited_at: None,
+                reactions: Vec::new(),
             }
         })
         .collect();

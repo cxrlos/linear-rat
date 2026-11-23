@@ -5,6 +5,7 @@ mod analytics;
 mod assigned;
 mod browse;
 mod changes;
+mod comment;
 mod create;
 mod detail;
 mod diagnostics;

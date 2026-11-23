@@ -234,6 +234,52 @@ pub struct Comment {
     pub author_id: Option<String>,
     pub body: String,
     pub created_at: Timestamp,
+    /// The comment this one replies to; `None` starts a thread.
+    #[serde(default)]
+    pub parent_id: Option<String>,
+    /// When its thread was resolved. Linear keeps it on the comment that
+    /// starts the thread.
+    #[serde(default)]
+    pub resolved_at: Option<Timestamp>,
+    /// When its author last changed the body.
+    #[serde(default)]
+    pub edited_at: Option<Timestamp>,
+    #[serde(default)]
+    pub reactions: Vec<Reaction>,
+}
+
+/// One emoji someone left on an issue or a comment.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Reaction {
+    pub id: String,
+    /// As Linear stores it: the emoji itself, or a shortcode such as
+    /// `+1` for a workspace's own emoji.
+    pub emoji: String,
+    pub user_id: Option<String>,
+    pub created_at: Timestamp,
+}
+
+/// Something Linear put in the viewer's inbox about an issue, as Linear's
+/// `IssueNotification`. Other kinds of notification are not kept.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Notification {
+    pub id: String,
+    /// What happened, as Linear's `type`: `issueComment`, `issueMention`,
+    /// `issueAssignedToYou`, `issueStatusChanged`, `issueReaction` and so on.
+    pub kind: String,
+    pub issue_id: String,
+    pub team_id: String,
+    /// The comment it is about, when it is about one.
+    pub comment_id: Option<String>,
+    /// Who did it, when a person did.
+    pub actor_id: Option<String>,
+    /// The emoji, for a reaction.
+    pub reaction_emoji: Option<String>,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+    pub read_at: Option<Timestamp>,
+    pub snoozed_until_at: Option<Timestamp>,
+    pub archived_at: Option<Timestamp>,
 }
 
 /// A link Linear keeps on an issue, such as a GitHub pull request, a Slack

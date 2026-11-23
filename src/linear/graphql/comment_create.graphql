@@ -8,6 +8,17 @@ mutation CommentCreate($input: CommentCreateInput!) {
       id
       body
       createdAt
+      editedAt
+      resolvedAt
+      parentId
+      reactions {
+        id
+        emoji
+        createdAt
+        user {
+          id
+        }
+      }
       user {
         id
         name
