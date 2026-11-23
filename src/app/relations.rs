@@ -229,15 +229,10 @@ pub(super) fn open_remove(state: &mut State) -> Update {
     Update::redraw()
 }
 
-/// A row of the removal list, as `blocks ENG-12 Title`.
+/// A row of the removal list, as `Blocks ENG-12 Title`: the relation in
+/// the words the detail uses for it.
 fn removal_label(state: &State, kind: RelationKind, other_id: &str) -> String {
-    let phrase = match kind {
-        RelationKind::Blocks => "blocks",
-        RelationKind::BlockedBy => "blocked by",
-        RelationKind::Related => "related to",
-        RelationKind::DuplicateOf => "duplicate of",
-        RelationKind::DuplicatedBy => "duplicated by",
-    };
+    let phrase = kind.name();
     match state.store.issue(other_id) {
         Some(other) => format!("{phrase} {} {}", other.identifier, other.title),
         None => format!("{phrase} {other_id}"),

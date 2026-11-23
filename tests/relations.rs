@@ -391,9 +391,9 @@ fn removing_lists_each_relation_and_deletes_the_chosen_one() {
 
     press(&mut app, "Dr");
     assert!(shows(&app, "Remove relations"), "{:#?}", screen(&app));
-    assert!(shows(&app, "blocks ENG-27"), "{:#?}", screen(&app));
-    assert!(shows(&app, "blocked by ENG-6"), "{:#?}", screen(&app));
-    assert!(shows(&app, "related to ENG-8"), "{:#?}", screen(&app));
+    assert!(shows(&app, "Blocks ENG-27"), "{:#?}", screen(&app));
+    assert!(shows(&app, "Blocked by ENG-6"), "{:#?}", screen(&app));
+    assert!(shows(&app, "Related ENG-8"), "{:#?}", screen(&app));
     assert_eq!(removable(&app), ["relation-2", "relation-1", "relation-3"]);
     let effects = press(&mut app, "ENG-27\n");
 
@@ -1036,7 +1036,7 @@ fn a_stand_in_relation_is_not_offered_for_removal() {
     press(&mut app, "Dr");
 
     assert_eq!(removable(&app), ["relation-2", "relation-1", "relation-3"]);
-    assert!(!shows(&app, "related to ENG-60"), "{:#?}", screen(&app));
+    assert!(!shows(&app, "Related ENG-60"), "{:#?}", screen(&app));
 }
 
 #[test]
