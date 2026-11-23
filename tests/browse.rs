@@ -482,6 +482,8 @@ async fn a_background_reload_does_not_raise_problems_the_viewer_dismissed() {
     app.handle(Event::ProjectsLoaded(Ok(list))).unwrap();
 
     assert_eq!(app.state().notice, None);
+    // The log already holds the problem from the first load.
+    assert_eq!(app.state().errors.len(), 1);
 }
 
 #[tokio::test]
@@ -498,6 +500,13 @@ async fn a_reload_raises_problems_the_last_load_did_not_have() {
         app.state().notice.as_deref(),
         Some("Only the first 50 projects loaded")
     );
+    let logged: Vec<&str> = app
+        .state()
+        .errors
+        .newest_first()
+        .map(|logged| logged.failure.message.as_str())
+        .collect();
+    assert_eq!(logged, ["Only the first 50 projects loaded"]);
 }
 
 #[tokio::test]
