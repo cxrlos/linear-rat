@@ -19,7 +19,7 @@ expression: app.backend()
 "│  ENG-57 Throttl│ 8 ⊘ Duplicate                             │edium  2 Cycle 7 │"
 "│  OPS-38 Add syn└ Down/Up select  Enter choose  Esc close ──┘edium    Cycle 7 │"
 "│  DES-31 Review copy for permission prom… ○ Todo        ▮▯▯ Low     5 Cycle 7 │"
-"│  ENG-65 Rotate refresh tokens on every … ○ Todo        ··· None    2 Cycle 7 │"
+"│  ENG-65 Rotate refresh tokens on every…  ○ Todo        ··· None    2 Cycle 7 │"
 "│  DES-16 Accessible focus rings across w… ○ Todo        ▮▮▮ High    5         │"
 "│  ENG-56 Notification settings reset aft… ○ Todo        ▮▮▮ High    2         │"
 "└──────────────────────────────────────────────────────────────────────────────┘"

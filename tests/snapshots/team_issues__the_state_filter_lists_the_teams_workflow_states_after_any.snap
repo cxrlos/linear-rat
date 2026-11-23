@@ -19,7 +19,7 @@ expression: app.backend()
 "│  ENG-68 Profile│ 8 Canceled                                │ow               │"
 "│  ENG-53 Bump th│ 9 Duplicate                               │one    5 Cycle 7 │"
 "│  ENG-61 Add con└ Down/Up select  Enter choose  Esc close ──┘ow     2 Cycle 7 │"
-"│  ENG-60 Improve error messages on sync … ◐ In Progress ··· None    5 Cycle 7 │"
+"│  ENG-60 Improve error messages on sync…  ◐ In Progress ··· None    5 Cycle 7 │"
 "│  ENG-59 Show who last moved a wheel      ◌ Backlog     ▮▯▯ Low     2         │"
 "│  ENG-51 Add a dry-run mode to the impor… ◐ In Progress ▮▮▯ Medium  2 Cycle 7 │"
 "└──────────────────────────────────────────────────────────────────────────────┘"

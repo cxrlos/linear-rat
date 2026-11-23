@@ -19,7 +19,7 @@ expression: app.backend()
 "│  │ 7 ⊘ Related · ENG-8 Export cellar reports to CSV                       │7 │"
 "│  └ Down/Up select  Enter choose  Esc close ───────────────────────────────┘7 │"
 "│  DES-31 Review copy for permission prom… ○ Todo        ▮▯▯ Low     5 Cycle 7 │"
-"│  ENG-65 Rotate refresh tokens on every … ○ Todo        ··· None    2 Cycle 7 │"
+"│  ENG-65 Rotate refresh tokens on every…  ○ Todo        ··· None    2 Cycle 7 │"
 "│  DES-16 Accessible focus rings across w… ○ Todo        ▮▮▮ High    5         │"
 "│  ENG-56 Notification settings reset aft… ○ Todo        ▮▮▮ High    2         │"
 "└──────────────────────────────────────────────────────────────────────────────┘"

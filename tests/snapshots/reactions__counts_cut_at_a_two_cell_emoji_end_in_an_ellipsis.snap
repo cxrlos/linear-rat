@@ -12,7 +12,7 @@ expression: app.backend()
 "│                                      │"
 "│Bring two options to the critique on  │"
 "│Thursday.                             │"
-"│👍 2  🎉 1  👎 1  😄 1  😕 1  ❤️ 1  … │" Hidden by multi-width symbols: [(2, " "), (8, " "), (14, " "), (20, " "), (26, " "), (32, " ")]
+"│👍 2  🎉 1  👎 1  😄 1  😕 1  ❤️ 1…   │" Hidden by multi-width symbols: [(2, " "), (8, " "), (14, " "), (20, " "), (26, " "), (32, " ")]
 "│                                      │"
 "│Comments (4)                          │"
 "│▸ resolved · 1 reply                  │"
