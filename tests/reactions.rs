@@ -15,6 +15,7 @@ use linear_rat::linear::{
     ClientError, FakeClient, GraphQlError, IssueDetail, LinearClient, ReactionTarget, Urgency,
 };
 use ratatui::backend::TestBackend;
+use ratatui::style::Color;
 
 const FIRST: &str = "DES-34";
 const ISSUE: &str = "issue-des-34";
@@ -147,6 +148,35 @@ fn counts_show_under_the_description_and_under_each_comment() {
     // backend; a full redraw shows the screen as a terminal would.
     app.redraw_all().unwrap();
     assert_snapshot!(app.backend());
+}
+
+/// The color of `emoji` on the first row that shows `line`.
+fn emoji_fg(app: &App<TestBackend>, line: &str, emoji: &str) -> Color {
+    let y = screen(app)
+        .iter()
+        .position(|row| row.contains(line))
+        .unwrap();
+    let buffer = app.backend().buffer();
+    let width = usize::from(buffer.area.width);
+    buffer.content()[y * width..(y + 1) * width]
+        .iter()
+        .find(|cell| cell.symbol() == emoji)
+        .unwrap()
+        .fg
+}
+
+#[test]
+fn the_viewers_reactions_are_accented_and_everyone_elses_muted() {
+    let mut app = app();
+    let theme = app.state().theme.clone();
+
+    // The viewer gave the 🎉 on the issue and neither 👍.
+    assert_eq!(emoji_fg(&app, "👍 2  🎉 1", "🎉"), theme.accent);
+    assert_eq!(emoji_fg(&app, "👍 2  🎉 1", "👍"), theme.muted);
+
+    // Once the viewer adds 👍 too, its count is theirs as well.
+    react(&mut app, 1);
+    assert_eq!(emoji_fg(&app, "👍 3  🎉 1", "👍"), theme.accent);
 }
 
 #[test]
