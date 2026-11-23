@@ -111,7 +111,7 @@ fn screen_pane(state: &State) -> Option<Pane> {
         Screen::MyIssues => (state.load == Load::Loaded).then(|| state.my_issues.pane()),
         Screen::TeamIssues => Some(state.team_issues.pane()),
         Screen::Results => Some(state.results.pane()),
-        Screen::Analytics | Screen::Cycles | Screen::Projects => None,
+        Screen::Analytics | Screen::Cycles | Screen::Projects | Screen::Inbox => None,
     }
 }
 

@@ -1,0 +1,108 @@
+# budget: 710
+# One page of the viewer's notifications, most recently updated first, for
+# the Inbox. The first load asks for the newest 50 unarchived ones; a delta
+# asks for those updated after `since`, archived ones included, and the
+# client follows `endCursor`. Only issue notifications are read: each
+# carries its whole issue, with the fields the delta poll reads, so the
+# Inbox can open it.
+query Notifications(
+  $first: Int = 50
+  $after: String
+  $filter: NotificationFilter
+  $includeArchived: Boolean = false
+) {
+  notifications(
+    first: $first
+    after: $after
+    orderBy: updatedAt
+    includeArchived: $includeArchived
+    filter: $filter
+  ) {
+    nodes {
+      __typename
+      id
+      type
+      createdAt
+      updatedAt
+      readAt
+      snoozedUntilAt
+      archivedAt
+      actor {
+        id
+        name
+        displayName
+      }
+      ... on IssueNotification {
+        commentId
+        reactionEmoji
+        issue {
+          id
+          identifier
+          title
+          description
+          url
+          branchName
+          priority
+          estimate
+          labelIds
+          createdAt
+          updatedAt
+          startedAt
+          completedAt
+          canceledAt
+          triagedAt
+          team {
+            id
+            key
+            name
+            issueEstimationType
+          }
+          state {
+            id
+            name
+            type
+            position
+          }
+          assignee {
+            id
+            name
+            displayName
+          }
+          creator {
+            id
+            name
+            displayName
+          }
+          cycle {
+            id
+            number
+            name
+            startsAt
+            endsAt
+            completedAt
+          }
+          project {
+            id
+          }
+          projectMilestone {
+            id
+          }
+          parent {
+            id
+          }
+          dueDate
+          archivedAt
+          subscribers(first: 1, filter: { isMe: { eq: true } }) {
+            nodes {
+              id
+            }
+          }
+        }
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}

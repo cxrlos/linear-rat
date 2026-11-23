@@ -75,6 +75,8 @@ pub struct State {
     pub release: Release,
     /// The file uploads in flight, for the indicator.
     pub uploads: Uploads,
+    /// The Inbox screen: how far it loaded and its focus.
+    pub inbox: super::Inbox,
 }
 
 impl State {
@@ -268,6 +270,8 @@ impl State {
                 .results
                 .focused_id()
                 .and_then(|id| self.store.issue(id)),
+            Screen::Inbox => super::inbox::focused(self)
+                .and_then(|notification| self.store.issue(&notification.issue_id)),
             Screen::Analytics | Screen::Cycles | Screen::Projects => None,
         }
     }
@@ -317,18 +321,21 @@ pub enum Screen {
     Analytics,
     Cycles,
     Projects,
+    /// The viewer's issue notifications.
+    Inbox,
     /// Search results, a palette jump, or the issues of a cycle or project,
     /// opened over another screen and left with Esc. It has no tab.
     Results,
 }
 
 impl Screen {
-    pub const ALL: [Screen; 5] = [
+    pub const ALL: [Screen; 6] = [
         Screen::MyIssues,
         Screen::TeamIssues,
         Screen::Analytics,
         Screen::Cycles,
         Screen::Projects,
+        Screen::Inbox,
     ];
 
     pub fn title(self) -> &'static str {
@@ -338,6 +345,7 @@ impl Screen {
             Screen::Analytics => "Analytics",
             Screen::Cycles => "Cycles",
             Screen::Projects => "Projects",
+            Screen::Inbox => "Inbox",
             Screen::Results => "Results",
         }
     }

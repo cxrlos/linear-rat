@@ -47,7 +47,8 @@ async fn the_loaded_issues_fill_my_issues_grouped_as_in_the_demo() {
 
     let effects = app.handle(Event::MyIssuesLoaded(Ok(loaded))).unwrap();
 
-    assert!(effects.is_empty());
+    // The viewer is confirmed, so the Inbox loads.
+    assert_eq!(effects, [Effect::LoadNotifications { since: None }]);
     // The demo screen itself is pinned by the app snapshots.
     let demo = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
     assert_eq!(screen(&app), screen(&demo));

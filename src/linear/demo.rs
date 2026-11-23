@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 use jiff::civil::{Date, date};
 use jiff::{SignedDuration, Timestamp};
 
+use super::model::Notification;
 use super::model::Reaction;
 use super::model::{
     Attachment, Comment, Cycle, Estimation, Issue, IssueRelation, Label, Member, Priority, Project,
@@ -1030,6 +1031,101 @@ fn fill_history(cycle: &mut Cycle, issues: &[Issue]) {
         cycle.issue_count_history.push(count(scope.len()));
         cycle.completed_issue_count_history.push(count(done.len()));
     }
+}
+
+/// One notification of the demo inbox: which of the viewer's open issues
+/// it is about, its kind, its actor, how many minutes before [`NOW`] it
+/// came, whether it is read, and the emoji of a reaction.
+type DemoNotification = (
+    usize,
+    &'static str,
+    &'static str,
+    i64,
+    bool,
+    Option<&'static str>,
+);
+
+/// The viewer's inbox: a dozen notifications of mixed kinds and read states
+/// about five of the viewer's open issues.
+const NOTIFICATIONS: [DemoNotification; 12] = [
+    (0, "issueNewComment", "theo", 20, false, None),
+    (0, "issueCommentMention", "ada", 2 * 60, false, None),
+    (0, "issueEmojiReaction", "jun", 5 * 60, true, Some("+1")),
+    (1, "issueAssignedToYou", "omar", 60, false, None),
+    (1, "issueStatusChanged", "omar", 3 * 60, true, None),
+    (2, "issueNewComment", "iris", 6 * 60, true, None),
+    (2, "issueNewComment", "nell", 26 * 60, true, None),
+    (3, "issueMention", "basil", 2 * 24 * 60, false, None),
+    (
+        3,
+        "issueEmojiReaction",
+        "pia",
+        3 * 24 * 60,
+        true,
+        Some("tada"),
+    ),
+    (4, "issueStatusChanged", "theo", 4 * 24 * 60, true, None),
+    (4, "issueAssignedToYou", "ada", 5 * 24 * 60, true, None),
+    (4, "issueNewComment", "ada", 45, false, None),
+];
+
+/// The demo inbox, newest first. A comment notification points at the
+/// issue's latest comment.
+pub fn notifications(data: &DemoWorkspace) -> Vec<Notification> {
+    let mut open: Vec<&Issue> = data
+        .issues
+        .iter()
+        .filter(|issue| issue.assignee_id.as_deref() == Some(data.viewer.id.as_str()))
+        .filter(|issue| {
+            !matches!(
+                issue.state.state_type,
+                StateType::Completed | StateType::Canceled
+            )
+        })
+        .collect();
+    // Issues with comments first, so the comment notifications have one to
+    // point at.
+    let has_comments = |issue: &Issue| {
+        data.comments
+            .iter()
+            .any(|comment| comment.issue_id == issue.id)
+    };
+    open.sort_by(|a, b| {
+        has_comments(b)
+            .cmp(&has_comments(a))
+            .then(a.identifier.cmp(&b.identifier))
+    });
+    let mut notifications: Vec<Notification> = NOTIFICATIONS
+        .iter()
+        .enumerate()
+        .filter_map(|(index, &(nth, kind, actor, minutes, read, emoji))| {
+            let issue = open.get(nth)?;
+            let at = NOW - SignedDuration::from_mins(minutes);
+            let comment_id = kind.contains("Comment").then(|| {
+                data.comments
+                    .iter()
+                    .rev()
+                    .find(|comment| comment.issue_id == issue.id)
+                    .map(|comment| comment.id.clone())
+            });
+            Some(Notification {
+                id: format!("notification-{}", index + 1),
+                kind: kind.to_owned(),
+                issue_id: issue.id.clone(),
+                team_id: issue.team_id.clone(),
+                comment_id: comment_id.flatten(),
+                actor_id: Some(member_id(actor)),
+                reaction_emoji: emoji.map(str::to_owned),
+                created_at: at,
+                updated_at: at,
+                read_at: read.then_some(at + SignedDuration::from_mins(5)),
+                snoozed_until_at: None,
+                archived_at: None,
+            })
+        })
+        .collect();
+    notifications.sort_by_key(|notification| std::cmp::Reverse(notification.created_at));
+    notifications
 }
 
 fn count(len: usize) -> u32 {

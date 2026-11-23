@@ -76,6 +76,12 @@ _Avoid_: project state (Linear's deprecated field)
 A named stage within one project, in that project's own order; an issue belongs to at most one.
 _Avoid_: milestone on its own when the project is unclear, epic
 
+**Notification**:
+Something Linear put in the viewer's inbox about an issue: a comment, a mention, an assignment, a workflow state change or a reaction. lrat shows only notifications about issues.
+
+**Inbox**:
+The screen of the viewer's notifications, grouped by issue. A notification in it is unread or read, and can be snoozed until a time or archived.
+
 **Grouping**:
 How a list of issues is split into groups with a header each, such as by workflow state or assignee.
 _Avoid_: view, board

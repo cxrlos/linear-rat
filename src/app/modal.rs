@@ -128,6 +128,8 @@ pub enum Purpose {
     RemoveRelations,
     /// Add this reaction to the focused comment or issue, or remove it.
     Reaction,
+    /// Snooze the focused notification until this time.
+    Snooze,
 }
 
 impl Choice {
@@ -141,6 +143,7 @@ impl Choice {
             Purpose::RelationKind => "Add a relation".to_owned(),
             Purpose::RemoveRelations => "Remove relations".to_owned(),
             Purpose::Reaction => "React".to_owned(),
+            Purpose::Snooze => "Snooze until".to_owned(),
         }
     }
 

@@ -1,0 +1,7 @@
+# budget: 5
+# Marks one notification read or unread, or snoozes it until a time.
+mutation NotificationUpdate($id: String!, $input: NotificationUpdateInput!) {
+  notificationUpdate(id: $id, input: $input) {
+    success
+  }
+}

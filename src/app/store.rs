@@ -13,12 +13,13 @@ use crate::analytics::AdministrableTeams;
 use crate::linear::ReactionTarget;
 use crate::linear::model::Reaction;
 use crate::linear::model::{
-    Attachment, Comment, Cycle, Issue, IssueRelation, Label, Member, Project, ProjectMilestone,
-    RelationKind, StateSpan, Team, Viewer, WorkflowState, Workspace,
+    Attachment, Comment, Cycle, Issue, IssueRelation, Label, Member, Notification, Project,
+    ProjectMilestone, RelationKind, StateSpan, Team, Viewer, WorkflowState, Workspace,
 };
 use crate::linear::{
-    AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, PostedComment, ProjectList,
-    SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions,
+    AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, NotificationsLoaded,
+    PostedComment, ProjectList, SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage,
+    TeamOptions,
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
@@ -98,6 +99,14 @@ pub struct Store {
     /// answers. Defaults when missing, so an older snapshot still loads.
     #[serde(default)]
     capabilities: Capabilities,
+    /// The viewer's issue notifications by id, from this session's loads.
+    /// Left out of the snapshot, so a new session loads the inbox afresh.
+    #[serde(skip)]
+    notifications: BTreeMap<String, Notification>,
+    /// The newest `updatedAt` among the notifications loaded, where the
+    /// next delta starts. Only server values.
+    #[serde(skip)]
+    notifications_watermark: Option<Timestamp>,
 }
 
 impl Store {
@@ -458,6 +467,11 @@ impl Store {
         Some(std::mem::replace(stored, comment))
     }
 
+    /// Stores `member`, replacing the copy with its id.
+    pub fn add_member(&mut self, member: Member) {
+        self.members.insert(member.id.clone(), member);
+    }
+
     /// Forgets the comment with id `id` and the replies under it, as
     /// Linear deletes them together, and returns them.
     pub fn remove_comment(&mut self, id: &str) -> Vec<Comment> {
@@ -543,6 +557,108 @@ impl Store {
         let reactions = self.reactions_mut(target)?;
         let at = reactions.iter().position(|reaction| reaction.id == id)?;
         Some(reactions.remove(at))
+    }
+
+    /// Takes in loaded notifications and what they refer to. A notification
+    /// replaces the stored one only when it is strictly newer, so a load
+    /// answered before a write in flight cannot undo what the write shows;
+    /// an archived one leaves the store. Returns whether anything changed.
+    pub fn merge_notifications(&mut self, loaded: &NotificationsLoaded) -> bool {
+        let mut changed = self.merge_notification_refs(loaded);
+        for notification in &loaded.notifications {
+            changed |= self.merge_notification(notification.clone());
+            self.notifications_watermark = self
+                .notifications_watermark
+                .max(Some(notification.updated_at));
+        }
+        changed
+    }
+
+    /// Takes in the issues, cycles, teams and people `loaded` refers to.
+    /// Returns whether an issue changed.
+    fn merge_notification_refs(&mut self, loaded: &NotificationsLoaded) -> bool {
+        let mut changed = false;
+        for issue in &loaded.issues {
+            changed |= self.upsert_issue(issue.clone());
+        }
+        by_id(&mut self.cycles, &loaded.cycles, |cycle| &cycle.id);
+        by_id(&mut self.teams, &loaded.teams, |team| &team.id);
+        by_id(&mut self.members, &loaded.members, |member| &member.id);
+        changed
+    }
+
+    /// Takes in one notification as [`Store::merge_notifications`] does,
+    /// without moving the watermark. An archived one leaves unless the
+    /// stored copy is strictly newer, since archiving need not move
+    /// `updatedAt`. Returns whether it changed the store.
+    fn merge_notification(&mut self, notification: Notification) -> bool {
+        let stored = self
+            .notifications
+            .get(&notification.id)
+            .map(|stored| stored.updated_at);
+        if notification.archived_at.is_some() {
+            if stored.is_some_and(|stored| stored > notification.updated_at) {
+                return false;
+            }
+            return self.notifications.remove(&notification.id).is_some();
+        }
+        if stored.is_some_and(|stored| stored >= notification.updated_at) {
+            return false;
+        }
+        self.notifications
+            .insert(notification.id.clone(), notification);
+        true
+    }
+
+    /// Runs `change` on the stored notification with id `id`. Returns
+    /// whether there was one.
+    pub fn change_notification(
+        &mut self,
+        id: &str,
+        change: impl FnOnce(&mut Notification),
+    ) -> bool {
+        match self.notifications.get_mut(id) {
+            Some(notification) => {
+                change(notification);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Puts `notification` back as it was, unless the stored copy has moved
+    /// on since: a newer one came in, or it left the store.
+    pub fn restore_notification(&mut self, notification: Notification) {
+        if let Some(stored) = self.notifications.get_mut(&notification.id)
+            && stored.updated_at == notification.updated_at
+        {
+            *stored = notification;
+        }
+    }
+
+    pub fn notifications(&self) -> impl Iterator<Item = &Notification> {
+        self.notifications.values()
+    }
+
+    pub fn notification(&self, id: &str) -> Option<&Notification> {
+        self.notifications.get(id)
+    }
+
+    /// The newest `updatedAt` among the notifications loaded, where the next
+    /// delta starts.
+    pub fn notifications_watermark(&self) -> Option<Timestamp> {
+        self.notifications_watermark
+    }
+
+    /// Takes in notifications a live event carried, as
+    /// [`Store::merge_notifications`] does but without moving the
+    /// watermark, which only a load may move.
+    pub fn merge_live_notifications(&mut self, loaded: &NotificationsLoaded) -> bool {
+        let mut changed = self.merge_notification_refs(loaded);
+        for notification in &loaded.notifications {
+            changed |= self.merge_notification(notification.clone());
+        }
+        changed
     }
 
     /// Replaces the comments of `issue_id`.

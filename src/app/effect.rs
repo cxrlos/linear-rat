@@ -3,8 +3,8 @@ use jiff::Timestamp;
 use super::ReactionWrite;
 
 use super::{
-    CommentWrite, LifecycleWrite, NewAttachment, NewComment, NewIssue, RelationWrite, TeamPoll,
-    Write, Writing,
+    CommentWrite, InboxWrite, LifecycleWrite, NewAttachment, NewComment, NewIssue, RelationWrite,
+    TeamPoll, Write, Writing,
 };
 use crate::linear::{AnalyticsWindow, SearchQuery, TeamQuery, Urgency};
 use crate::release::Record;
@@ -171,4 +171,18 @@ pub enum Effect {
     /// link; the result comes back as
     /// [`Event::Attached`](super::Event::Attached).
     Attach(NewAttachment),
+
+    /// Load the viewer's notifications: the newest ones with `since`
+    /// `None`, else those updated after it; the result comes back as
+    /// [`Event::NotificationsLoaded`](super::Event::NotificationsLoaded).
+    LoadNotifications {
+        since: Option<Timestamp>,
+    },
+    /// Send the one mutation of an inbox write; the result comes back as
+    /// [`Event::InboxWritten`](super::Event::InboxWritten).
+    WriteInbox(InboxWrite),
+    /// Archive these notifications one after another, in the background so
+    /// the governor spaces them; the results come back together as
+    /// [`Event::InboxBatchWritten`](super::Event::InboxBatchWritten).
+    ArchiveNotifications(Vec<InboxWrite>),
 }

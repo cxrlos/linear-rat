@@ -6,16 +6,16 @@ use super::ReactionWrite;
 use crate::linear::model::Reaction;
 
 use super::{
-    CommentWrite, Failure, LifecycleWrite, LoadError, NewAttachment, NewComment, NewIssue,
-    RelationWrite, SyncFailure, UploadId, Write, Writing,
+    CommentWrite, Failure, InboxWrite, LifecycleWrite, LoadError, NewAttachment, NewComment,
+    NewIssue, RelationWrite, SyncFailure, UploadId, Write, Writing,
 };
 use crate::linear::model::{
     Attachment, Cycle, Issue, IssueRelation, Label, Member, ProjectMilestone, Team, WorkflowState,
 };
 use crate::linear::{
-    AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, LiveEvent, PostedComment,
-    ProjectList, SearchQuery, SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage,
-    TeamOptions, TeamQuery,
+    AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, LiveEvent, NotificationsLoaded,
+    PostedComment, ProjectList, SearchQuery, SearchResults, TeamAnalyticsIssues, TeamChanges,
+    TeamIssuesPage, TeamOptions, TeamQuery,
 };
 
 /// Something that happened, fed to [`update`](super::update).
@@ -231,4 +231,21 @@ pub enum Event {
         attachment: NewAttachment,
         result: Result<Attachment, Failure>,
     },
+
+    /// The result of
+    /// [`Effect::LoadNotifications`](super::Effect::LoadNotifications)
+    /// from `since`.
+    NotificationsLoaded {
+        since: Option<Timestamp>,
+        result: Result<NotificationsLoaded, Failure>,
+    },
+    /// Linear's answer to [`Effect::WriteInbox`](super::Effect::WriteInbox).
+    InboxWritten {
+        write: InboxWrite,
+        result: Result<(), Failure>,
+    },
+    /// Linear's answers to
+    /// [`Effect::ArchiveNotifications`](super::Effect::ArchiveNotifications),
+    /// one per write.
+    InboxBatchWritten(Vec<(InboxWrite, Result<(), Failure>)>),
 }

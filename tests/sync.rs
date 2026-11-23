@@ -201,7 +201,11 @@ fn the_first_poll_starts_each_team_without_a_watermark() {
 
     let effects = app.handle(Event::Tick(START)).unwrap();
 
-    let [Effect::Poll(teams)] = effects.as_slice() else {
+    let [
+        Effect::Poll(teams),
+        Effect::LoadNotifications { since: None },
+    ] = effects.as_slice()
+    else {
         panic!("{effects:?}");
     };
     assert_eq!(teams.len(), app.state().store.teams().count());

@@ -38,10 +38,12 @@ pub enum Context {
     Cycles,
     /// The focused comment of a detail, ahead of [`Context::Detail`] there.
     Comment,
+    /// The Inbox screen.
+    Inbox,
 }
 
 impl Context {
-    pub const ALL: [Context; 9] = [
+    pub const ALL: [Context; 10] = [
         Context::Global,
         Context::List,
         Context::TeamIssues,
@@ -51,6 +53,7 @@ impl Context {
         Context::Browse,
         Context::Cycles,
         Context::Comment,
+        Context::Inbox,
     ];
 
     /// The name of its table in `config.toml`, as in `[keys.list]`.
@@ -65,6 +68,7 @@ impl Context {
             Context::Browse => "browse",
             Context::Cycles => "cycles",
             Context::Comment => "comment",
+            Context::Inbox => "inbox",
         }
     }
 
@@ -85,6 +89,7 @@ impl Context {
             Context::Browse => "Cycles and Projects",
             Context::Cycles => "Cycles",
             Context::Comment => "Comment",
+            Context::Inbox => "Inbox",
         }
     }
 }
@@ -132,5 +137,6 @@ fn pane_contexts(state: &State) -> Vec<Context> {
         Screen::Analytics => vec![Context::Analytics, Context::Global],
         Screen::Cycles => vec![Context::Cycles, Context::Browse, Context::Global],
         Screen::Projects => vec![Context::Browse, Context::Global],
+        Screen::Inbox => vec![Context::Inbox, Context::Global],
     }
 }

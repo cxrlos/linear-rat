@@ -24,8 +24,8 @@ pub use governor::{SystemTimer, Timer, Urgency};
 pub use http::{ClientConfig, Dial, HttpClient, LIVE_ENDPOINT, LiveConfig, Pipe};
 use model::Reaction;
 use model::{
-    Attachment, Comment, Cycle, Issue, IssueRelation, Label, Member, Priority, Project,
-    ProjectMilestone, ProjectOverview, RelationType, StateSpan, StateType, Team, Viewer,
+    Attachment, Comment, Cycle, Issue, IssueRelation, Label, Member, Notification, Priority,
+    Project, ProjectMilestone, ProjectOverview, RelationType, StateSpan, StateType, Team, Viewer,
     WorkflowState, Workspace,
 };
 
@@ -97,6 +97,52 @@ pub trait LinearClient {
         &self,
         issue_id: &str,
     ) -> impl Future<Output = Result<(), ClientError>> + Send;
+
+    /// The viewer's issue notifications. With `since` `None`, the newest 50
+    /// unarchived ones, as the viewer waits on them; otherwise every one
+    /// updated after `since`, archived ones included, in the background.
+    /// A client without an inbox, as the test doubles are, has none.
+    fn notifications(
+        &self,
+        since: Option<Timestamp>,
+    ) -> impl Future<Output = Result<NotificationsLoaded, ClientError>> + Send {
+        let _ = since;
+        async { Ok(NotificationsLoaded::default()) }
+    }
+
+    /// Sends one `notificationUpdate` marking the notification with id `id`
+    /// read or unread, or snoozing it.
+    fn update_notification(
+        &self,
+        id: &str,
+        update: &NotificationUpdate,
+    ) -> impl Future<Output = Result<(), ClientError>> + Send {
+        let _ = (id, update);
+        async { Err(no_inbox()) }
+    }
+
+    /// Sends one `notificationArchive` for the notification with id `id`.
+    /// Archive all read sends them in the background, so the governor
+    /// spaces them.
+    fn archive_notification(
+        &self,
+        id: &str,
+        urgency: Urgency,
+    ) -> impl Future<Output = Result<(), ClientError>> + Send {
+        let _ = (id, urgency);
+        async { Err(no_inbox()) }
+    }
+
+    /// Sends one `notificationMarkReadAll` marking every notification about
+    /// the issue with id `issue_id` read at `read_at`.
+    fn mark_issue_notifications_read(
+        &self,
+        issue_id: &str,
+        read_at: Timestamp,
+    ) -> impl Future<Output = Result<(), ClientError>> + Send {
+        let _ = (issue_id, read_at);
+        async { Err(no_inbox()) }
+    }
 
     /// Moves the issue with id `issue_id` and its sub-issues to the trash,
     /// where Linear keeps them for 30 days. There is no permanent delete.
@@ -390,6 +436,50 @@ pub enum LiveEvent {
     Issue(TeamChanges),
     /// A comment was added to an issue.
     Comment(PostedComment),
+    /// An issue was archived. Like [`LiveEvent::Issue`], it moves no
+    /// watermark.
+    Archived(TeamChanges),
+    /// An issue was brought back from the archive.
+    Unarchived(TeamChanges),
+    /// A comment on an issue was edited, resolved or reacted to.
+    CommentUpdated(PostedComment),
+    /// A comment on an issue was deleted.
+    CommentDeleted {
+        issue_id: String,
+        comment_id: String,
+    },
+    /// An issue notification was created, read, snoozed or archived, for
+    /// the person with id `recipient_id`, who may not be the viewer.
+    Notification {
+        recipient_id: String,
+        loaded: NotificationsLoaded,
+    },
+}
+
+/// Issue notifications Linear sent, with the issues they are about and the
+/// people and teams those refer to.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct NotificationsLoaded {
+    pub notifications: Vec<Notification>,
+    pub issues: Vec<Issue>,
+    pub cycles: Vec<Cycle>,
+    /// Who did what the notifications are about, and the people of their
+    /// issues.
+    pub members: Vec<Member>,
+    pub teams: Vec<Team>,
+    /// How many notifications were about something other than an issue,
+    /// and were left out.
+    pub skipped: usize,
+    pub as_of: Timestamp,
+}
+
+/// The fields one `notificationUpdate` changes.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct NotificationUpdate {
+    /// Marks it read at a time, or unread.
+    pub read_at: Patch<Timestamp>,
+    /// Hides it until this time.
+    pub snoozed_until_at: Option<Timestamp>,
 }
 
 /// A comment Linear has stored, and its author.
@@ -951,6 +1041,9 @@ thread_local! {
     static DEMO_RELATIONS: RefCell<(Vec<IssueRelation>, Vec<String>)> =
         const { RefCell::new((Vec::new(), Vec::new())) };
     static DEMO_ATTACHMENTS: RefCell<Vec<Attachment>> = const { RefCell::new(Vec::new()) };
+    /// Notifications as writes through this client left them.
+    static DEMO_NOTIFICATIONS: RefCell<BTreeMap<String, Notification>> =
+        const { RefCell::new(BTreeMap::new()) };
 }
 
 /// Attaches `url` to the demo issue with id `issue_id` as Linear does: an
@@ -1052,6 +1145,36 @@ fn apply_demo_reactions(issue_id: &str, detail: &mut IssueDetail) {
                 .retain(|reaction| !removed.contains(&reaction.id));
         }
     });
+}
+
+/// The demo inbox as writes through the fake client left it, archived
+/// notifications included.
+fn demo_notifications() -> Vec<Notification> {
+    let mut notifications = demo::notifications(&demo::workspace());
+    DEMO_NOTIFICATIONS.with_borrow(|edits| {
+        for notification in &mut notifications {
+            if let Some(edited) = edits.get(&notification.id) {
+                notification.clone_from(edited);
+            }
+        }
+    });
+    notifications
+}
+
+/// Applies `change` to the demo notification with id `id` and remembers it,
+/// one second newer.
+fn demo_notification_change(
+    id: &str,
+    change: impl FnOnce(&mut Notification),
+) -> Result<(), ClientError> {
+    let mut notification = demo_notifications()
+        .into_iter()
+        .find(|notification| notification.id == id)
+        .ok_or_else(|| not_found("notification", id))?;
+    change(&mut notification);
+    notification.updated_at += SignedDuration::from_secs(1);
+    DEMO_NOTIFICATIONS.with_borrow_mut(|edits| edits.insert(id.to_owned(), notification));
+    Ok(())
 }
 
 /// The demo issue with id `issue_id` as edits through the fake client left
@@ -1256,6 +1379,11 @@ fn demo_update(
     Ok(issue)
 }
 
+/// What a client without an inbox answers a notification write with.
+fn no_inbox() -> ClientError {
+    ClientError::Decode("this client has no inbox".to_owned())
+}
+
 fn not_found(what: &str, id: &str) -> ClientError {
     ClientError::GraphQl(vec![GraphQlError {
         message: format!("Entity not found: {what} {id}"),
@@ -1365,6 +1493,80 @@ impl LinearClient for FakeClient {
 
     async fn unarchive_issue(&self, issue_id: &str) -> Result<(), ClientError> {
         demo_change(issue_id, |issue| issue.archived_at = None)
+    }
+
+    async fn notifications(
+        &self,
+        since: Option<Timestamp>,
+    ) -> Result<NotificationsLoaded, ClientError> {
+        let data = demo::workspace();
+        let notifications: Vec<Notification> = match since {
+            None => demo_notifications()
+                .into_iter()
+                .filter(|notification| notification.archived_at.is_none())
+                .collect(),
+            Some(since) => demo_notifications()
+                .into_iter()
+                .filter(|notification| notification.updated_at > since)
+                .collect(),
+        };
+        let mut issues: Vec<Issue> = Vec::new();
+        for notification in &notifications {
+            if !issues.iter().any(|issue| issue.id == notification.issue_id) {
+                issues.push(demo_issue(&data, &notification.issue_id)?);
+            }
+        }
+        Ok(NotificationsLoaded {
+            notifications,
+            issues,
+            cycles: data.cycles,
+            members: data.members,
+            teams: data.teams,
+            skipped: 0,
+            as_of: demo::NOW,
+        })
+    }
+
+    async fn update_notification(
+        &self,
+        id: &str,
+        update: &NotificationUpdate,
+    ) -> Result<(), ClientError> {
+        demo_notification_change(id, |notification| {
+            match &update.read_at {
+                Patch::Unchanged => {}
+                Patch::Clear => notification.read_at = None,
+                Patch::Set(at) => notification.read_at = Some(*at),
+            }
+            if let Some(until) = update.snoozed_until_at {
+                notification.snoozed_until_at = Some(until);
+            }
+        })
+    }
+
+    async fn archive_notification(&self, id: &str, _: Urgency) -> Result<(), ClientError> {
+        demo_notification_change(id, |notification| {
+            notification.archived_at = Some(demo::NOW);
+        })
+    }
+
+    async fn mark_issue_notifications_read(
+        &self,
+        issue_id: &str,
+        read_at: Timestamp,
+    ) -> Result<(), ClientError> {
+        let ids: Vec<String> = demo_notifications()
+            .into_iter()
+            .filter(|notification| notification.issue_id == issue_id)
+            .filter(|notification| notification.read_at.is_none())
+            .map(|notification| notification.id)
+            .collect();
+        for id in ids {
+            demo_notification_change(&id, |notification| {
+                notification.read_at = Some(read_at);
+            })?;
+        }
+        Ok(())
     }
 
     /// Remembers the issue as trashed: later edits and existence checks no
