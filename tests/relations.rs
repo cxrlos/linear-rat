@@ -472,6 +472,21 @@ fn an_issue_without_relations_says_so_and_opens_nothing() {
 }
 
 #[test]
+fn the_bottom_bar_hints_tab_on_the_remove_relation_picker() {
+    let mut app = focused_with_detail("ENG-51");
+
+    press(&mut app, "Dr");
+
+    let bar = screen(&app);
+    let does = bar
+        .iter()
+        .rev()
+        .find(|line| line.starts_with(" Do "))
+        .unwrap();
+    assert!(does.contains("Tab toggle"), "{bar:#?}");
+}
+
+#[test]
 fn the_remove_relation_picker() {
     let mut app = focused_with_detail("ENG-51");
 
