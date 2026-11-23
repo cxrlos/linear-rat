@@ -88,7 +88,7 @@ fn items(state: &State, row: HintRow) -> Vec<Item> {
     let mut shown = Vec::new();
     for &context in &contexts {
         for spec in ACTIONS.iter().filter(|s| s.contexts.contains(&context)) {
-            let Some(hint) = spec.hint.filter(|hint| hint.row == row) else {
+            let Some(hint) = spec.hint_in(state).filter(|hint| hint.row == row) else {
                 continue;
             };
             if shown.contains(&spec.action) {

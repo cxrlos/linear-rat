@@ -277,6 +277,21 @@ fn tab_is_available_in_the_file_prompt() {
 }
 
 #[test]
+fn the_bottom_bar_says_tab_completes_in_the_file_prompt() {
+    let mut app = app();
+
+    press(&mut app, "F");
+
+    let lines = screen(&app);
+    let bar = lines
+        .iter()
+        .find(|line| line.starts_with(" Do "))
+        .unwrap_or_else(|| panic!("{}", lines.join("\n")));
+    assert!(bar.contains("Tab complete"), "{bar}");
+    assert!(!bar.contains("toggle"), "{bar}");
+}
+
+#[test]
 fn a_readable_file_starts_its_upload_and_closes_the_prompt() {
     let mut app = app();
     press(&mut app, "FCargo.toml");

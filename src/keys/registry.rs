@@ -53,6 +53,19 @@ impl ActionSpec {
         }
     }
 
+    /// Where the bottom bar shows it on `state`: its hint, but with the word
+    /// the open overlay uses for it, as Tab completing a path in the attach
+    /// prompt.
+    pub fn hint_in(&self, state: &State) -> Option<Hint> {
+        match (self.action, state.modals.top()) {
+            (Action::ToggleEntry, Some(Modal::Attach(_))) => self.hint.map(|hint| Hint {
+                word: "complete",
+                ..hint
+            }),
+            _ => self.hint,
+        }
+    }
+
     /// Whether it can run now: [`ActionSpec::available`], and then whether
     /// the API key may send what it [`writes`](ActionSpec::writes).
     pub fn availability(&self, state: &State) -> Availability {
