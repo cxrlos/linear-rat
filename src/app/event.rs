@@ -3,11 +3,11 @@ use jiff::Timestamp;
 use semver::Version;
 
 use super::{
-    Failure, LifecycleWrite, LoadError, NewComment, NewIssue, RelationWrite, SyncFailure, Write,
-    Writing,
+    Failure, LifecycleWrite, LoadError, NewAttachment, NewComment, NewIssue, RelationWrite,
+    SyncFailure, UploadId, Write, Writing,
 };
 use crate::linear::model::{
-    Cycle, Issue, IssueRelation, Label, Member, ProjectMilestone, Team, WorkflowState,
+    Attachment, Cycle, Issue, IssueRelation, Label, Member, ProjectMilestone, Team, WorkflowState,
 };
 use crate::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, LiveEvent, PostedComment,
@@ -204,4 +204,16 @@ pub enum Event {
     /// The result of [`Effect::CheckRelease`](super::Effect::CheckRelease):
     /// the latest release, or `None` when the check failed.
     ReleaseChecked(Option<Version>),
+    /// `sent` bytes of the upload of [`Effect::Attach`](super::Effect::Attach)
+    /// have gone out.
+    UploadProgress {
+        upload: UploadId,
+        sent: u64,
+    },
+    /// Linear's answer to [`Effect::Attach`](super::Effect::Attach): the
+    /// attachment as it stored it, or why it was not attached.
+    Attached {
+        attachment: NewAttachment,
+        result: Result<Attachment, Failure>,
+    },
 }

@@ -5,8 +5,8 @@ use crossterm::event::KeyCode;
 use super::{Context, Key};
 use crate::analytics::WeekRange;
 use crate::app::{
-    self, Action, AnalyticsView, Copyable, EditPicker, Editable, FilterField, LinkSet, Modal, Pane,
-    Phase, Screen, State, WriteClass, can_load_more,
+    self, Action, AnalyticsView, AttachStep, Copyable, EditPicker, Editable, FilterField, LinkSet,
+    Modal, Pane, Phase, Screen, State, WriteClass, can_load_more,
 };
 use crate::ui;
 
@@ -212,10 +212,12 @@ pub enum OverlayKind {
     Confirm,
     /// The error log, which scrolls.
     Messages,
+    /// The prompt a file path is typed into, which Tab completes.
+    Path,
 }
 
 impl OverlayKind {
-    pub const ALL: [OverlayKind; 9] = [
+    pub const ALL: [OverlayKind; 10] = [
         OverlayKind::Cheatsheet,
         OverlayKind::List,
         OverlayKind::MultiList,
@@ -225,6 +227,7 @@ impl OverlayKind {
         OverlayKind::Prompt,
         OverlayKind::Confirm,
         OverlayKind::Messages,
+        OverlayKind::Path,
     ];
 
     /// The kind of `modal`, or `None` for the which-key popup, which only
@@ -244,6 +247,8 @@ impl OverlayKind {
             Modal::DueDate(_) => OverlayKind::Prompt,
             Modal::Confirm(_) => OverlayKind::Confirm,
             Modal::Messages { .. } => OverlayKind::Messages,
+            Modal::Attach(prompt) if prompt.step == AttachStep::File => OverlayKind::Path,
+            Modal::Attach(_) => OverlayKind::Prompt,
         })
     }
 }
@@ -272,6 +277,7 @@ const ACCEPTING: &[OverlayKind] = &[
     OverlayKind::Search,
     OverlayKind::Prompt,
     OverlayKind::Confirm,
+    OverlayKind::Path,
 ];
 
 /// Every action lrat has, in the order hints and the cheatsheet list them.
@@ -639,6 +645,32 @@ pub static ACTIONS: &[ActionSpec] = &[
                 .focused_issue()
                 .is_some_and(|issue| !app::is_local(&issue.id))
         },
+    },
+    ActionSpec {
+        action: Action::AttachFile,
+        id: "attach-file",
+        description: "Attach a file",
+        label: "attach a file / link",
+        group: Group::Edit,
+        writes: Some(WriteClass::Attach),
+        hint: None,
+        contexts: PANES,
+        overlays: &[],
+        default_keys: &[&[Key::char('F')]],
+        available: has_saved_issue,
+    },
+    ActionSpec {
+        action: Action::AttachLink,
+        id: "attach-link",
+        description: "Attach a link",
+        label: "attach a file / link",
+        group: Group::Edit,
+        writes: Some(WriteClass::Attach),
+        hint: None,
+        contexts: PANES,
+        overlays: &[],
+        default_keys: &[&[Key::char('W')]],
+        available: has_saved_issue,
     },
     ActionSpec {
         action: Action::Archive,
@@ -1117,7 +1149,11 @@ pub static ACTIONS: &[ActionSpec] = &[
         writes: None,
         hint: does("toggle"),
         contexts: OVERLAY,
-        overlays: &[OverlayKind::MultiList, OverlayKind::Search],
+        overlays: &[
+            OverlayKind::MultiList,
+            OverlayKind::Search,
+            OverlayKind::Path,
+        ],
         default_keys: &[&[Key::named(KeyCode::Tab)]],
         available: |state| match state.modals.top() {
             Some(Modal::Search(search)) => search.editable(),
@@ -1127,6 +1163,7 @@ pub static ACTIONS: &[ActionSpec] = &[
             Some(Modal::IssuePicker(picker)) => {
                 picker.list.is_multi() && picker.list.selected().is_some()
             }
+            Some(Modal::Attach(prompt)) => prompt.step == AttachStep::File,
             _ => false,
         },
     },
@@ -1499,7 +1536,7 @@ fn can_accept(state: &State) -> bool {
             Phase::Typing { .. } | Phase::NothingFound { .. } => !search.query.trim().is_empty(),
             Phase::Searching { .. } => false,
         },
-        Some(Modal::Confirm(_) | Modal::DueDate(_)) => true,
+        Some(Modal::Confirm(_) | Modal::DueDate(_) | Modal::Attach(_)) => true,
         _ => false,
     }
 }

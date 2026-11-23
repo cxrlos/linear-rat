@@ -26,7 +26,7 @@ use ratatui::layout::{Constraint, Layout, Rect, Size};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph, Tabs};
 
-use crate::app::{Action, Load, Modal, Screen, State};
+use crate::app::{Action, Indicator, Load, Modal, Screen, State};
 use crate::keys::{self, Context};
 
 const MAX_NOTICE_ROWS: usize = 3;
@@ -86,6 +86,7 @@ pub fn render(state: &State, frame: &mut Frame) {
             Modal::DueDate(prompt) => picker::render_due_date(state, prompt, frame, body_area),
             Modal::Confirm(confirm) => confirm::render(state, confirm, frame, body_area),
             Modal::Messages { scroll } => messages::render(state, *scroll, frame, body_area),
+            Modal::Attach(prompt) => picker::render_attach(state, prompt, frame, body_area),
         }
     }
 }
@@ -95,10 +96,7 @@ pub fn render(state: &State, frame: &mut Frame) {
 /// only their key, as `[2]`.
 fn tab_titles(state: &State, width: u16) -> [String; Screen::ALL.len()] {
     let full = Screen::ALL.map(|screen| tab_title(state, screen, false));
-    let indicator = state
-        .sync_status
-        .indicator()
-        .map_or(0, |indicator| text::width(&indicator.text) + 2);
+    let indicator = indicator(state).map_or(0, |indicator| text::width(&indicator.text) + 2);
     let room = usize::from(width).saturating_sub(indicator);
     if usize::from(titles_width(&full)) <= room {
         return full;
@@ -134,7 +132,7 @@ fn titles_width(titles: &[String]) -> u16 {
 /// fine and accented when it is failing or throttled. Left out when it
 /// would touch the tabs. Returns how many columns it took.
 fn render_sync_indicator(state: &State, frame: &mut Frame, area: Rect, tabs_width: u16) -> u16 {
-    let Some(indicator) = state.sync_status.indicator() else {
+    let Some(indicator) = indicator(state) else {
         return 0;
     };
     let text = format!("{} ", indicator.text);
@@ -151,6 +149,33 @@ fn render_sync_indicator(state: &State, frame: &mut Frame, area: Rect, tabs_widt
         Layout::horizontal([Constraint::Fill(1), Constraint::Length(width)]).areas(area);
     frame.render_widget(Span::styled(text, style), right);
     width
+}
+
+/// The longest file name the upload indicator shows before cutting it.
+const UPLOAD_NAME_WIDTH: usize = 24;
+
+/// What the indicator shows: the uploads in flight while there are any, as
+/// `uploading rind.log 42%`, else how sync is doing.
+fn indicator(state: &State) -> Option<Indicator> {
+    let uploads = state.uploads.active();
+    let text = match uploads {
+        [] => return state.sync_status.indicator(),
+        [upload] => format!(
+            "uploading {} {}%",
+            text::fit(&upload.name, UPLOAD_NAME_WIDTH),
+            upload.percent()
+        ),
+        several => {
+            let size: u64 = several.iter().map(|upload| upload.size).sum();
+            let sent: u64 = several
+                .iter()
+                .map(|upload| upload.sent.min(upload.size))
+                .sum();
+            let percent = (sent * 100).checked_div(size).unwrap_or(100);
+            format!("uploading {} files {percent}%", several.len())
+        }
+    };
+    Some(Indicator { text, alert: false })
 }
 
 /// The release notice, muted, between the tabs and the sync indicator,

@@ -6,6 +6,7 @@ use ratatui::layout::Size;
 use jiff::Timestamp;
 use jiff::civil::Date;
 
+use super::Uploads;
 use super::{
     AnalyticsScreen, Cycles, Detail, Drafts, ErrorLog, Failure, Load, LoadError, ModalStack,
     MyIssues, Names, Projects, RelationsInFlight, Release, Results, Store, SyncStatus, TeamIssues,
@@ -72,6 +73,8 @@ pub struct State {
     pub errors: ErrorLog,
     /// Newer releases and whether this session checks for them.
     pub release: Release,
+    /// The file uploads in flight, for the indicator.
+    pub uploads: Uploads,
 }
 
 impl State {

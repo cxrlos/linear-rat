@@ -13,6 +13,7 @@ use crate::app::{
     Action, Choice, CreateForm, DUE_DATE_FORMS, DuePrompt, Edit, EditPicker, IssuePicker, Links,
     Note, Picker, State, Step,
 };
+use crate::app::{AttachPrompt, AttachStep, MAX_FILE_SIZE};
 use crate::keys::{self, Context};
 
 /// The width the list asks for at least, so short entries leave room for
@@ -155,6 +156,95 @@ pub fn render_due_date(state: &State, prompt: &DuePrompt, frame: &mut Frame, are
         + 4;
     let width = u16::try_from(width).unwrap_or(u16::MAX);
     let popup = super::centered(area, width, 5);
+    let edge = usize::from(popup.width.saturating_sub(2));
+    let block = super::popup_block(state)
+        .title(text::fit(&format!(" {title} "), edge))
+        .title_bottom(text::fit_line(bottom, edge));
+    let lines: Vec<Line> = lines
+        .into_iter()
+        .map(|line| text::fit_line(line, edge.saturating_sub(2)))
+        .collect();
+    frame.render_widget(Clear, popup);
+    frame.render_widget(
+        Paragraph::new(lines).block(block.padding(Padding::horizontal(1))),
+        popup,
+    );
+}
+
+/// How many of the entries Tab could not choose between the attach prompt
+/// lists.
+const MAX_MATCHES: usize = 6;
+
+/// Draws the attach prompt centered inside `area`'s border: for a link's
+/// title, the link; what has been typed; the entries Tab could not choose
+/// between; and what it takes or why the last try was refused.
+pub fn render_attach(state: &State, prompt: &AttachPrompt, frame: &mut Frame, area: Rect) {
+    let theme = &state.theme;
+    let area = area.inner(Margin::new(1, 1));
+    let (placeholder, hint, items): (&str, String, &[(&[Action], &str)]) = match &prompt.step {
+        AttachStep::File => (
+            "type a path",
+            format!("Up to {} MB; ~ is your home", MAX_FILE_SIZE / 1_000_000),
+            &[
+                (&[Action::Accept], "attach"),
+                (&[Action::ToggleEntry], "complete"),
+                (&[Action::Close], "close"),
+            ],
+        ),
+        AttachStep::Link => (
+            "type a URL",
+            "http:// or https://".to_owned(),
+            &[(&[Action::Accept], "next"), (&[Action::Close], "close")],
+        ),
+        AttachStep::Title { .. } => (
+            "type a title",
+            "Optional; Linear names the link when it is empty".to_owned(),
+            &[(&[Action::Accept], "attach"), (&[Action::Close], "close")],
+        ),
+    };
+    let mut lines = Vec::new();
+    if let AttachStep::Title { url } = &prompt.step {
+        lines.push(Line::from(vec![
+            Span::styled("Link ", style::muted(theme)),
+            Span::raw(url.clone()),
+        ]));
+    }
+    lines.push(if prompt.text.is_empty() {
+        Line::from(vec![
+            Span::styled("> ", style::accent(theme)),
+            Span::styled(placeholder, style::muted(theme)),
+        ])
+    } else {
+        Line::from(vec![
+            Span::styled("> ", style::accent(theme)),
+            Span::raw(prompt.text.clone()),
+        ])
+    });
+    for name in prompt.matches.iter().take(MAX_MATCHES) {
+        lines.push(Line::from(format!("  {name}")));
+    }
+    if prompt.matches.len() > MAX_MATCHES {
+        lines.push(Line::styled(
+            format!("  and {} more", prompt.matches.len() - MAX_MATCHES),
+            style::muted(theme),
+        ));
+    }
+    lines.push(match &prompt.error {
+        Some(error) => Line::styled(format!("✘ {error}"), style::error(theme)),
+        None => Line::styled(hint, style::muted(theme)),
+    });
+    let title = prompt.title();
+    let bottom = keys_line(state, items);
+    let width = lines
+        .iter()
+        .map(Line::width)
+        .chain([text::width(&title) + 2, bottom.width(), MIN_WIDTH])
+        .max()
+        .unwrap_or(0)
+        + 4;
+    let width = u16::try_from(width).unwrap_or(u16::MAX);
+    let height = u16::try_from(lines.len() + 2).unwrap_or(u16::MAX);
+    let popup = super::centered(area, width, height);
     let edge = usize::from(popup.width.saturating_sub(2));
     let block = super::popup_block(state)
         .title(text::fit(&format!(" {title} "), edge))

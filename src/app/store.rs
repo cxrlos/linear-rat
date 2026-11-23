@@ -668,6 +668,15 @@ impl Store {
         self.attachments.get(issue_id).map(Vec::as_slice)
     }
 
+    /// Adds `attachment` to its issue's, replacing one with the same URL as
+    /// Linear does. Left to the detail's load when it has not loaded them.
+    pub fn add_attachment(&mut self, attachment: Attachment) {
+        if let Some(attachments) = self.attachments.get_mut(&attachment.issue_id) {
+            attachments.retain(|known| known.url != attachment.url);
+            attachments.push(attachment);
+        }
+    }
+
     /// The workflow states `issue_id` has been in, if the detail loaded them.
     pub fn state_history(&self, issue_id: &str) -> Option<&[StateSpan]> {
         self.state_histories.get(issue_id).map(Vec::as_slice)
