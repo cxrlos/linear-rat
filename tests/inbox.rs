@@ -280,7 +280,8 @@ async fn shift_a_archives_the_notification_and_a_rejection_brings_it_back() {
 
 #[tokio::test]
 async fn z_snoozes_until_a_preset_and_the_notification_comes_back_once_it_passes() {
-    let mut app = inbox().await;
+    // Wide enough for the tab to carry its count.
+    let mut app = inbox_at(120, 40).await;
     let id = focused(&app).id;
 
     press(&mut app, "z");
@@ -298,6 +299,9 @@ async fn z_snoozes_until_a_preset_and_the_notification_comes_back_once_it_passes
             .iter()
             .any(|n| n.id == id)
     );
+    let snoozed = screen(&app);
+    assert!(snoozed.contains("[6] Inbox 4 "), "{snoozed}");
+    assert!(snoozed.contains("Inbox · 4 unread"), "{snoozed}");
 
     let effects = app.handle(Event::Tick(until)).unwrap();
     drop(effects);
@@ -307,6 +311,9 @@ async fn z_snoozes_until_a_preset_and_the_notification_comes_back_once_it_passes
             .any(|n| n.id == id),
         "it comes back once the snooze passes"
     );
+    let woken = screen(&app);
+    assert!(woken.contains("[6] Inbox 5 "), "the tick redraws: {woken}");
+    assert!(woken.contains("Inbox · 5 unread"), "{woken}");
 }
 
 #[test]
