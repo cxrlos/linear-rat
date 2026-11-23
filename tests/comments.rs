@@ -12,7 +12,9 @@ use linear_rat::app::{
     WriteClass, Writing,
 };
 use linear_rat::linear::model::Comment;
-use linear_rat::linear::{ClientError, FakeClient, GraphQlError, IssueDetail, LinearClient};
+use linear_rat::linear::{
+    ClientError, ErrorKind, FakeClient, GraphQlError, IssueDetail, LinearClient,
+};
 use ratatui::backend::TestBackend;
 
 /// The issue My Issues focuses first in the demo, with a resolved thread
@@ -128,6 +130,19 @@ fn saved(writing: Writing, text: &str) -> Event {
 fn forbidden(action: &str) -> Failure {
     let error: GraphQlError = serde_json::from_str(FORBIDDEN).unwrap();
     Failure::from_client(action, &ClientError::GraphQl(vec![error]))
+}
+
+fn offline() -> Failure {
+    Failure::new(ErrorKind::Offline, "test", "could not reach Linear")
+}
+
+/// What the editor opens on when `keys` are pressed.
+fn editor_text(app: &mut App<TestBackend>, keys: &str) -> String {
+    let effects = press(app, keys);
+    let [Effect::OpenEditor { text, .. }] = effects.as_slice() else {
+        panic!("expected the editor to open, got {effects:?}");
+    };
+    text.clone()
 }
 
 fn capability(app: &App<TestBackend>, class: WriteClass) -> Capability {
@@ -290,6 +305,32 @@ fn a_reply_linear_refuses_goes_and_its_text_starts_the_next_reply() {
 }
 
 #[test]
+fn a_reply_that_fails_keeps_its_text_for_the_next_reply_in_the_thread() {
+    let mut app = app();
+    focus(&mut app, OPEN);
+    let writing = only_editor(press(&mut app, "r"));
+    let effects = app.handle(saved(writing, "Agreed")).unwrap();
+    let [Effect::CreateComment(reply)] = effects.as_slice() else {
+        panic!("{effects:?}");
+    };
+
+    app.handle(Event::CommentCreated {
+        comment: reply.clone(),
+        result: Err(offline()),
+    })
+    .unwrap();
+
+    focus(&mut app, OPEN_REPLY);
+    assert_eq!(editor_text(&mut app, "r"), "Agreed", "same thread");
+    focus(&mut app, RESOLVED);
+    assert_eq!(
+        editor_text(&mut app, "r"),
+        "",
+        "another thread starts empty"
+    );
+}
+
+#[test]
 fn e_edits_the_viewers_comment_from_its_text_and_shows_the_change_at_once() {
     let mut app = app();
     focus(&mut app, OPEN_REPLY);
@@ -338,6 +379,40 @@ fn an_edit_linear_refuses_is_undone_and_its_text_starts_the_next_edit() {
             .as_deref()
             .unwrap()
             .starts_with(&format!("Could not edit the comment on {FIRST}"))
+    );
+}
+
+#[test]
+fn an_edit_that_fails_keeps_its_text_for_the_next_edit_until_one_is_taken() {
+    let mut app = app();
+    focus(&mut app, OPEN_REPLY);
+    let writing = only_editor(press(&mut app, "E"));
+    let write = only_change(app.handle(saved(writing, "Picked up")).unwrap());
+
+    app.handle(Event::CommentChanged {
+        write,
+        result: Err(offline()),
+    })
+    .unwrap();
+
+    let effects = press(&mut app, "E");
+    let [Effect::OpenEditor { writing, text }] = effects.as_slice() else {
+        panic!("{effects:?}");
+    };
+    assert_eq!(text, "Picked up");
+    let write = only_change(
+        app.handle(saved(writing.clone(), "Picked up today"))
+            .unwrap(),
+    );
+    app.handle(Event::CommentChanged {
+        write,
+        result: Ok(()),
+    })
+    .unwrap();
+    assert_eq!(
+        editor_text(&mut app, "E"),
+        "Picked up today",
+        "once one is taken, the next edit starts from the comment"
     );
 }
 
