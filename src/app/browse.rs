@@ -215,11 +215,8 @@ pub(super) fn cycles_loaded(
             cycles.cycles = loaded;
             cycles.load = Progress::Done;
             cycles.loaded_at = now;
-            if reloading {
-                sync::reloaded(state, None);
-            }
         }
-        Err(failure) if reloading => sync::reloaded(state, Some(failure)),
+        Err(failure) if reloading => sync::reload_failed(state, failure),
         Err(failure) => {
             cycles.load = Progress::Failed(failure.message.clone());
             state.record(failure);
@@ -270,11 +267,8 @@ pub(super) fn projects_loaded(state: &mut State, result: Result<ProjectList, Fai
             projects.projects = list.projects;
             projects.load = Progress::Done;
             projects.loaded_at = now;
-            if reloading {
-                sync::reloaded(state, None);
-            }
         }
-        Err(failure) if reloading => sync::reloaded(state, Some(failure)),
+        Err(failure) if reloading => sync::reload_failed(state, failure),
         Err(failure) => {
             state.projects.load = Progress::Failed(failure.message.clone());
             state.record(failure);
@@ -506,9 +500,8 @@ fn relisted(state: &mut State, listing: Listing, result: Result<SearchResults, F
                     results::rebuild(state);
                 }
             });
-            sync::reloaded(state, None);
         }
-        Err(failure) => sync::reloaded(state, Some(failure)),
+        Err(failure) => sync::reload_failed(state, failure),
     }
 }
 

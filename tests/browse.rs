@@ -10,7 +10,7 @@ use std::collections::VecDeque;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use insta::assert_snapshot;
 use jiff::SignedDuration;
-use linear_rat::app::{App, Edit, Effect, Event, Failure, Screen, State, cycle_title};
+use linear_rat::app::{App, Edit, Effect, Event, Failure, Screen, State, SyncFailure, cycle_title};
 use linear_rat::linear::model::Priority;
 use linear_rat::linear::{ErrorKind, FakeClient, LinearClient, demo};
 use ratatui::backend::TestBackend;
@@ -562,20 +562,64 @@ async fn a_cycle_list_reloaded_late_does_not_replace_another_cycles_list() {
     assert_eq!(app.state().results.ids(), wanted.as_slice());
 }
 
+/// A poll that reached no team, so sync is failing.
+fn failed_poll() -> Event {
+    Event::Polled {
+        changes: Vec::new(),
+        failure: Some(SyncFailure::Failed(Failure::new(
+            ErrorKind::Other,
+            "poll for changes",
+            "Linear could not be reached",
+        ))),
+    }
+}
+
 #[tokio::test]
-async fn a_reload_shows_in_the_sync_indicator_like_a_poll() {
+async fn a_projects_reload_is_not_an_issue_sync() {
     let mut app = sized(100, 24);
     run(&mut app, "5").await;
     tick(&mut app, 30);
+    app.handle(failed_poll()).unwrap();
+    let synced = app.state().sync_status.last_synced();
     press(&mut app, "r");
 
     let list = FakeClient.viewer_projects().await.unwrap();
-    app.handle(Event::ProjectsLoaded(Ok(list))).unwrap();
+    let effects = app.handle(Event::ProjectsLoaded(Ok(list))).unwrap();
 
-    let at = demo::NOW
-        .checked_add(SignedDuration::from_secs(30))
-        .unwrap();
-    assert_eq!(app.state().sync_status.last_synced(), Some(at));
+    assert_eq!(app.state().sync_status.last_synced(), synced);
+    assert!(app.state().sync_status.indicator().unwrap().alert);
+    assert!(!effects.contains(&Effect::SaveSnapshot), "{effects:?}");
+}
+
+#[tokio::test]
+async fn a_cycles_reload_is_not_an_issue_sync() {
+    let mut app = sized(100, 24);
+    run(&mut app, "4").await;
+    tick(&mut app, 30);
+    app.handle(failed_poll()).unwrap();
+    let synced = app.state().sync_status.last_synced();
+
+    let effects = press(&mut app, "r");
+    settle(&mut app, effects).await;
+
+    assert_eq!(app.state().sync_status.last_synced(), synced);
+    assert!(app.state().sync_status.indicator().unwrap().alert);
+}
+
+#[tokio::test]
+async fn a_cycles_issue_list_reload_is_not_an_issue_sync() {
+    let mut app = sized(100, 24);
+    run(&mut app, "4").await;
+    run(&mut app, "\n").await;
+    tick(&mut app, 30);
+    app.handle(failed_poll()).unwrap();
+    let synced = app.state().sync_status.last_synced();
+
+    let effects = press(&mut app, "r");
+    settle(&mut app, effects).await;
+
+    assert_eq!(app.state().sync_status.last_synced(), synced);
+    assert!(app.state().sync_status.indicator().unwrap().alert);
 }
 
 #[tokio::test]

@@ -359,17 +359,11 @@ pub(super) fn refresh(state: &mut State) -> Update {
 }
 
 /// A reload of the Cycles or Projects screen, or of a cycle's or project's
-/// issues, came back: the sync indicator shows it as it shows a poll that
-/// ended this way, `failure` `None` for one that went well.
-pub(super) fn reloaded(state: &mut State, failure: Option<Failure>) {
-    match failure {
-        None => {
-            let status = &mut state.sync_status;
-            status.last_synced = status.now;
-            status.problem = None;
-        }
-        Some(failure) => note_failure(state, SyncFailure::Failed(failure)),
-    }
+/// issues, failed: the sync indicator shows it as it shows a failed poll.
+/// One that went well changes nothing here: only an issue poll counts as a
+/// sync, so only a poll sets the time synced and clears a problem.
+pub(super) fn reload_failed(state: &mut State, failure: Failure) {
+    note_failure(state, SyncFailure::Failed(failure));
 }
 
 fn retry_load(state: &mut State) -> Effect {
