@@ -1086,13 +1086,19 @@ fn enter() -> io::Result<TerminalEvent> {
 }
 
 /// Opens the demo Inbox, types `keys` into the runtime against a recording
-/// client, and hands back the notification focused before the keys and
-/// the inbox mutations the client was sent.
+/// client, and hands back the notification focused before the keys, the
+/// inbox mutations the client was sent and the app's time when they were.
+/// The keys wait for the runtime's first tick, which sets that time; left
+/// to race it, a key could act on the demo's time instead.
 // clippy's allow-unwrap-in-tests does not cover helpers outside #[test] functions.
 #[allow(clippy::unwrap_used)]
 async fn sent_from_the_inbox(
     keys: Vec<io::Result<TerminalEvent>>,
-) -> (linear_rat::linear::model::Notification, Vec<String>) {
+) -> (
+    linear_rat::linear::model::Notification,
+    Vec<String>,
+    Timestamp,
+) {
     let client = CountingClient::default();
     let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
     app.handle(Event::NotificationsLoaded {
@@ -1109,23 +1115,29 @@ async fn sent_from_the_inbox(
         .unwrap()
         .clone();
 
+    let mut keys = Some(keys);
+    let after_the_first_tick = Box::pin(
+        stream::once(tokio::time::sleep(Duration::from_millis(1)))
+            .flat_map(move |()| stream::iter(keys.take().unwrap_or_default()))
+            .chain(stream::pending()),
+    );
     let running = runtime::run(
         &mut app,
         Some(&client),
         None,
-        input(keys),
+        after_the_first_tick,
         future::pending(),
     );
     let stopped = tokio::time::timeout(Duration::from_millis(200), running).await;
 
     assert!(stopped.is_err(), "the runtime stopped: {stopped:?}");
     let sent = client.inbox.lock().unwrap().clone();
-    (focused, sent)
+    (focused, sent, app.state().now())
 }
 
 #[tokio::test(start_paused = true)]
 async fn m_sends_the_notification_read_and_again_unread() {
-    let (focused, sent) = sent_from_the_inbox(vec![press('m'), press('m')]).await;
+    let (focused, sent, _) = sent_from_the_inbox(vec![press('m'), press('m')]).await;
 
     assert_eq!(
         sent,
@@ -1138,22 +1150,22 @@ async fn m_sends_the_notification_read_and_again_unread() {
 
 #[tokio::test(start_paused = true)]
 async fn shift_m_sends_the_issue_to_mark_read() {
-    let (focused, sent) = sent_from_the_inbox(vec![press('M')]).await;
+    let (focused, sent, _) = sent_from_the_inbox(vec![press('M')]).await;
 
     assert_eq!(sent, [format!("read issue {}", focused.issue_id)]);
 }
 
 #[tokio::test(start_paused = true)]
 async fn z_sends_the_snooze_until_the_preset() {
-    let (focused, sent) = sent_from_the_inbox(vec![press('z'), enter()]).await;
+    let (focused, sent, now) = sent_from_the_inbox(vec![press('z'), enter()]).await;
 
-    let until = demo::NOW + jiff::SignedDuration::from_hours(1);
+    let until = now + jiff::SignedDuration::from_hours(1);
     assert_eq!(sent, [format!("update {} snooze {until}", focused.id)]);
 }
 
 #[tokio::test(start_paused = true)]
 async fn shift_a_archives_the_notification_as_the_viewer_waits() {
-    let (focused, sent) = sent_from_the_inbox(vec![press('A')]).await;
+    let (focused, sent, _) = sent_from_the_inbox(vec![press('A')]).await;
 
     assert_eq!(sent, [format!("archive {} Urgent", focused.id)]);
 }
@@ -1173,7 +1185,7 @@ async fn archive_all_read_sends_each_archive_in_the_background() {
     keys.extend("archive all read".chars().map(press));
     keys.push(enter());
 
-    let (_, mut sent) = sent_from_the_inbox(keys).await;
+    let (_, mut sent, _) = sent_from_the_inbox(keys).await;
 
     sent.sort();
     let mut read = read;
