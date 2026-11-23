@@ -135,7 +135,7 @@ Polling stays the source of correctness, as ADR 0003 decides: Linear replays not
 
 When Linear closes the socket, lrat logs the close frame (code and reason) under `$XDG_STATE_HOME/lrat/` and reconnects. The `graphql-transport-ws` protocol Linear speaks defines 4400 (an invalid message), 4401 (unauthorized), 4403 (forbidden), 4408 (no `connection_init` in time), 4409 (a subscription id used twice), 4429 (too many `connection_init` messages) and 4500 (a server error); which of them Linear sends in practice is not recorded here yet.
 
-Linear also sends back the changes you make yourself. That echo carries your change, and the store keeps the newer copy, so it redraws nothing. With two edits of one issue in flight, the echo of the first shows the issue as the first edit left it until the second is answered, exactly as Linear's answer to the first edit does, so lrat does not drop echoes.
+Linear also sends back the changes you make yourself. That echo carries your change, and the store keeps the newer copy, so it changes nothing on screen. With two edits of one issue in flight, the echo of the first shows the issue as the first edit left it until the second is answered, exactly as Linear's answer to the first edit does, so lrat does not drop echoes.
 
 ## `[analytics]`
 
