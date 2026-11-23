@@ -371,6 +371,24 @@ pub enum LiveEvent {
     Issue(TeamChanges),
     /// A comment was added to an issue.
     Comment(PostedComment),
+    /// An issue was archived. Like [`LiveEvent::Issue`], it moves no
+    /// watermark.
+    Archived(TeamChanges),
+    /// An issue was brought back from the archive.
+    Unarchived(TeamChanges),
+    /// A comment on an issue was edited, resolved or reacted to.
+    CommentUpdated(PostedComment),
+    /// A comment on an issue was deleted.
+    CommentDeleted {
+        issue_id: String,
+        comment_id: String,
+    },
+    /// An issue notification was created, read, snoozed or archived, for
+    /// the person with id `recipient_id`, who may not be the viewer.
+    Notification {
+        recipient_id: String,
+        loaded: NotificationsLoaded,
+    },
 }
 
 /// Issue notifications Linear sent, with the issues they are about and the

@@ -439,13 +439,7 @@ impl Store {
     /// answered before a write in flight cannot undo what the write shows;
     /// an archived one leaves the store. Returns whether anything changed.
     pub fn merge_notifications(&mut self, loaded: &NotificationsLoaded) -> bool {
-        let mut changed = false;
-        for issue in &loaded.issues {
-            changed |= self.upsert_issue(issue.clone());
-        }
-        by_id(&mut self.cycles, &loaded.cycles, |cycle| &cycle.id);
-        by_id(&mut self.teams, &loaded.teams, |team| &team.id);
-        by_id(&mut self.members, &loaded.members, |member| &member.id);
+        let mut changed = self.merge_notification_refs(loaded);
         for notification in &loaded.notifications {
             changed |= self.merge_notification(notification.clone());
             self.notifications_watermark = self
@@ -455,18 +449,36 @@ impl Store {
         changed
     }
 
+    /// Takes in the issues, cycles, teams and people `loaded` refers to.
+    /// Returns whether an issue changed.
+    fn merge_notification_refs(&mut self, loaded: &NotificationsLoaded) -> bool {
+        let mut changed = false;
+        for issue in &loaded.issues {
+            changed |= self.upsert_issue(issue.clone());
+        }
+        by_id(&mut self.cycles, &loaded.cycles, |cycle| &cycle.id);
+        by_id(&mut self.teams, &loaded.teams, |team| &team.id);
+        by_id(&mut self.members, &loaded.members, |member| &member.id);
+        changed
+    }
+
     /// Takes in one notification as [`Store::merge_notifications`] does,
-    /// without moving the watermark. Returns whether it changed the store.
-    pub fn merge_notification(&mut self, notification: Notification) -> bool {
-        if self
+    /// without moving the watermark. An archived one leaves unless the
+    /// stored copy is strictly newer, since archiving need not move
+    /// `updatedAt`. Returns whether it changed the store.
+    fn merge_notification(&mut self, notification: Notification) -> bool {
+        let stored = self
             .notifications
             .get(&notification.id)
-            .is_some_and(|stored| stored.updated_at >= notification.updated_at)
-        {
-            return false;
-        }
+            .map(|stored| stored.updated_at);
         if notification.archived_at.is_some() {
+            if stored.is_some_and(|stored| stored > notification.updated_at) {
+                return false;
+            }
             return self.notifications.remove(&notification.id).is_some();
+        }
+        if stored.is_some_and(|stored| stored >= notification.updated_at) {
+            return false;
         }
         self.notifications
             .insert(notification.id.clone(), notification);
@@ -511,6 +523,46 @@ impl Store {
     /// delta starts.
     pub fn notifications_watermark(&self) -> Option<Timestamp> {
         self.notifications_watermark
+    }
+
+    /// Replaces a loaded comment with `posted`, as Linear now has it, and
+    /// stores its author. Returns whether the comment was loaded.
+    pub fn replace_comment(&mut self, posted: PostedComment) -> bool {
+        let comment = posted.comment;
+        let Some(stored) = self
+            .comments
+            .get_mut(&comment.issue_id)
+            .and_then(|comments| comments.iter_mut().find(|known| known.id == comment.id))
+        else {
+            return false;
+        };
+        *stored = comment;
+        if let Some(author) = posted.author {
+            self.members.insert(author.id.clone(), author);
+        }
+        true
+    }
+
+    /// Takes the comment `comment_id` off the loaded comments of
+    /// `issue_id`. Returns whether it was there.
+    pub fn remove_comment(&mut self, issue_id: &str, comment_id: &str) -> bool {
+        let Some(comments) = self.comments.get_mut(issue_id) else {
+            return false;
+        };
+        let before = comments.len();
+        comments.retain(|comment| comment.id != comment_id);
+        comments.len() != before
+    }
+
+    /// Takes in notifications a live event carried, as
+    /// [`Store::merge_notifications`] does but without moving the
+    /// watermark, which only a load may move.
+    pub fn merge_live_notifications(&mut self, loaded: &NotificationsLoaded) -> bool {
+        let mut changed = self.merge_notification_refs(loaded);
+        for notification in &loaded.notifications {
+            changed |= self.merge_notification(notification.clone());
+        }
+        changed
     }
 
     /// Replaces the comments of `issue_id`.

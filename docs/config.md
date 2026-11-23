@@ -112,7 +112,7 @@ noop = ["gg", "<C-d>"]                 # these keys do nothing, and leave every 
 
 lrat polls Linear for changed issues on these intervals, and `r` polls at once. You count as idle after two minutes without a key press.
 
-With `live = true`, lrat also opens Linear's websocket once My Issues has loaded, and an issue created or updated in one of your teams, or a new comment on an issue whose comments are on screen, shows as soon as Linear sends it. Polling keeps running: a poll follows five seconds after the latest live update, and another follows every connection, so nothing missed while the socket was down stays missing. After a disconnect lrat reconnects by itself, waiting a little longer after each failure, up to a minute. With `live = false`, the default, no websocket is opened.
+With `live = true`, lrat also opens Linear's websocket once My Issues has loaded, and what Linear sends shows as soon as it arrives (see [Live updates](#live-updates)). With `live = false`, the default, no websocket is opened.
 
 Between sessions, lrat keeps what it loaded in a snapshot under `$XDG_CACHE_HOME/lrat/` (`~/.cache/lrat/` by default, on macOS too), one file per workspace and viewer, readable only by you and never holding the API key. The next launch shows it before the first request returns. When Linear cannot be reached at launch, the snapshot stays on screen and lrat loads My Issues again every poll interval (or at once with `r`); it polls only after that load confirms the workspace and viewer. Deleting the directory is always safe.
 
@@ -122,6 +122,20 @@ Between sessions, lrat keeps what it loaded in a snapshot under `$XDG_CACHE_HOME
 | `idle-poll-seconds` | 5 to 3600, not less than `active-poll-seconds` | `60` | Seconds between polls while you are idle. |
 | `pause-when-unfocused` | `true`, `false` | `true` | Stop polling while the terminal reports focus lost. |
 | `live` | `true`, `false` | `false` | Also apply live updates from Linear's websocket, as they happen. |
+
+### Live updates
+
+The websocket subscribes, 1.5 seconds apart so Linear does not close it for subscribing too fast, to:
+
+- issues created or updated in each of your teams, and issues archived or unarchived (Linear offers no team filter for those, so lrat drops other teams' issues);
+- comments added, edited, resolved, reacted to or deleted, kept only on an issue lrat holds; a deleted comment the detail had focused is no longer focused;
+- notifications created, read, snoozed or archived, kept only when they are yours and about an issue; they update the Inbox.
+
+Polling stays the source of correctness, as ADR 0003 decides: Linear replays nothing missed while the socket was down and has no event for a deleted issue. A poll follows five seconds after the latest live issue update, and another follows every connection. After a disconnect lrat reconnects by itself, waiting a little longer after each failure, up to a minute.
+
+When Linear closes the socket, lrat logs the close frame (code and reason) under `$XDG_STATE_HOME/lrat/` and reconnects. The `graphql-transport-ws` protocol Linear speaks defines 4400 (an invalid message), 4401 (unauthorized), 4403 (forbidden), 4408 (no `connection_init` in time), 4409 (a subscription id used twice), 4429 (too many `connection_init` messages) and 4500 (a server error); which of them Linear sends in practice is not recorded here yet.
+
+Linear also sends back the changes you make yourself. That echo carries your change, and the store keeps the newer copy, so it redraws nothing. With two edits of one issue in flight, the echo of the first shows the issue as the first edit left it until the second is answered, exactly as Linear's answer to the first edit does, so lrat does not drop echoes.
 
 ## `[analytics]`
 

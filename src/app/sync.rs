@@ -472,12 +472,17 @@ fn forget_archived(state: &mut State, changes: &TeamChanges) {
     }
 }
 
-/// Applies a live event: an issue merges through the same newer-wins path
-/// as a poll, without moving a watermark, and a comment joins the comments
+/// Applies a live event: an issue, created, updated, archived or
+/// unarchived, merges through the same newer-wins path as a poll, without
+/// moving a watermark, and a comment joins, replaces or leaves the comments
 /// already loaded. An issue event that changed the store schedules a delta
 /// poll [`LIVE_POLL_AFTER`] after the latest one; a comment schedules none,
 /// since a delta poll fetches no comments. A new connection asks for a poll
 /// at once, to catch up.
+///
+/// Events Linear does not filter are kept only when they concern the
+/// viewer: a comment only on an issue in the store, a notification only
+/// for the viewer.
 pub(super) fn live(state: &mut State, event: LiveEvent) -> Update {
     let status = &mut state.sync_status;
     let redraw = match event {
@@ -485,7 +490,9 @@ pub(super) fn live(state: &mut State, event: LiveEvent) -> Update {
             status.catch_up = true;
             false
         }
-        LiveEvent::Issue(changes) => {
+        LiveEvent::Issue(changes)
+        | LiveEvent::Archived(changes)
+        | LiveEvent::Unarchived(changes) => {
             let changed = state.store.apply(&changes);
             if changed {
                 status.live_poll_at = status
@@ -498,9 +505,47 @@ pub(super) fn live(state: &mut State, event: LiveEvent) -> Update {
         }
         LiveEvent::Comment(posted) => {
             let issue_id = posted.comment.issue_id.clone();
+            if state.store.issue(&issue_id).is_none() {
+                return Update::default();
+            }
             let before = state.store.comments(&issue_id).map(<[_]>::len);
             state.store.add_comment(posted);
             state.store.comments(&issue_id).map(<[_]>::len) != before
+        }
+        LiveEvent::CommentUpdated(posted) => {
+            if state.store.issue(&posted.comment.issue_id).is_none() {
+                return Update::default();
+            }
+            state.store.replace_comment(posted)
+        }
+        LiveEvent::CommentDeleted {
+            issue_id,
+            comment_id,
+        } => {
+            if state.store.issue(&issue_id).is_none() {
+                return Update::default();
+            }
+            if state.detail.focused_comment(&issue_id) == Some(comment_id.as_str()) {
+                state.detail.focus_comment(&issue_id, None);
+            }
+            state.store.remove_comment(&issue_id, &comment_id)
+        }
+        LiveEvent::Notification {
+            recipient_id,
+            loaded,
+        } => {
+            let for_viewer = state
+                .store
+                .viewer()
+                .is_some_and(|viewer| viewer.id == recipient_id);
+            if !for_viewer {
+                return Update::default();
+            }
+            let changed = state.store.merge_live_notifications(&loaded);
+            if changed {
+                state.rebuild_lists();
+            }
+            changed
         }
     };
     let mut effects = Vec::new();

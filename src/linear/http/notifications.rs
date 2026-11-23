@@ -216,6 +216,14 @@ pub(super) struct NotificationNode {
     pub(super) reaction_emoji: Option<String>,
     #[serde(default)]
     pub(super) issue: Option<IssueNode>,
+    /// The recipient, which only the live events ask for.
+    #[serde(default)]
+    pub(super) user: Option<IdOnly>,
+}
+
+#[derive(Deserialize)]
+pub(super) struct IdOnly {
+    pub(super) id: String,
 }
 
 impl NotificationNode {

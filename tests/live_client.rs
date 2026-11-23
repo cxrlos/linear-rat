@@ -539,3 +539,41 @@ async fn with_live_off_no_socket_is_opened() {
 async fn with_live_on_the_runtime_opens_the_socket() {
     assert!(dials_with_live(true).await >= 1);
 }
+
+#[tokio::test(start_paused = true)]
+async fn every_subscription_goes_out_spaced_archives_comments_and_notifications_included() {
+    let (client, listener) = client();
+    let server = serve(listener, |mut listener| async move {
+        let mut connection = Connection::accept(&mut listener).await;
+        connection.handshake().await;
+        connection.subscriptions(10).await
+    });
+    let mut events = std::pin::pin!(client.live_events(vec!["team-eng".to_owned()]));
+
+    assert_eq!(events.next().await, Some(LiveEvent::Connected));
+    let subscriptions = finish(server, events.as_mut()).await;
+
+    let ids: Vec<&str> = subscriptions
+        .iter()
+        .map(|(message, _)| message["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        ids,
+        [
+            "issueCreated:team-eng",
+            "issueUpdated:team-eng",
+            "commentCreated",
+            "issueArchived",
+            "issueUnarchived",
+            "commentUpdated",
+            "commentDeleted",
+            "notificationCreated",
+            "notificationUpdated",
+            "notificationArchived",
+        ]
+    );
+    for pair in subscriptions.windows(2) {
+        let gap = pair[1].1 - pair[0].1;
+        assert!(gap >= Duration::from_millis(1500), "{gap:?}");
+    }
+}
