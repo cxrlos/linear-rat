@@ -465,6 +465,42 @@ async fn showing_the_projects_screen_again_reloads_only_once_the_poll_interval_p
 }
 
 #[tokio::test]
+async fn a_background_reload_does_not_raise_problems_the_viewer_dismissed() {
+    let mut app = sized(100, 24);
+    tick(&mut app, 0);
+    press(&mut app, "5");
+    let mut list = FakeClient.viewer_projects().await.unwrap();
+    list.problems = vec!["Only the first 50 projects loaded".to_owned()];
+    app.handle(Event::ProjectsLoaded(Ok(list.clone()))).unwrap();
+    assert!(app.state().notice.is_some());
+
+    // Any key dismisses the notice; going away and back once the rows are
+    // stale reloads them in the background.
+    press(&mut app, "1");
+    tick(&mut app, 30);
+    assert_eq!(browse_loads(press(&mut app, "5")), [Effect::LoadProjects]);
+    app.handle(Event::ProjectsLoaded(Ok(list))).unwrap();
+
+    assert_eq!(app.state().notice, None);
+}
+
+#[tokio::test]
+async fn a_reload_raises_problems_the_last_load_did_not_have() {
+    let mut app = sized(100, 24);
+    run(&mut app, "5").await;
+    press(&mut app, "r");
+
+    let mut list = FakeClient.viewer_projects().await.unwrap();
+    list.problems = vec!["Only the first 50 projects loaded".to_owned()];
+    app.handle(Event::ProjectsLoaded(Ok(list))).unwrap();
+
+    assert_eq!(
+        app.state().notice.as_deref(),
+        Some("Only the first 50 projects loaded")
+    );
+}
+
+#[tokio::test]
 async fn going_back_to_a_stale_cycles_screen_reloads_it() {
     let mut app = sized(100, 24);
     tick(&mut app, 0);

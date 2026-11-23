@@ -80,6 +80,9 @@ pub struct Projects {
     reloading: bool,
     /// The project whose issue list in Results is loading again.
     relisting: Option<String>,
+    /// What Linear could not give in the last load, so a reload raises
+    /// only problems the viewer has not seen.
+    problems: Vec<String>,
 }
 
 impl Projects {
@@ -241,15 +244,18 @@ pub(super) fn open_projects(state: &mut State) -> Vec<Effect> {
 }
 
 /// Takes in the projects, the focus kept on the same project. What Linear
-/// could not give becomes the notice, unless one is already showing. A
-/// reload that failed keeps the projects shown.
+/// could not give becomes the notice, unless one is already showing or a
+/// reload brought the same problems as the last load, which the viewer
+/// has seen. A reload that failed keeps the projects shown.
 pub(super) fn projects_loaded(state: &mut State, result: Result<ProjectList, Failure>) {
     let reloading = std::mem::take(&mut state.projects.reloading);
     match result {
         Ok(list) => {
-            if state.notice.is_none() {
+            let seen = reloading && list.problems == state.projects.problems;
+            if state.notice.is_none() && !seen {
                 state.notice = super::state::summary(&list.problems);
             }
+            state.projects.problems.clone_from(&list.problems);
             state.store.merge_projects(&list);
             state.rebuild_lists();
             let now = state.sync_status.now();
