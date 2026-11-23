@@ -231,6 +231,28 @@ fn tab_completes_as_far_as_the_entries_agree_and_lists_them() {
 }
 
 #[test]
+fn tab_leaves_hidden_entries_out_unless_the_name_starts_with_a_dot() {
+    let dir = std::env::temp_dir().join(format!("lrat-attach-hidden-{}", std::process::id()));
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(dir.join(".notes"), "").unwrap();
+    fs::write(dir.join("notes.txt"), "").unwrap();
+    let dir = dir.display();
+    let mut app = app();
+    press(&mut app, &format!("F{dir}/"));
+
+    tab(&mut app);
+
+    assert_eq!(typed(&app), format!("{dir}/notes.txt"));
+
+    let mut app = self::app();
+    press(&mut app, &format!("F{dir}/."));
+
+    tab(&mut app);
+
+    assert_eq!(typed(&app), format!("{dir}/.notes"));
+}
+
+#[test]
 fn tab_with_nothing_to_complete_says_so() {
     let mut app = app();
     press(&mut app, "Fzz-nothing-");
