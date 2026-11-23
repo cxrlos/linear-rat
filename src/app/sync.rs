@@ -681,6 +681,33 @@ mod tests {
         NOW.checked_add(SignedDuration::from_secs(seconds)).unwrap()
     }
 
+    /// The store can hold comments of an issue it no longer holds; an edit
+    /// to one of them must not land, since it concerns no issue on screen.
+    #[test]
+    fn a_live_comment_edit_on_an_issue_not_in_the_store_is_dropped() {
+        let mut state = State::default();
+        let mut detail = crate::linear::IssueDetail::demo("issue-des-34");
+        for comment in &mut detail.comments {
+            comment.issue_id = "issue-gone".to_owned();
+        }
+        state.store.merge_detail("issue-gone", &detail);
+        let before = state.store.comments("issue-gone").unwrap().to_vec();
+        let mut edited = before[0].clone();
+        edited.body = "Edited elsewhere".to_owned();
+
+        let update = live(
+            &mut state,
+            LiveEvent::CommentUpdated(crate::linear::PostedComment {
+                comment: edited,
+                author: None,
+            }),
+        );
+
+        assert!(!update.redraw);
+        assert!(update.effects.is_empty(), "{:?}", update.effects);
+        assert_eq!(state.store.comments("issue-gone").unwrap(), before);
+    }
+
     #[test]
     fn ages_are_seconds_then_minutes_hours_and_days() {
         assert_eq!(age(at(59), NOW), "59s");
