@@ -1,6 +1,7 @@
 //! The real client's comment changes against a local fake HTTP server:
 //! replies, edits, deletes, resolving and unresolving, what each sends and
-//! how the answer is read.
+//! how the answer is read; and adding and removing reactions on issues and
+//! comments.
 
 // clippy's allow-unwrap-in-tests does not cover helpers outside #[test] functions.
 #![allow(clippy::unwrap_used)]
@@ -8,7 +9,7 @@
 use std::time::Duration;
 
 use linear_rat::auth::ApiKey;
-use linear_rat::linear::{ClientConfig, ClientError, HttpClient, LinearClient};
+use linear_rat::linear::{ClientConfig, ClientError, HttpClient, LinearClient, ReactionTarget};
 use serde_json::{Value, json};
 use wiremock::matchers::method;
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -156,4 +157,82 @@ async fn a_change_linear_rejects_is_an_error_with_its_message() {
         matches!(&error, ClientError::GraphQl(errors) if errors[0].message.contains("Entity not found")),
         "{error:?}"
     );
+}
+
+fn reaction_created(id: &str, emoji: &str) -> Value {
+    json!({ "data": { "reactionCreate": {
+        "success": true,
+        "reaction": {
+            "id": id,
+            "emoji": emoji,
+            "createdAt": "2026-11-02T15:00:01.000Z",
+            "user": { "id": "user-mira" }
+        }
+    } } })
+}
+
+#[tokio::test]
+async fn a_reaction_on_a_comment_sends_the_comment_and_reads_it_back() {
+    let server = server_answering(reaction_created("reaction-7", "🎉")).await;
+
+    let reaction = client_for(&server)
+        .add_reaction(&ReactionTarget::Comment("comment-9".to_owned()), "🎉")
+        .await
+        .unwrap();
+
+    let body = sent(&server).await;
+    assert!(query(&body).contains("mutation ReactionCreate"));
+    assert_eq!(
+        body["variables"],
+        json!({ "input": { "commentId": "comment-9", "emoji": "🎉" } })
+    );
+    assert_eq!(reaction.id, "reaction-7");
+    assert_eq!(reaction.emoji, "🎉");
+    assert_eq!(reaction.user_id.as_deref(), Some("user-mira"));
+}
+
+#[tokio::test]
+async fn a_reaction_on_an_issue_sends_the_issue() {
+    let server = server_answering(reaction_created("reaction-8", "👍")).await;
+
+    client_for(&server)
+        .add_reaction(&ReactionTarget::Issue("issue-1".to_owned()), "👍")
+        .await
+        .unwrap();
+
+    let body = sent(&server).await;
+    assert_eq!(
+        body["variables"],
+        json!({ "input": { "issueId": "issue-1", "emoji": "👍" } })
+    );
+}
+
+#[tokio::test]
+async fn removing_a_reaction_sends_its_id() {
+    let server =
+        server_answering(json!({ "data": { "reactionDelete": { "success": true } } })).await;
+
+    client_for(&server)
+        .remove_reaction("reaction-7")
+        .await
+        .unwrap();
+
+    let body = sent(&server).await;
+    assert!(query(&body).contains("mutation ReactionDelete"));
+    assert_eq!(body["variables"], json!({ "id": "reaction-7" }));
+}
+
+#[tokio::test]
+async fn a_reaction_linear_does_not_confirm_is_an_error() {
+    let server = server_answering(
+        json!({ "data": { "reactionCreate": { "success": false, "reaction": null } } }),
+    )
+    .await;
+
+    let error = client_for(&server)
+        .add_reaction(&ReactionTarget::Issue("issue-1".to_owned()), "👍")
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, ClientError::Decode(_)), "{error:?}");
 }
