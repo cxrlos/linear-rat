@@ -1,3 +1,4 @@
+use super::attach::AttachPrompt;
 use super::create::CreateForm;
 use super::edit::{DuePrompt, EditPicker};
 use super::issue_picker::IssuePicker;
@@ -40,6 +41,8 @@ pub enum Modal {
     Messages { scroll: u16 },
     /// A list to choose one or several issues from, for a purpose.
     IssuePicker(IssuePicker),
+    /// The prompt that attaches a file or a link to an issue.
+    Attach(AttachPrompt),
 }
 
 impl Modal {
@@ -52,7 +55,8 @@ impl Modal {
             | Modal::Create(_)
             | Modal::Choice(_)
             | Modal::DueDate(_)
-            | Modal::IssuePicker(_) => true,
+            | Modal::IssuePicker(_)
+            | Modal::Attach(_) => true,
             Modal::Search(search) => !matches!(search.phase, Phase::Searching { .. }),
             Modal::Cheatsheet { .. }
             | Modal::WhichKey { .. }
@@ -78,6 +82,11 @@ impl Modal {
             Modal::Create(form) => form.text_field(),
             Modal::DueDate(prompt) => {
                 prompt.error = None;
+                Some(&mut prompt.text)
+            }
+            Modal::Attach(prompt) => {
+                prompt.error = None;
+                prompt.matches.clear();
                 Some(&mut prompt.text)
             }
             Modal::Cheatsheet { .. }

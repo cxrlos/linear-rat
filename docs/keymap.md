@@ -55,6 +55,8 @@ The Team Issues list also takes the Issue list keys, and the Cycles screen the C
 | `edit-due-date` | `d` | Set or clear the due date |
 | `edit-text` | `E` | Edit the title and description |
 | `comment` | `c` | Comment in $EDITOR |
+| `attach-file` | `F` | Attach a file |
+| `attach-link` | `W` | Attach a link |
 | `archive` | `A` | Archive the issue |
 | `unarchive` | `U` | Unarchive the issue |
 | `trash` | `X` | Move the issue to the trash |
@@ -111,6 +113,8 @@ The Team Issues list also takes the Issue list keys, and the Cycles screen the C
 | `edit-due-date` | `d` | Set or clear the due date |
 | `edit-text` | `E` | Edit the title and description |
 | `comment` | `c` | Comment in $EDITOR |
+| `attach-file` | `F` | Attach a file |
+| `attach-link` | `W` | Attach a link |
 | `archive` | `A` | Archive the issue |
 | `unarchive` | `U` | Unarchive the issue |
 | `trash` | `X` | Move the issue to the trash |

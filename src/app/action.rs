@@ -104,6 +104,10 @@ pub enum Action {
     SwitchCyclesTeam,
     /// List the issues of the focused cycle or project.
     ListIssues,
+    /// Open the prompt that attaches a local file to the focused issue.
+    AttachFile,
+    /// Open the prompt that attaches a link to the focused issue.
+    AttachLink,
 }
 
 /// What [`Action::Copy`] puts on the clipboard.

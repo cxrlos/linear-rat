@@ -3,6 +3,7 @@
 mod action;
 mod analytics_screen;
 mod arrange;
+mod attach;
 mod browse;
 mod capabilities;
 mod compose;
@@ -42,6 +43,9 @@ use ratatui::layout::Rect;
 pub use action::{Action, Copyable};
 pub use analytics_screen::{AnalyticsScreen, AnalyticsView};
 pub use arrange::{Arrangement, Group, GroupKey, Grouping, Sort, SortKey, arrange, linear_order};
+pub use attach::{
+    AttachPrompt, AttachStep, Attaching, MAX_FILE_SIZE, NewAttachment, Upload, UploadId, Uploads,
+};
 pub use browse::{Cycles, Projects, cycle_counts, cycle_title};
 pub use capabilities::{Capabilities, Capability, WriteClass};
 pub use compose::{Drafts, IssueDraft, NewComment, NewIssue, Writing, is_local};

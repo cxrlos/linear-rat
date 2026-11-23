@@ -14,12 +14,14 @@ use futures_util::stream::FuturesUnordered;
 use futures_util::{Stream, StreamExt};
 use jiff::{SignedDuration, Timestamp};
 use ratatui::backend::Backend;
+use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::time::{Instant, MissedTickBehavior};
 
 use crate::app::{
     App, Effect, Event, Failure, Lifecycle, LifecycleWrite, LoadError, NewComment, NewIssue,
     RelationWrite, SEARCH_PAUSE, SyncFailure, TeamPoll, Write,
 };
+use crate::app::{Attaching, NewAttachment};
 use crate::linear::{
     AnalyticsWindow, ClientError, ErrorKind, LinearClient, LiveEvent, RelationCreate, SearchQuery,
     Urgency,
@@ -52,6 +54,9 @@ struct Reach<'a, C> {
     snapshots: Option<&'a SnapshotCache>,
     releases: Option<&'a ReleaseCheck>,
     live: Cell<Option<Live<'a>>>,
+    /// Where uploads report their progress, as events the loop feeds in
+    /// as they come.
+    progress: UnboundedSender<Event>,
 }
 
 /// Runs until the app asks to quit, `shutdown` resolves, or terminal input
@@ -105,13 +110,15 @@ where
     S: Future<Output = ()>,
     J: Stream<Item = JobControl>,
 {
+    let (progress, progressed) = mpsc::unbounded_channel();
     let reach = Reach {
         client,
         snapshots,
         releases,
         live: Cell::new(None),
+        progress,
     };
-    let result = run_loop(app, &reach, input, shutdown, job_control).await;
+    let result = run_loop(app, &reach, progressed, input, shutdown, job_control).await;
     save_snapshot(app, &reach);
     result
 }
@@ -119,6 +126,7 @@ where
 async fn run_loop<B, C, I, S, J>(
     app: &mut App<B>,
     reach: &Reach<'_, C>,
+    mut progressed: UnboundedReceiver<Event>,
     mut input: I,
     shutdown: S,
     job_control: J,
@@ -154,6 +162,7 @@ where
             }
             Some(event) = in_flight.next(), if !in_flight.is_empty() => Some(event),
             Some(event) = next_live(&mut live) => Some(Event::Live(event)),
+            Some(event) = progressed.recv() => Some(event),
             Some(signal) = job_control.next() => on_job_control(app, signal, &mut System)?,
             terminal_event = input.next() => match terminal_event {
                 Some(event) => from_terminal(event.context("reading terminal input")?),
@@ -592,6 +601,11 @@ where
             in_flight.push(Box::pin(update_issue_text(reach.client, write, seen, text)));
             Ok(())
         }
+        Effect::Attach(attachment) => {
+            let progress = reach.progress.clone();
+            in_flight.push(Box::pin(attach(reach.client, attachment, progress)));
+            Ok(())
+        }
     };
     if let Err(error) = outcome {
         let failed = effect_failed(action, &error);
@@ -874,6 +888,43 @@ async fn create_comment<C: LinearClient>(client: Option<&C>, comment: NewComment
     Event::CommentCreated { comment, result }
 }
 
+/// Uploads and attaches a file, sending its progress to `progress`, or
+/// attaches a link.
+async fn attach<C: LinearClient>(
+    client: Option<&C>,
+    attachment: NewAttachment,
+    progress: UnboundedSender<Event>,
+) -> Event {
+    let action = attachment.action();
+    let result = match client {
+        Some(client) => {
+            let id = attachment.issue_id.as_str();
+            match &attachment.what {
+                Attaching::File { upload, file } => {
+                    let upload = *upload;
+                    let report = move |sent| {
+                        // Closed only once the loop has ended.
+                        let _ = progress.send(Event::UploadProgress { upload, sent });
+                    };
+                    client.attach_file(id, file, report).await
+                }
+                Attaching::Link { url, title } => {
+                    client.attach_link(id, url, title.as_deref()).await
+                }
+            }
+            .map_err(|error| Failure::from_client(&action, &error))
+        }
+        None => Err(no_client(&action)),
+    };
+    match &result {
+        Ok(_) => tracing::info!(issue = %attachment.identifier, "Linear stored an attachment"),
+        Err(error) => {
+            tracing::warn!(issue = %attachment.identifier, %error, "Linear did not attach");
+        }
+    }
+    Event::Attached { attachment, result }
+}
+
 async fn create_issue<C: LinearClient>(client: Option<&C>, issue: NewIssue) -> Event {
     let result = match client {
         Some(client) => client
@@ -1072,6 +1123,7 @@ mod tests {
             snapshots: None,
             releases: None,
             live: Cell::new(None),
+            progress: mpsc::unbounded_channel().0,
         };
         execute(app, effect, &reach, &mut in_flight, outside).unwrap()
     }
@@ -1132,6 +1184,7 @@ mod tests {
                 snapshots: None,
                 releases: None,
                 live: Cell::new(None),
+                progress: mpsc::unbounded_channel().0,
             };
             for effect in [Effect::LoadMyIssues, Effect::Poll(Vec::new())] {
                 let flow = execute(
@@ -1159,6 +1212,7 @@ mod tests {
             snapshots: None,
             releases: None,
             live: Cell::new(None),
+            progress: mpsc::unbounded_channel().0,
         };
         let flow = execute(
             &mut app,
@@ -1193,6 +1247,7 @@ mod tests {
             snapshots: None,
             releases: None,
             live: Cell::new(None),
+            progress: mpsc::unbounded_channel().0,
         };
         let started = Instant::now();
 
@@ -1246,6 +1301,7 @@ mod tests {
             snapshots: None,
             releases: None,
             live: Cell::new(None),
+            progress: mpsc::unbounded_channel().0,
         };
         let frames = app.frames_drawn();
 
@@ -1274,6 +1330,7 @@ mod tests {
             snapshots: None,
             releases: None,
             live: Cell::new(None),
+            progress: mpsc::unbounded_channel().0,
         };
 
         let flow = execute(&mut app, effect, &reach, &mut in_flight, &mut outside).unwrap();
@@ -1455,6 +1512,108 @@ mod tests {
                 "suspend lrat",
                 "could not suspend lrat"
             )))
+        );
+    }
+
+    /// Starts attaching the crate's `Cargo.toml` to the focused issue, as
+    /// Shift-F, its path and Enter do, and hands back the attach asked for.
+    fn start_upload(app: &mut App<TestBackend>) -> NewAttachment {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+        let key = |code| Event::Key(KeyEvent::new(code, KeyModifiers::NONE));
+        let mut effects = Vec::new();
+        for c in "FCargo.toml".chars() {
+            effects.extend(app.handle(key(KeyCode::Char(c))).unwrap());
+        }
+        effects.extend(app.handle(key(KeyCode::Enter)).unwrap());
+        match effects.as_slice() {
+            [Effect::Attach(attachment)] => attachment.clone(),
+            other => panic!("expected one attachment, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn an_attach_joins_the_requests_in_flight_and_reports_its_progress() {
+        let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+        let attachment = start_upload(&mut app);
+        let Attaching::File { upload, file } = &attachment.what else {
+            panic!("{attachment:?}");
+        };
+        let (progress, mut progressed) = mpsc::unbounded_channel();
+        let mut in_flight = FuturesUnordered::new();
+        let reach = Reach {
+            client: Some(&FakeClient),
+            snapshots: None,
+            releases: None,
+            live: Cell::new(None),
+            progress,
+        };
+
+        let flow = execute(
+            &mut app,
+            Effect::Attach(attachment.clone()),
+            &reach,
+            &mut in_flight,
+            &mut Fake::default(),
+        )
+        .unwrap();
+        let event = in_flight.next().await.unwrap();
+
+        assert_eq!(flow, ControlFlow::Continue(()));
+        let Event::Attached {
+            attachment: answered,
+            result,
+        } = event
+        else {
+            panic!("{event:?}");
+        };
+        assert_eq!(answered, attachment);
+        assert_eq!(result.unwrap().title, "Cargo.toml");
+        assert_eq!(
+            progressed.try_recv().unwrap(),
+            Event::UploadProgress {
+                upload: *upload,
+                sent: file.size,
+            }
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn upload_progress_reaches_the_indicator_while_the_loop_waits() {
+        let mut app = App::new(TestBackend::new(80, 24), State::demo()).unwrap();
+        let attachment = start_upload(&mut app);
+        let Attaching::File { upload, file } = &attachment.what else {
+            panic!("{attachment:?}");
+        };
+        let (progress, progressed) = mpsc::unbounded_channel();
+        progress
+            .send(Event::UploadProgress {
+                upload: *upload,
+                sent: file.size * 42 / 100 + 1,
+            })
+            .unwrap();
+        let reach = Reach {
+            client: Some(&FakeClient),
+            snapshots: None,
+            releases: None,
+            live: Cell::new(None),
+            progress,
+        };
+
+        let running = run_loop(
+            &mut app,
+            &reach,
+            progressed,
+            futures_util::stream::pending(),
+            std::future::pending(),
+            futures_util::stream::pending(),
+        );
+        let stopped = tokio::time::timeout(Duration::from_millis(200), running).await;
+
+        assert!(stopped.is_err(), "the loop stopped: {stopped:?}");
+        assert!(
+            screen(&app).contains("uploading Cargo.toml 42%"),
+            "{}",
+            screen(&app)
         );
     }
 }

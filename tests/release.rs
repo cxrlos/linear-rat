@@ -285,7 +285,9 @@ fn the_notice_goes_first_when_the_tab_row_is_too_narrow() {
 
 #[test]
 fn the_cheatsheet_shows_the_full_line_with_how_to_upgrade() {
-    let mut app = app_at(120, state(true, Channel::Homebrew, with_latest(newer())));
+    // Tall enough that the line below every pane needs no scrolling.
+    let state = state(true, Channel::Homebrew, with_latest(newer()));
+    let mut app = App::new(TestBackend::new(120, 32), state).unwrap();
 
     app.handle(key('?')).unwrap();
 

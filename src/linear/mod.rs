@@ -13,6 +13,7 @@ use std::cell::RefCell;
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
+use std::path::PathBuf;
 
 use futures_util::Stream;
 use jiff::civil::Date;
@@ -270,6 +271,37 @@ pub trait LinearClient {
     /// What `lrat doctor` reports about the key beyond its viewer: the
     /// viewer's role, Linear's `rateLimitStatus` and Linear's clock.
     fn diagnostics(&self) -> impl Future<Output = Result<Diagnostics, ClientError>> + Send;
+
+    /// Uploads `file` to the URL Linear's `fileUpload` signs for it, with
+    /// only the headers Linear returns, then attaches the uploaded file to
+    /// the issue with id `issue_id`, titled with its name. `progress` hears
+    /// how many bytes have gone out so far, as they go.
+    fn attach_file(
+        &self,
+        issue_id: &str,
+        file: &FileUpload,
+        progress: impl FnMut(u64) + Send + Sync + 'static,
+    ) -> impl Future<Output = Result<Attachment, ClientError>> + Send;
+
+    /// Attaches `url` to the issue with id `issue_id`, titled `title`, or as
+    /// Linear names it when `None`.
+    fn attach_link(
+        &self,
+        issue_id: &str,
+        url: &str,
+        title: Option<&str>,
+    ) -> impl Future<Output = Result<Attachment, ClientError>> + Send;
+}
+
+/// A file the viewer chose to attach, as lrat found it before uploading.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileUpload {
+    pub path: PathBuf,
+    /// The file's name, which titles the attachment.
+    pub name: String,
+    /// The MIME type guessed from the extension.
+    pub content_type: String,
+    pub size: u64,
 }
 
 /// The viewer's role, the rate limits and Linear's clock, as `lrat doctor`
@@ -864,6 +896,29 @@ thread_local! {
     /// Relations created through this client, and the ids of those deleted.
     static DEMO_RELATIONS: RefCell<(Vec<IssueRelation>, Vec<String>)> =
         const { RefCell::new((Vec::new(), Vec::new())) };
+    static DEMO_ATTACHMENTS: RefCell<Vec<Attachment>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Attaches `url` to the demo issue with id `issue_id` as Linear does: an
+/// attachment with the same URL on the issue is replaced.
+fn demo_attach(issue_id: &str, url: &str, title: &str) -> Result<Attachment, ClientError> {
+    if !demo_has_issue(&demo::workspace(), issue_id) {
+        return Err(not_found("issue", issue_id));
+    }
+    Ok(DEMO_ATTACHMENTS.with_borrow_mut(|attachments| {
+        attachments.retain(|known| known.issue_id != issue_id || known.url != url);
+        let attachment = Attachment {
+            id: format!("demo-attachment-new-{}", attachments.len() + 1),
+            issue_id: issue_id.to_owned(),
+            url: url.to_owned(),
+            title: title.to_owned(),
+            subtitle: None,
+            source_type: None,
+            status: None,
+        };
+        attachments.push(attachment.clone());
+        attachment
+    }))
 }
 
 /// The demo issue with id `issue_id` as edits through the fake client left
@@ -1237,6 +1292,14 @@ impl LinearClient for FakeClient {
                     .cloned(),
             );
         });
+        DEMO_ATTACHMENTS.with_borrow(|attachments| {
+            for attachment in attachments.iter().filter(|a| a.issue_id == issue_id) {
+                detail
+                    .attachments
+                    .retain(|known| known.url != attachment.url);
+                detail.attachments.push(attachment.clone());
+            }
+        });
         Ok(detail)
     }
 
@@ -1507,6 +1570,37 @@ impl LinearClient for FakeClient {
             ],
             server_time: Some(demo::NOW),
         })
+    }
+
+    /// The file attached under a made-up upload URL, its bytes reported
+    /// sent at once and never read.
+    async fn attach_file(
+        &self,
+        issue_id: &str,
+        file: &FileUpload,
+        mut progress: impl FnMut(u64) + Send + Sync + 'static,
+    ) -> Result<Attachment, ClientError> {
+        let url = format!("https://uploads.linear.app/demo/{}/{}", issue_id, file.name);
+        let attachment = demo_attach(issue_id, &url, &file.name)?;
+        progress(file.size);
+        Ok(attachment)
+    }
+
+    /// The link attached, titled with its host when no title is given, as
+    /// Linear names a link.
+    async fn attach_link(
+        &self,
+        issue_id: &str,
+        url: &str,
+        title: Option<&str>,
+    ) -> Result<Attachment, ClientError> {
+        let host = url
+            .split_once("://")
+            .map_or(url, |(_, rest)| rest)
+            .split(['/', '?', '#'])
+            .next()
+            .unwrap_or(url);
+        demo_attach(issue_id, url, title.unwrap_or(host))
     }
 
     /// The `updatedAt` of the issue as edits through this client left it.

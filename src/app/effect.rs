@@ -1,6 +1,8 @@
 use jiff::Timestamp;
 
-use super::{LifecycleWrite, NewComment, NewIssue, RelationWrite, TeamPoll, Write, Writing};
+use super::{
+    LifecycleWrite, NewAttachment, NewComment, NewIssue, RelationWrite, TeamPoll, Write, Writing,
+};
 use crate::linear::{AnalyticsWindow, SearchQuery, TeamQuery, Urgency};
 use crate::release::Record;
 
@@ -154,4 +156,9 @@ pub enum Effect {
     CheckRelease,
     /// Write what the release checks found to the release cache.
     SaveRelease(Record),
+    /// Upload a file and attach it, reporting the upload's progress as
+    /// [`Event::UploadProgress`](super::Event::UploadProgress), or attach a
+    /// link; the result comes back as
+    /// [`Event::Attached`](super::Event::Attached).
+    Attach(NewAttachment),
 }

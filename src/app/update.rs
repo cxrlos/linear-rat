@@ -4,8 +4,8 @@ use ratatui::layout::Size;
 use super::edit::{self, Editable};
 use super::{
     Action, Copyable, Effect, Event, Load, Modal, Palette, Pane, Purpose, Screen, State,
-    analytics_screen, browse, compose, create, detail, issue_picker, lifecycle, links, palette,
-    rearrange, relations, release, results, search, sync, team_issues,
+    analytics_screen, attach, browse, compose, create, detail, issue_picker, lifecycle, links,
+    palette, rearrange, relations, release, results, search, sync, team_issues,
 };
 use crate::keys::{self, Key, Resolution};
 use crate::linear::SearchQuery;
@@ -241,6 +241,8 @@ fn apply(state: &mut State, event: Event) -> Update {
         Event::EditorClosed { writing, result } => compose::closed(state, writing, result),
         Event::CommentCreated { comment, result } => compose::commented(state, &comment, result),
         Event::IssueCreated { issue, result } => compose::created(state, &issue, result),
+        Event::UploadProgress { upload, sent } => attach::progressed(state, upload, sent),
+        Event::Attached { attachment, result } => attach::attached(state, &attachment, result),
     }
 }
 
@@ -371,6 +373,7 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             Some(Modal::DueDate(_)) => edit::accept_due_date(state),
             Some(Modal::Confirm(_)) => lifecycle::confirm(state),
             Some(Modal::IssuePicker(_)) => issue_picker::choose(state, None),
+            Some(Modal::Attach(_)) => attach::accept(state),
             _ => Update::default(),
         },
 
@@ -550,6 +553,7 @@ pub fn perform(state: &mut State, action: Action) -> Update {
             Some(Modal::Search(_)) => search::toggle_comments(state),
             Some(Modal::IssuePicker(_)) => issue_picker::toggle(state, None),
             Some(Modal::Choice(_)) => relations::toggle(state, None),
+            Some(Modal::Attach(_)) => attach::complete(state),
             _ => edit::toggle(state, None),
         },
         Action::ToggleSearchScope => search::toggle_scope(state),
@@ -565,6 +569,8 @@ pub fn perform(state: &mut State, action: Action) -> Update {
         Action::RemoveRelation => relations::open_remove(state),
         Action::ClearParent => relations::clear_parent(state),
         Action::GoToRelated => relations::open_related(state),
+        Action::AttachFile => attach::open_file(state),
+        Action::AttachLink => attach::open_link(state),
         Action::ToggleBlocked if state.screen == Screen::TeamIssues => Update {
             redraw: true,
             effects: team_issues::toggle_blocked(state),
