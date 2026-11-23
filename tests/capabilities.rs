@@ -292,7 +292,7 @@ fn a_narrow_palette_cuts_the_reason_and_keeps_the_key() {
         .iter()
         .find(|line| line.contains("Change the assignee"))
         .unwrap_or_else(|| panic!("{}", lines.join("\n")));
-    assert!(row.contains("… a │"), "{row}");
+    assert!(row.contains("API…") && row.contains(" a │"), "{row}");
 }
 
 #[test]

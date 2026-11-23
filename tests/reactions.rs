@@ -189,7 +189,7 @@ fn counts_cut_at_a_two_cell_emoji_end_in_an_ellipsis() {
     }
 
     assert!(
-        shows(&app, "👍 2  🎉 1  👎 1  😄 1  😕 1  ❤️ 1  …"),
+        shows(&app, "👍 2  🎉 1  👎 1  😄 1  😕 1  ❤️ 1…"),
         "{:#?}",
         screen(&app)
     );
