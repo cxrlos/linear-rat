@@ -4,7 +4,7 @@
 
 These are lrat's default keys. Press `?` in lrat to see the keys of the screen you are on, with the ones that cannot run now muted. Keys are written in the vim notation `config.toml` uses, and each table heading names the config table that rebinds its actions; see [Configuration](https://github.com/cxrlos/linear-rat/blob/main/docs/config.md#keys).
 
-The Team Issues list also takes the Issue list keys, the Cycles screen the Cycles and Projects keys, and a focused comment the Issue detail keys. While an overlay has a text field, as the pickers, the palette and the search do, a character typed without Ctrl or Alt goes into the field instead, except a picker's number keys.
+The Team Issues list also takes the Issue list keys, the Cycles screen the Cycles and Projects keys, and a focused comment the Issue detail keys. While a comment is focused, a Comment key wins over any other key it shares, such as trashing the issue, until `close` drops the focus. While an overlay has a text field, as the pickers, the palette and the search do, a character typed without Ctrl or Alt goes into the field instead, except a picker's number keys.
 
 ## Everywhere (`[keys.global]`)
 
