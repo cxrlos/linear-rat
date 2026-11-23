@@ -522,6 +522,7 @@ const STACKS: &[&[Context]] = &[
     &[Context::List, Context::Global],
     &[Context::Detail, Context::Global],
     &[Context::Analytics, Context::Global],
+    &[Context::Inbox, Context::Global],
     &[Context::Overlay],
 ];
 
