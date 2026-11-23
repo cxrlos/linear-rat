@@ -255,8 +255,24 @@ fn comments_and_history_show_once_loaded_on_a_narrow_terminal() {
 
     let effects = send(&mut app, [enter()]);
     answer(&mut app, effects);
-    send(&mut app, [key('G')]);
+    // Scroll until the comments head the pane, with the history below.
+    for _ in 0..40 {
+        if screen(&app)[2].starts_with("│Comments (") {
+            break;
+        }
+        send(&mut app, [key('j')]);
+    }
 
+    let lines = screen(&app);
+    assert!(lines[2].starts_with("│Comments ("), "{}", lines.join("\n"));
+    assert!(
+        lines.iter().any(|line| line.starts_with("│History")),
+        "{}",
+        lines.join("\n")
+    );
+    // A wide emoji leaves the old text in the cell it covers in the test
+    // backend; a full redraw shows the screen as a terminal would.
+    app.redraw_all().unwrap();
     assert_snapshot!(app.backend());
 }
 
