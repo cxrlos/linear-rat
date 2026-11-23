@@ -382,6 +382,47 @@ fn an_edit_linear_refuses_is_undone_and_its_text_starts_the_next_edit() {
     );
 }
 
+/// The emoji of the reactions on the comment `id`.
+fn reaction_emoji(app: &App<TestBackend>, id: &str) -> Vec<String> {
+    comment(app, id)
+        .unwrap()
+        .reactions
+        .iter()
+        .map(|reaction| reaction.emoji.clone())
+        .collect()
+}
+
+/// Reacts with the picker's `nth` emoji on the focused comment.
+fn react(app: &mut App<TestBackend>, nth: usize) {
+    press(app, "+");
+    let effects = press(app, &nth.to_string());
+    assert!(
+        matches!(effects.as_slice(), [Effect::React(_)]),
+        "{effects:?}"
+    );
+}
+
+#[test]
+fn an_edit_linear_refuses_undoes_only_the_text() {
+    let mut app = app();
+    focus(&mut app, OPEN_REPLY);
+    let body = comment(&app, OPEN_REPLY).unwrap().body;
+    let writing = only_editor(press(&mut app, "E"));
+    let write = only_change(app.handle(saved(writing, "Picked up")).unwrap());
+    react(&mut app, 7);
+    let reacted = reaction_emoji(&app, OPEN_REPLY);
+    assert!(reacted.contains(&"🚀".to_owned()), "{reacted:?}");
+
+    app.handle(Event::CommentChanged {
+        write,
+        result: Err(forbidden(&format!("edit a comment on {FIRST}"))),
+    })
+    .unwrap();
+
+    assert_eq!(comment(&app, OPEN_REPLY).unwrap().body, body);
+    assert_eq!(reaction_emoji(&app, OPEN_REPLY), reacted);
+}
+
 #[test]
 fn an_edit_that_fails_keeps_its_text_for_the_next_edit_until_one_is_taken() {
     let mut app = app();
@@ -512,6 +553,25 @@ fn a_resolve_linear_refuses_opens_the_thread_again() {
             .unwrap()
             .starts_with(&format!("Could not resolve the thread on {FIRST}"))
     );
+}
+
+#[test]
+fn a_resolve_linear_refuses_undoes_only_the_resolve() {
+    let mut app = app();
+    focus(&mut app, OPEN);
+    let write = only_change(press(&mut app, "x"));
+    react(&mut app, 7);
+    let reacted = reaction_emoji(&app, OPEN);
+    assert!(reacted.contains(&"🚀".to_owned()), "{reacted:?}");
+
+    app.handle(Event::CommentChanged {
+        write,
+        result: Err(forbidden(&format!("resolve a thread on {FIRST}"))),
+    })
+    .unwrap();
+
+    assert!(comment(&app, OPEN).unwrap().resolved_at.is_none());
+    assert_eq!(reaction_emoji(&app, OPEN), reacted);
 }
 
 #[test]

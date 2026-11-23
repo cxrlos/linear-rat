@@ -467,13 +467,30 @@ pub(super) fn changed(
     Update::redraw()
 }
 
-/// Puts back what `write` changed.
+/// Puts back what `write` changed, and only that: a change made to the
+/// comment meanwhile, such as a reaction, stays.
 fn roll_back(state: &mut State, write: &CommentWrite) {
     match write.change {
         CommentChange::Delete => state.store.put_back_comments(write.previous.clone()),
-        CommentChange::Edit(_) | CommentChange::Resolve | CommentChange::Unresolve => {
+        CommentChange::Edit(_) => {
             for previous in &write.previous {
-                state.store.replace_comment(previous.clone());
+                let stored = state
+                    .store
+                    .comments(&previous.issue_id)
+                    .and_then(|comments| comments.iter().find(|c| c.id == previous.id))
+                    .cloned();
+                if let Some(mut stored) = stored {
+                    stored.body.clone_from(&previous.body);
+                    stored.edited_at = previous.edited_at;
+                    state.store.replace_comment(stored);
+                }
+            }
+        }
+        CommentChange::Resolve | CommentChange::Unresolve => {
+            for previous in &write.previous {
+                state
+                    .store
+                    .resolve_comment(&previous.id, previous.resolved_at);
             }
         }
     }
