@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0](https://github.com/cxrlos/linear-rat/compare/v0.3.0...v0.4.0) - 2026-11-23
+
+### Added
+
+- complete lrat 0.4.0 ([#143](https://github.com/cxrlos/linear-rat/pull/143))
+
 ## [0.3.0](https://github.com/cxrlos/linear-rat/compare/v0.2.0...v0.3.0) - 2026-11-19
 
 ### Added
