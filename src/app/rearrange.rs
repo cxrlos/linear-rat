@@ -88,7 +88,7 @@ pub(super) fn pick(state: &mut State, nth: Option<usize>) -> Option<Vec<Effect>>
     let Some(Modal::Choice(choice)) = state.modals.top() else {
         return None;
     };
-    let purpose = choice.purpose;
+    let purpose = choice.purpose.clone();
     let name = choice.chosen(nth).cloned()?;
     state.modals.pop();
     let mut arrangement = current(state)?;
@@ -102,7 +102,7 @@ pub(super) fn pick(state: &mut State, nth: Option<usize>) -> Option<Vec<Effect>>
         | Purpose::CyclesTeam
         | Purpose::Filter(_)
         | Purpose::RelationKind
-        | Purpose::RemoveRelations
+        | Purpose::RemoveRelations { .. }
         | Purpose::Reaction
         | Purpose::Snooze => {
             return None;

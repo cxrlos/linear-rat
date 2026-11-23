@@ -107,7 +107,7 @@ pub struct Choice {
 }
 
 /// What picking an entry of a [`Choice`] does.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Purpose {
     /// Show this team in Team Issues.
     Team,
@@ -124,8 +124,9 @@ pub enum Purpose {
     Sort,
     /// Add a relation of this kind to the focused issue.
     RelationKind,
-    /// Remove these relations of the focused issue.
-    RemoveRelations,
+    /// Remove these relations of the issue `issue_id`, the one focused when
+    /// the list opened.
+    RemoveRelations { issue_id: String },
     /// Add this reaction to the focused comment or issue, or remove it.
     Reaction,
     /// Snooze the focused notification until this time.
@@ -135,13 +136,13 @@ pub enum Purpose {
 impl Choice {
     /// What the popup is titled.
     pub fn title(&self) -> String {
-        match self.purpose {
+        match &self.purpose {
             Purpose::Team | Purpose::AnalyticsTeam | Purpose::CyclesTeam => "Team".to_owned(),
             Purpose::Filter(field) => format!("Filter by {}", field.name().to_lowercase()),
             Purpose::Group => "Group by".to_owned(),
             Purpose::Sort => "Sort by".to_owned(),
             Purpose::RelationKind => "Add a relation".to_owned(),
-            Purpose::RemoveRelations => "Remove relations".to_owned(),
+            Purpose::RemoveRelations { .. } => "Remove relations".to_owned(),
             Purpose::Reaction => "React".to_owned(),
             Purpose::Snooze => "Snooze until".to_owned(),
         }

@@ -651,7 +651,7 @@ fn choose(state: &mut State, nth: Option<usize>) -> Update {
     if choice.purpose == Purpose::RelationKind {
         return relations::kind_chosen(state, nth);
     }
-    if choice.purpose == Purpose::RemoveRelations {
+    if matches!(choice.purpose, Purpose::RemoveRelations { .. }) {
         return relations::removal_chosen(state, nth);
     }
     if choice.purpose == Purpose::Reaction {

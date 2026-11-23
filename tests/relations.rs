@@ -15,7 +15,7 @@ use linear_rat::app::{
 use linear_rat::linear::model::{Issue, IssueRelation, RelationKind, RelationType};
 use linear_rat::linear::{
     ErrorKind, FakeClient, IssueDetail, LinearClient, Patch, RelationCreate, SearchQuery,
-    SearchResults, TeamFilter, TeamQuery,
+    SearchResults, TeamChanges, TeamFilter, TeamQuery, demo,
 };
 use ratatui::backend::TestBackend;
 
@@ -414,6 +414,46 @@ fn removing_lists_each_relation_and_deletes_the_chosen_one() {
     })
     .unwrap();
     assert_eq!(relations(&app, DRY_RUN).len(), 2);
+}
+
+#[test]
+fn removing_keeps_to_the_issue_the_list_opened_on_when_the_focus_moves() {
+    let mut app = focused_with_detail("ENG-51");
+    press(&mut app, "Dr");
+
+    // A poll reassigns ENG-51 away, so it leaves My Issues and the focus
+    // moves to another issue while the list is open.
+    let mut reassigned = app.state().store.issue(DRY_RUN).unwrap().clone();
+    reassigned.assignee_id = Some("member-someone-else".to_owned());
+    reassigned.updated_at = reassigned
+        .updated_at
+        .checked_add(jiff::SignedDuration::from_mins(1))
+        .unwrap();
+    app.handle(Event::Polled {
+        changes: vec![TeamChanges {
+            team_id: reassigned.team_id.clone(),
+            newest: Some(reassigned.updated_at),
+            issues: vec![reassigned],
+            trashed: Vec::new(),
+            cycles: Vec::new(),
+            labels: Vec::new(),
+            members: Vec::new(),
+            teams: Vec::new(),
+            as_of: demo::NOW,
+        }],
+        failure: None,
+    })
+    .unwrap();
+    assert_ne!(app.state().focused_issue().unwrap().id, DRY_RUN);
+
+    let effects = press(&mut app, "ENG-27\n");
+
+    let writes = deletes(&effects);
+    let [write] = writes.as_slice() else {
+        panic!("{effects:?}");
+    };
+    assert_eq!(write.relation.id, "relation-2");
+    assert_eq!(write.identifier, "ENG-51");
 }
 
 #[test]

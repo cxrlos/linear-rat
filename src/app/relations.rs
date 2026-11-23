@@ -221,7 +221,9 @@ pub(super) fn open_remove(state: &mut State) -> Update {
         return Update::redraw();
     }
     state.modals.push(Modal::Choice(Choice {
-        purpose: Purpose::RemoveRelations,
+        purpose: Purpose::RemoveRelations {
+            issue_id: issue.id.clone(),
+        },
         list: Picker::multi(entries, []),
     }));
     Update::redraw()
@@ -266,6 +268,10 @@ pub(super) fn removal_chosen(state: &mut State, nth: Option<usize>) -> Update {
     let Some(Modal::Choice(choice)) = state.modals.top() else {
         return Update::default();
     };
+    let Purpose::RemoveRelations { issue_id } = &choice.purpose else {
+        return Update::default();
+    };
+    let issue_id = issue_id.clone();
     let marked: Vec<String> = choice
         .list
         .marked()
@@ -288,9 +294,6 @@ pub(super) fn removal_chosen(state: &mut State, nth: Option<usize>) -> Update {
         return Update::default();
     }
     state.modals.pop();
-    let Some(issue_id) = state.focused_issue().map(|issue| issue.id.clone()) else {
-        return Update::redraw();
-    };
     remove(state, &issue_id, &chosen)
 }
 
