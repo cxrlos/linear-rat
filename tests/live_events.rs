@@ -183,6 +183,60 @@ fn a_deleted_comment_leaves_and_takes_the_detail_focus_with_it() {
 }
 
 #[test]
+fn a_deleted_thread_takes_its_replies_and_the_focus_on_one_of_them() {
+    let mut state = State::demo();
+    let (issue_id, reply) = state
+        .store
+        .issues()
+        .find_map(|issue| {
+            let reply = IssueDetail::demo(&issue.id)
+                .comments
+                .into_iter()
+                .find(|comment| comment.parent_id.is_some())?;
+            Some((issue.id.clone(), reply))
+        })
+        .unwrap();
+    let root = reply.parent_id.clone().unwrap();
+    state
+        .detail
+        .focus_comment(&issue_id, Some(reply.id.clone()));
+    let mut app = App::new(TestBackend::new(80, 24), state).unwrap();
+    app.handle(Event::IssueDetailLoaded {
+        issue_id: issue_id.clone(),
+        result: Ok(IssueDetail::demo(&issue_id)),
+    })
+    .unwrap();
+
+    app.handle(Event::Live(LiveEvent::CommentDeleted {
+        issue_id: issue_id.clone(),
+        comment_id: root.clone(),
+    }))
+    .unwrap();
+
+    assert!(stored_comments(&app, &issue_id).iter().all(|comment| {
+        comment.id != root && comment.parent_id.as_deref() != Some(root.as_str())
+    }));
+    assert_eq!(app.state().detail.focused_comment(&issue_id), None);
+}
+
+#[test]
+fn an_edited_comment_brings_its_author_along() {
+    let (mut app, _, comments) = with_comments();
+    let mut author = app.state().store.members().next().unwrap().clone();
+    author.id = "member-new-to-lrat".to_owned();
+    let mut edited = comments[0].clone();
+    edited.author_id = Some(author.id.clone());
+
+    app.handle(Event::Live(LiveEvent::CommentUpdated(PostedComment {
+        comment: edited,
+        author: Some(author.clone()),
+    })))
+    .unwrap();
+
+    assert_eq!(app.state().store.member(&author.id), Some(&author));
+}
+
+#[test]
 fn comment_events_on_an_issue_lrat_does_not_hold_are_dropped() {
     let (mut app, issue_id, comments) = with_comments();
     let mut elsewhere = comments[0].clone();
