@@ -14,7 +14,7 @@ pub use registry::{
     ACTIONS, ActionSpec, Availability, Group, Hint, HintRow, OverlayKind, by_id, spec,
 };
 
-use crate::app::{Load, Modal, Pane, Screen, State};
+use crate::app::{self, Load, Modal, Pane, Screen, State};
 
 /// Where a binding applies. Several contexts are active at once, most
 /// specific first, and the first one that binds a key wins.
@@ -36,10 +36,12 @@ pub enum Context {
     Browse,
     /// The Cycles screen, ahead of [`Context::Browse`] there.
     Cycles,
+    /// The focused comment of a detail, ahead of [`Context::Detail`] there.
+    Comment,
 }
 
 impl Context {
-    pub const ALL: [Context; 8] = [
+    pub const ALL: [Context; 9] = [
         Context::Global,
         Context::List,
         Context::TeamIssues,
@@ -48,6 +50,7 @@ impl Context {
         Context::Analytics,
         Context::Browse,
         Context::Cycles,
+        Context::Comment,
     ];
 
     /// The name of its table in `config.toml`, as in `[keys.list]`.
@@ -61,6 +64,7 @@ impl Context {
             Context::Analytics => "analytics",
             Context::Browse => "browse",
             Context::Cycles => "cycles",
+            Context::Comment => "comment",
         }
     }
 
@@ -80,6 +84,7 @@ impl Context {
             Context::Analytics => "Analytics",
             Context::Browse => "Cycles and Projects",
             Context::Cycles => "Cycles",
+            Context::Comment => "Comment",
         }
     }
 }
@@ -101,6 +106,15 @@ pub fn active_contexts(state: &State) -> Vec<Context> {
 /// The contexts of the screen under any overlay. My Issues has no list
 /// while it loads or shows why it could not.
 pub fn screen_contexts(state: &State) -> Vec<Context> {
+    let mut contexts = pane_contexts(state);
+    if contexts.first() == Some(&Context::Detail) && app::focused_comment(state).is_some() {
+        contexts.insert(0, Context::Comment);
+    }
+    contexts
+}
+
+/// The contexts of the screen's focused pane, a focused comment aside.
+fn pane_contexts(state: &State) -> Vec<Context> {
     match state.screen {
         Screen::MyIssues if state.load != Load::Loaded => vec![Context::Global],
         Screen::MyIssues if state.my_issues.pane() == Pane::Detail => {

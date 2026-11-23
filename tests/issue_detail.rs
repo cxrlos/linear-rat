@@ -409,6 +409,43 @@ async fn loads_the_attachments_with_a_pull_requests_status() {
 }
 
 #[tokio::test]
+async fn loads_the_issues_own_reactions_oldest_first() {
+    let server = MockServer::start().await;
+    mount(
+        &server,
+        "IssueComments",
+        None,
+        comments_page(Vec::new(), None),
+    )
+    .await;
+    let mut history = history_page(Vec::new());
+    history["data"]["issue"]["reactions"] = json!([
+        { "id": "reaction-2", "emoji": "🎉", "createdAt": "2026-10-02T00:00:00.000Z", "user": { "id": "member-ana" } },
+        { "id": "reaction-1", "emoji": "+1", "createdAt": "2026-10-01T00:00:00.000Z", "user": null },
+    ]);
+    mount(&server, "IssueStateHistory", None, history).await;
+    mount_relations(&server, no_relations()).await;
+
+    let detail = client_for(&server)
+        .issue_detail("issue-1", Urgency::Urgent)
+        .await
+        .unwrap();
+
+    let reactions: Vec<(&str, &str, Option<&str>)> = detail
+        .reactions
+        .iter()
+        .map(|r| (r.id.as_str(), r.emoji.as_str(), r.user_id.as_deref()))
+        .collect();
+    assert_eq!(
+        reactions,
+        [
+            ("reaction-1", "+1", None),
+            ("reaction-2", "🎉", Some("member-ana")),
+        ]
+    );
+}
+
+#[tokio::test]
 async fn an_issue_linear_cannot_find_is_an_error() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))

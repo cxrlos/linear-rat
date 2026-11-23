@@ -10,9 +10,10 @@ use ratatui::text::{Line, Span};
 use unicode_width::UnicodeWidthStr;
 
 use super::theme::Theme;
-use super::{icons, markdown, style};
-use crate::app::{DetailLoad, State};
-use crate::linear::model::{Attachment, Estimation, Issue, StateSpan};
+use super::{icons, markdown, style, text};
+use crate::app::{self, DetailLoad, State};
+use crate::linear::ReactionTarget;
+use crate::linear::model::{Attachment, Comment, Estimation, Issue, StateSpan};
 
 const FIELD_WIDTH: usize = 10;
 
@@ -27,6 +28,21 @@ pub(super) fn issue(state: &State) -> Option<&Issue> {
 
 /// Every line of `issue`'s detail, wrapped to `width` columns.
 pub(super) fn lines(state: &State, issue: &Issue, width: u16) -> Vec<Line<'static>> {
+    build(state, issue, width).0
+}
+
+/// Where the focused comment is among the [`lines`] of `issue`'s detail:
+/// its first line and the line after its last.
+pub(super) fn focused_comment_lines(
+    state: &State,
+    issue: &Issue,
+    width: u16,
+) -> Option<(usize, usize)> {
+    build(state, issue, width).1
+}
+
+/// The detail's lines, and where the focused comment is among them.
+fn build(state: &State, issue: &Issue, width: u16) -> (Vec<Line<'static>>, Option<(usize, usize)>) {
     let theme = &state.theme;
     let store = &state.store;
     let now = store.as_of().unwrap_or(issue.updated_at);
@@ -74,6 +90,8 @@ pub(super) fn lines(state: &State, issue: &Issue, width: u16) -> Vec<Line<'stati
         }
         _ => lines.push(Line::styled("No description.", muted)),
     }
+    let target = ReactionTarget::Issue(issue.id.clone());
+    lines.extend(reaction_line(state, &target, "", width));
     lines.extend(relations(state, issue, width));
 
     let load = state.detail.load(&issue.id);
@@ -85,34 +103,14 @@ pub(super) fn lines(state: &State, issue: &Issue, width: u16) -> Vec<Line<'stati
     };
     lines.push(Line::styled(heading, bold));
     lines.extend(load_note(theme, load, comments.is_some(), width));
+    let mut focus_lines = None;
     match comments {
         Some([]) => lines.push(Line::styled("No comments.", muted)),
         Some(comments) => {
-            for (index, comment) in comments.iter().enumerate() {
-                if index > 0 {
-                    lines.push(Line::default());
-                }
-                let author = comment
-                    .author_id
-                    .as_deref()
-                    .and_then(|id| store.member(id))
-                    .map_or("Unknown", |member| member.name.as_str());
-                lines.extend(markdown::wrap(
-                    &[
-                        (author.to_owned(), bold),
-                        (format!(" · {}", ago(comment.created_at, now)), muted),
-                    ],
-                    width,
-                    &[],
-                    &[],
-                ));
-                let body = markdown::render(&comment.body, width.saturating_sub(2), theme);
-                lines.extend(body.into_iter().map(|line| {
-                    let mut spans = vec![Span::raw("  ")];
-                    spans.extend(line.spans);
-                    Line::from(spans)
-                }));
-            }
+            let (thread_lines, focus) = comment_lines(state, issue, comments, now, width);
+            let offset = lines.len();
+            focus_lines = focus.map(|(start, end)| (offset + start, offset + end));
+            lines.extend(thread_lines);
         }
         None => {}
     }
@@ -132,7 +130,151 @@ pub(super) fn lines(state: &State, issue: &Issue, width: u16) -> Vec<Line<'stati
     lines.push(Line::default());
     lines.push(Line::styled("Details", bold));
     lines.extend(details(state, issue, now, width));
+    (lines, focus_lines)
+}
+
+/// The comments as threads: each first comment with its replies indented
+/// under it, a resolved thread as one muted line unless the focus is in
+/// it. Also where the focused comment is among the lines.
+fn comment_lines(
+    state: &State,
+    issue: &Issue,
+    comments: &[Comment],
+    now: Timestamp,
+    width: u16,
+) -> (Vec<Line<'static>>, Option<(usize, usize)>) {
+    let muted = style::muted(&state.theme);
+    let focused = state.detail.focused_comment(&issue.id);
+    let mut lines = Vec::new();
+    let mut focus = None;
+    for (index, (root, replies)) in app::threads(comments).into_iter().enumerate() {
+        if index > 0 {
+            lines.push(Line::default());
+        }
+        if app::is_collapsed(root, &replies, focused) {
+            let count = match replies.len() {
+                0 => "no replies".to_owned(),
+                1 => "1 reply".to_owned(),
+                n => format!("{n} replies"),
+            };
+            let collapsed = text::fit(&format!("▸ resolved · {count}"), usize::from(width));
+            lines.push(Line::styled(collapsed, muted));
+            continue;
+        }
+        for (depth, comment) in
+            std::iter::once((0, root)).chain(replies.into_iter().map(|r| (1, r)))
+        {
+            let start = lines.len();
+            lines.extend(one_comment(state, comment, depth, now, width));
+            if focused == Some(comment.id.as_str()) {
+                focus = Some((start, lines.len()));
+            }
+        }
+    }
+    (lines, focus)
+}
+
+/// One comment, `depth` levels into its thread: its author, age and
+/// marks, then its text indented under them. The focused one takes the
+/// accent.
+fn one_comment(
+    state: &State,
+    comment: &Comment,
+    depth: usize,
+    now: Timestamp,
+    width: u16,
+) -> Vec<Line<'static>> {
+    const REPLY_INDENT: usize = 4;
+    let theme = &state.theme;
+    let focused = state
+        .detail
+        .focused_comment(&comment.issue_id)
+        .is_some_and(|id| id == comment.id);
+    let (name_style, meta_style) = if focused {
+        let accent = style::accent(theme);
+        (
+            accent.add_modifier(Modifier::BOLD | Modifier::REVERSED),
+            accent,
+        )
+    } else {
+        (
+            Style::new().add_modifier(Modifier::BOLD),
+            style::muted(theme),
+        )
+    };
+    let author = comment
+        .author_id
+        .as_deref()
+        .and_then(|id| state.store.member(id))
+        .map_or("Unknown", |member| member.name.as_str());
+    let mut meta = format!(" · {}", ago(comment.created_at, now));
+    if comment.edited_at.is_some() {
+        meta.push_str(" · edited");
+    }
+    if comment.resolved_at.is_some() {
+        meta.push_str(" · resolved");
+    }
+    if app::is_local(&comment.id) {
+        meta.push_str(" · sending…");
+    }
+    let indent = " ".repeat(depth * REPLY_INDENT);
+    let mut lines = markdown::wrap(
+        &[(author.to_owned(), name_style), (meta, meta_style)],
+        width,
+        &[(indent.clone(), Style::new())],
+        &[(indent.clone(), Style::new())],
+    );
+    let body_indent = format!("{indent}  ");
+    let room = u16::try_from(text::width(&body_indent)).unwrap_or(u16::MAX);
+    let body = markdown::render(&comment.body, width.saturating_sub(room), theme);
+    lines.extend(body.into_iter().map(|line| {
+        let mut spans = vec![Span::raw(body_indent.clone())];
+        spans.extend(line.spans);
+        Line::from(spans)
+    }));
+    let target = ReactionTarget::Comment(comment.id.clone());
+    lines.extend(reaction_line(state, &target, &body_indent, width));
     lines
+}
+
+/// The reactions on `target` as one line after `indent`, as `👍 2  🎉 1`
+/// in the order each emoji was first given: those the viewer gave
+/// accented, the rest muted, cut to `width`. Nothing without reactions.
+fn reaction_line(
+    state: &State,
+    target: &ReactionTarget,
+    indent: &str,
+    width: u16,
+) -> Option<Line<'static>> {
+    let viewer = state.store.viewer().map(|viewer| viewer.id.as_str());
+    let mut counts: Vec<(&str, usize, bool)> = Vec::new();
+    for reaction in state.store.reactions(target) {
+        let emoji = app::shown_emoji(&reaction.emoji);
+        let own = viewer.is_some() && reaction.user_id.as_deref() == viewer;
+        match counts.iter_mut().find(|(known, ..)| *known == emoji) {
+            Some((_, count, yours)) => {
+                *count += 1;
+                *yours |= own;
+            }
+            None => counts.push((emoji, 1, own)),
+        }
+    }
+    if counts.is_empty() {
+        return None;
+    }
+    let mut spans = vec![Span::raw(indent.to_owned())];
+    for (index, (emoji, count, own)) in counts.into_iter().enumerate() {
+        if index > 0 {
+            spans.push(Span::raw("  "));
+        }
+        let style = if own {
+            style::accent(&state.theme)
+        } else {
+            style::muted(&state.theme)
+        };
+        spans.push(Span::styled(format!("{emoji} {count}"), style));
+    }
+    Some(text::fit_line(Line::from(spans), usize::from(width)))
 }
 
 /// The Relations section: the parent, the sub-issues with how many are

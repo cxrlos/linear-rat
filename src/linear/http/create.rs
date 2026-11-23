@@ -18,12 +18,14 @@ pub(super) async fn create_comment(
     client: &HttpClient,
     issue_id: &str,
     body: &str,
+    parent_id: Option<&str>,
 ) -> Result<PostedComment, ClientError> {
+    let mut input = json!({ "issueId": issue_id, "body": body });
+    if let Some(parent_id) = parent_id {
+        input["parentId"] = json!(parent_id);
+    }
     let response: Response<CommentData> = client
-        .execute(
-            COMMENT_CREATE,
-            json!({ "input": { "issueId": issue_id, "body": body } }),
-        )
+        .execute(COMMENT_CREATE, json!({ "input": input }))
         .await?;
     let payload = response.data.comment_create;
     if !payload.success {

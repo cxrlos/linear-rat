@@ -2,9 +2,11 @@ use crossterm::event::{KeyCode, KeyEventKind};
 use ratatui::layout::Size;
 
 use super::edit::{self, Editable};
+use super::reactions;
 use super::{
     Action, Copyable, Effect, Event, Load, Modal, Palette, Pane, Purpose, Screen, State,
-    analytics_screen, attach, browse, compose, create, detail, issue_picker, lifecycle, links,
+    analytics_screen, attach, browse, comments, compose, create, detail, issue_picker, lifecycle,
+    links,
     palette, rearrange, relations, release, results, search, sync, team_issues,
 };
 use crate::keys::{self, Key, Resolution};
@@ -243,6 +245,8 @@ fn apply(state: &mut State, event: Event) -> Update {
         Event::IssueCreated { issue, result } => compose::created(state, &issue, result),
         Event::UploadProgress { upload, sent } => attach::progressed(state, upload, sent),
         Event::Attached { attachment, result } => attach::attached(state, &attachment, result),
+        Event::CommentChanged { write, result } => comments::changed(state, &write, result),
+        Event::Reacted { write, result } => reactions::reacted(state, &write, result),
     }
 }
 
@@ -378,6 +382,9 @@ pub fn perform(state: &mut State, action: Action) -> Update {
         },
 
         Action::Close if state.modals.pop().is_some() => Update::redraw(),
+        Action::Close if detail::has_focus(state) && comments::focused_comment(state).is_some() => {
+            comments::unfocus(state)
+        }
         Action::MoveDown
         | Action::MoveUp
         | Action::MoveToTop
@@ -571,6 +578,13 @@ pub fn perform(state: &mut State, action: Action) -> Update {
         Action::GoToRelated => relations::open_related(state),
         Action::AttachFile => attach::open_file(state),
         Action::AttachLink => attach::open_link(state),
+        Action::NextComment => comments::move_focus(state, true),
+        Action::PreviousComment => comments::move_focus(state, false),
+        Action::ReplyToComment => comments::reply(state),
+        Action::EditComment => comments::edit(state),
+        Action::DeleteComment => comments::ask_to_delete(state),
+        Action::ToggleResolved => comments::toggle_resolved(state),
+        Action::React => reactions::open(state),
         Action::ToggleBlocked if state.screen == Screen::TeamIssues => Update {
             redraw: true,
             effects: team_issues::toggle_blocked(state),
@@ -617,6 +631,9 @@ fn choose(state: &mut State, nth: Option<usize>) -> Update {
     }
     if choice.purpose == Purpose::RemoveRelations {
         return relations::removal_chosen(state, nth);
+    }
+    if choice.purpose == Purpose::Reaction {
+        return reactions::chosen(state, nth);
     }
     if choice.purpose == Purpose::CyclesTeam {
         browse::pick_team(state, nth).map_or_else(Update::default, |effects| Update {

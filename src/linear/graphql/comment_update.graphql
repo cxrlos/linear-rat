@@ -1,0 +1,8 @@
+# budget: 5
+# Replaces the text of one of the viewer's comments. Answers only whether
+# Linear did it; the app already shows the new text.
+mutation CommentUpdate($id: String!, $input: CommentUpdateInput!) {
+  commentUpdate(id: $id, input: $input) {
+    success
+  }
+}

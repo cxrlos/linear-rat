@@ -2,9 +2,12 @@ use crossterm::event::KeyEvent;
 use jiff::Timestamp;
 use semver::Version;
 
+use super::ReactionWrite;
+use crate::linear::model::Reaction;
+
 use super::{
-    Failure, LifecycleWrite, LoadError, NewAttachment, NewComment, NewIssue, RelationWrite,
-    SyncFailure, UploadId, Write, Writing,
+    CommentWrite, Failure, LifecycleWrite, LoadError, NewAttachment, NewComment, NewIssue,
+    RelationWrite, SyncFailure, UploadId, Write, Writing,
 };
 use crate::linear::model::{
     Attachment, Cycle, Issue, IssueRelation, Label, Member, ProjectMilestone, Team, WorkflowState,
@@ -200,6 +203,18 @@ pub enum Event {
     IssueCreated {
         issue: NewIssue,
         result: Result<Box<Issue>, Failure>,
+    },
+    /// Linear's answer to
+    /// [`Effect::ChangeComment`](super::Effect::ChangeComment).
+    CommentChanged {
+        write: CommentWrite,
+        result: Result<(), Failure>,
+    },
+    /// Linear's answer to [`Effect::React`](super::Effect::React): the
+    /// reaction as Linear stored it, for one added.
+    Reacted {
+        write: ReactionWrite,
+        result: Result<Option<Reaction>, Failure>,
     },
     /// The result of [`Effect::CheckRelease`](super::Effect::CheckRelease):
     /// the latest release, or `None` when the check failed.

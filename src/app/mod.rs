@@ -6,6 +6,7 @@ mod arrange;
 mod attach;
 mod browse;
 mod capabilities;
+mod comments;
 mod compose;
 mod create;
 mod detail;
@@ -25,6 +26,7 @@ mod my_issues;
 mod names;
 mod palette;
 mod picker;
+mod reactions;
 mod rearrange;
 mod relations;
 mod release;
@@ -48,6 +50,10 @@ pub use attach::{
 };
 pub use browse::{Cycles, Projects, cycle_counts, cycle_title};
 pub use capabilities::{Capabilities, Capability, WriteClass};
+pub use comments::{
+    CommentChange, CommentWrite, can_focus_comments, focused_comment, is_collapsed,
+    owns_focused_comment, threads,
+};
 pub use compose::{Drafts, IssueDraft, NewComment, NewIssue, Writing, is_local};
 pub use create::{CreateForm, Step};
 pub use detail::{Detail, DetailLoad};
@@ -72,6 +78,7 @@ pub use my_issues::MyIssues;
 pub use names::Names;
 pub use palette::{Palette, PaletteEntry, palette_matches};
 pub use picker::{Entry, Note, Picker};
+pub use reactions::{ReactionChange, ReactionWrite, can_react, shown_emoji};
 pub use rearrange::{can_rearrange, own_order};
 pub use relations::{RelationWrite, RelationsInFlight};
 pub use release::Release;

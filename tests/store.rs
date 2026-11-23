@@ -3,7 +3,7 @@
 
 use jiff::Timestamp;
 use linear_rat::app::{State, Store};
-use linear_rat::linear::model::Issue;
+use linear_rat::linear::model::{Comment, Issue};
 use linear_rat::linear::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, TeamAnalyticsIssues, TeamChanges,
     TeamIssuesPage,
@@ -437,5 +437,56 @@ fn a_cut_short_milestone_list_leaves_a_complete_one_in_place() {
     assert_eq!(
         store.project_milestones("project-1").map(|m| m.len()),
         Some(2)
+    );
+}
+
+/// A comment on `issue-1` made on day `day`, replying to `parent_id`.
+fn comment(id: &str, day: i64, parent_id: Option<&str>) -> Comment {
+    Comment {
+        id: id.to_owned(),
+        issue_id: "issue-1".to_owned(),
+        author_id: None,
+        body: id.to_owned(),
+        created_at: october(day),
+        parent_id: parent_id.map(str::to_owned),
+        resolved_at: None,
+        edited_at: None,
+        reactions: Vec::new(),
+    }
+}
+
+fn comment_ids(store: &Store) -> Vec<&str> {
+    store
+        .comments("issue-1")
+        .unwrap()
+        .iter()
+        .map(|comment| comment.id.as_str())
+        .collect()
+}
+
+#[test]
+fn removing_a_comment_takes_its_replies_and_putting_them_back_restores_the_order() {
+    let mut store = Store::default();
+    store.set_comments(
+        "issue-1",
+        vec![
+            comment("root", 1, None),
+            comment("other", 2, None),
+            comment("reply", 3, Some("root")),
+            comment("reply-to-reply", 4, Some("reply")),
+            comment("other-reply", 5, Some("other")),
+        ],
+    );
+
+    let removed = store.remove_comment("root");
+
+    let removed_ids: Vec<&str> = removed.iter().map(|c| c.id.as_str()).collect();
+    assert_eq!(removed_ids, ["root", "reply", "reply-to-reply"]);
+    assert_eq!(comment_ids(&store), ["other", "other-reply"]);
+
+    store.put_back_comments(removed);
+    assert_eq!(
+        comment_ids(&store),
+        ["root", "other", "reply", "reply-to-reply", "other-reply"]
     );
 }

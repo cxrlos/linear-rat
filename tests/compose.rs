@@ -132,7 +132,7 @@ fn a_saved_comment_is_sent_once_and_shows_in_the_detail_when_linear_stores_it() 
     assert_eq!(comment.body, "Rind looks *great*");
     let posted = on_fake(async |client| {
         client
-            .create_comment(&comment.issue_id, &comment.body)
+            .create_comment(&comment.issue_id, &comment.body, None)
             .await
             .unwrap()
     });
@@ -142,6 +142,8 @@ fn a_saved_comment_is_sent_once_and_shows_in_the_detail_when_linear_stores_it() 
     })
     .unwrap();
     assert!(shows(&app, &format!("Commented on {FIRST}")));
+    // `{` focuses the newest comment, which scrolls it into view.
+    press(&mut app, "{");
     assert!(shows(&app, "Rind looks great"), "{:#?}", screen(&app));
 }
 
@@ -492,7 +494,10 @@ fn the_demo_keeps_what_was_written_for_the_rest_of_the_session() {
     let issue_id = app().state().focused_issue().unwrap().id.clone();
 
     let (detail, created, existing) = on_fake(async |client| {
-        client.create_comment(&issue_id, "Noted.").await.unwrap();
+        client
+            .create_comment(&issue_id, "Noted.", None)
+            .await
+            .unwrap();
         let detail = client
             .issue_detail(&issue_id, linear_rat::linear::Urgency::Urgent)
             .await

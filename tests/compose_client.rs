@@ -91,7 +91,7 @@ async fn a_comment_sends_the_issue_and_body_and_reads_back_the_stored_comment() 
     .await;
 
     let posted = client_for(&server)
-        .create_comment("issue-1", "Rind looks *great*")
+        .create_comment("issue-1", "Rind looks *great*", None)
         .await
         .unwrap();
 
@@ -121,7 +121,7 @@ async fn a_comment_linear_rejects_is_an_error_with_its_message() {
     .await;
 
     let error = client_for(&server)
-        .create_comment("issue-gone", "Hello")
+        .create_comment("issue-gone", "Hello", None)
         .await
         .unwrap_err();
 

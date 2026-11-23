@@ -108,6 +108,21 @@ pub enum Action {
     AttachFile,
     /// Open the prompt that attaches a link to the focused issue.
     AttachLink,
+    /// Focus the next comment of the detail.
+    NextComment,
+    /// Focus the previous comment of the detail.
+    PreviousComment,
+    /// Reply in the focused comment's thread in `$EDITOR`.
+    ReplyToComment,
+    /// Edit the viewer's focused comment in `$EDITOR`.
+    EditComment,
+    /// Ask to confirm deleting the viewer's focused comment.
+    DeleteComment,
+    /// Resolve the focused comment's thread, or open it again.
+    ToggleResolved,
+    /// Pick a reaction to add to, or remove from, the focused comment or
+    /// issue.
+    React,
 }
 
 /// What [`Action::Copy`] puts on the clipboard.

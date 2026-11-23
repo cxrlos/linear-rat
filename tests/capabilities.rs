@@ -337,6 +337,8 @@ fn a_forbidden_comment_denies_comments_in_the_team() {
             issue_id: app.state().focused_issue().unwrap().id.clone(),
             identifier: FIRST.to_owned(),
             body: "Brie".to_owned(),
+            parent_id: None,
+            local_id: None,
         },
         result: Err(forbidden("comment on DES-34")),
     })

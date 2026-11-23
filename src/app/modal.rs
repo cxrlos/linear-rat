@@ -126,6 +126,8 @@ pub enum Purpose {
     RelationKind,
     /// Remove these relations of the focused issue.
     RemoveRelations,
+    /// Add this reaction to the focused comment or issue, or remove it.
+    Reaction,
 }
 
 impl Choice {
@@ -138,6 +140,7 @@ impl Choice {
             Purpose::Sort => "Sort by".to_owned(),
             Purpose::RelationKind => "Add a relation".to_owned(),
             Purpose::RemoveRelations => "Remove relations".to_owned(),
+            Purpose::Reaction => "React".to_owned(),
         }
     }
 

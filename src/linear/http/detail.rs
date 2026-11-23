@@ -8,6 +8,7 @@ use serde_json::{Value, json};
 
 use super::assigned::{optional_timestamp, state_type, timestamp};
 use super::comment::CommentNode;
+use super::comment::ReactionNode;
 use super::{HttpClient, PageInfo, Urgency, relations};
 use crate::linear::model::{
     Attachment, Project, ProjectMilestone, StateSpan, StateType, WorkflowState,
@@ -53,6 +54,7 @@ pub(super) async fn load(
         project: None,
         milestone: None,
         attachments: Vec::new(),
+        reactions: Vec::new(),
         problems: comment_errors
             .iter()
             .chain(&history_errors)
@@ -81,8 +83,13 @@ pub(super) async fn load(
         }
         detail.comments.push(comment);
     }
-    for (index, page) in history_pages.into_iter().enumerate() {
+    for (index, mut page) in history_pages.into_iter().enumerate() {
         if index == 0 {
+            detail.reactions = std::mem::take(&mut page.issue.reactions)
+                .into_iter()
+                .map(ReactionNode::into_reaction)
+                .collect();
+            detail.reactions.sort_by_key(|reaction| reaction.created_at);
             detail.attachments = page
                 .issue
                 .attachments
@@ -159,6 +166,8 @@ struct IssueHistory {
     project_milestone: Option<MilestoneNode>,
     state_history: Connection<SpanNode>,
     attachments: Nodes<AttachmentNode>,
+    #[serde(default)]
+    reactions: Vec<ReactionNode>,
 }
 
 #[derive(Deserialize)]

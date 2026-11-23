@@ -5,9 +5,12 @@
 //! Everything is derived from [`NOW`] and a fixed seed, so every call returns
 //! the same data on every machine.
 
+use std::collections::BTreeMap;
+
 use jiff::civil::{Date, date};
 use jiff::{SignedDuration, Timestamp};
 
+use super::model::Reaction;
 use super::model::{
     Attachment, Comment, Cycle, Estimation, Issue, IssueRelation, Label, Member, Priority, Project,
     ProjectMilestone, ProjectOverview, ProjectStatus, ProjectStatusType, RelationType, StateSpan,
@@ -43,6 +46,8 @@ pub struct DemoWorkspace {
     pub comments: Vec<Comment>,
     pub attachments: Vec<Attachment>,
     pub relations: Vec<IssueRelation>,
+    /// Issues' own reactions by issue id, oldest first.
+    pub issue_reactions: BTreeMap<String, Vec<Reaction>>,
 }
 
 /// Builds the demo workspace. Deterministic: no clock, no OS randomness.
@@ -100,11 +105,14 @@ pub fn workspace() -> DemoWorkspace {
         comments: Vec::new(),
         attachments: Vec::new(),
         relations: Vec::new(),
+        issue_reactions: BTreeMap::new(),
     };
     for spec in &TEAMS {
         add_team(&mut data, spec, &mut rng);
     }
     add_links(&mut data);
+    add_threads(&mut data);
+    add_reactions(&mut data);
     add_milestones(&mut data);
     add_schedule(&mut data);
     add_relations(&mut data);
@@ -371,6 +379,98 @@ fn add_links(data: &mut DemoWorkspace) {
         .find(|comment| comment.issue_id == focus_rings)
     {
         comment.body.push_str(DES_16_COMMENT);
+    }
+}
+
+/// Turns DES-34's comments into conversations: the viewer's comment
+/// becomes an edited reply to the one before it, and a resolved thread with
+/// the viewer's reply comes ahead of both. Added after the generated data,
+/// so the seed's draws stay as they were.
+fn add_threads(data: &mut DemoWorkspace) {
+    let issue_id = "issue-des-34";
+    let mut ids = data
+        .comments
+        .iter()
+        .filter(|comment| comment.issue_id == issue_id)
+        .map(|comment| comment.id.clone());
+    let (Some(first), Some(second)) = (ids.next(), ids.next()) else {
+        return;
+    };
+    let Some(at) = data.comments.iter().position(|comment| comment.id == first) else {
+        return;
+    };
+    if let Some(reply) = data
+        .comments
+        .iter_mut()
+        .find(|comment| comment.id == second)
+    {
+        reply.parent_id = Some(first);
+        reply.edited_at = Some(ts(unix(reply.created_at) + HOUR));
+    }
+    let asked = unix(NOW) - 8 * DAY - 5 * HOUR;
+    let resolved = [
+        (
+            "comment-des-34-rind",
+            None,
+            "pia",
+            asked,
+            "Should the rind colour follow the theme, or stay fixed?",
+        ),
+        (
+            "comment-des-34-rind-reply",
+            Some("comment-des-34-rind"),
+            VIEWER,
+            asked + 4 * HOUR,
+            "It follows the theme now, same as the borders.",
+        ),
+    ]
+    .map(|(id, parent, author, created, body)| Comment {
+        id: id.to_owned(),
+        issue_id: issue_id.to_owned(),
+        author_id: Some(member_id(author)),
+        body: body.to_owned(),
+        created_at: ts(created),
+        parent_id: parent.map(str::to_owned),
+        resolved_at: parent.is_none().then(|| ts(asked + 5 * HOUR)),
+        edited_at: None,
+        reactions: Vec::new(),
+    });
+    data.comments.splice(at..at, resolved);
+}
+
+/// Reactions on DES-34 and on a comment of each of its threads, the
+/// viewer's among them.
+fn add_reactions(data: &mut DemoWorkspace) {
+    let issue_id = "issue-des-34";
+    let at = unix(NOW) - 2 * DAY;
+    let reaction = |n: usize, emoji: &str, handle: &str| Reaction {
+        id: format!("reaction-des-34-{n}"),
+        emoji: emoji.to_owned(),
+        user_id: Some(member_id(handle)),
+        created_at: ts(at + i64::try_from(n).unwrap_or(0) * HOUR),
+    };
+    data.issue_reactions.insert(
+        issue_id.to_owned(),
+        vec![
+            reaction(1, "👍", "pia"),
+            reaction(2, "👍", "nell"),
+            reaction(3, "🎉", VIEWER),
+        ],
+    );
+    let on_comments = [
+        (
+            "comment-des-34-rind",
+            vec![reaction(4, "🎉", "nell"), reaction(5, "❤️", "iris")],
+        ),
+        (
+            "comment-90",
+            vec![reaction(6, "👀", VIEWER), reaction(7, "👍", "pia")],
+        ),
+    ];
+    for (comment_id, reactions) in on_comments {
+        if let Some(comment) = data.comments.iter_mut().find(|c| c.id == comment_id) {
+            comment.reactions = reactions;
+        }
     }
 }
 

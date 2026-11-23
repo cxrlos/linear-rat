@@ -78,6 +78,8 @@ fn failures() -> Vec<Event> {
                 issue_id: "issue-des-34".to_owned(),
                 identifier: "DES-34".to_owned(),
                 body: "Brie".to_owned(),
+                parent_id: None,
+                local_id: None,
             },
             result: Err(failure("comment on DES-34")),
         },

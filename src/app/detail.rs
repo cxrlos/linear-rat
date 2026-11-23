@@ -3,7 +3,10 @@
 
 use std::collections::BTreeMap;
 
+use super::comments::CommentWrite;
+use super::reactions::ReactionWrite;
 use super::{Action, Effect, Failure, Load, Pane, Screen, State, Update};
+use crate::linear::model::Comment;
 use crate::linear::{IssueDetail, Urgency};
 use crate::ui;
 
@@ -16,6 +19,15 @@ pub struct Detail {
     scroll: usize,
     comment_id: Option<String>,
     loads: BTreeMap<String, DetailLoad>,
+    /// Comment changes Linear has not answered yet. A detail that loads
+    /// meanwhile replaces the stored comments, so these are put back over
+    /// it until Linear answers.
+    pub(super) comment_writes: Vec<CommentWrite>,
+    /// Stand-ins of replies Linear has not stored yet.
+    pub(super) replies: Vec<Comment>,
+    /// Reaction changes Linear has not answered yet, put back over a detail
+    /// that loads meanwhile, as `comment_writes` are.
+    pub(super) reaction_writes: Vec<ReactionWrite>,
 }
 
 /// How far the comments and state history of one issue are.
@@ -52,6 +64,27 @@ impl Detail {
             self.scroll = 0;
         }
         self.comment_id = comment_id;
+    }
+
+    /// Moves the focus of `issue_id`'s detail from the comment `from` to
+    /// `to`, as when Linear stored a stand-in under its own id.
+    pub(super) fn replace_focus(&mut self, issue_id: &str, from: &str, to: &str) {
+        if self.focused_comment(issue_id) == Some(from) {
+            self.comment_id = Some(to.to_owned());
+        }
+    }
+
+    /// Scrolls the detail of `issue_id`, which shows `rows` lines, so its
+    /// lines `start` to `end` show, their start first when they do not fit.
+    pub(super) fn show_lines(&mut self, issue_id: &str, start: usize, end: usize, rows: usize) {
+        let scroll = self.scroll(issue_id);
+        self.scroll = if start < scroll || end.saturating_sub(start) > rows {
+            start
+        } else if end > scroll + rows {
+            end - rows
+        } else {
+            scroll
+        };
     }
 
     /// How far the comments and history of `issue_id` are, or `None` if they
@@ -150,6 +183,8 @@ pub(super) fn loaded(state: &mut State, issue_id: String, result: Result<IssueDe
             state.record_problems("load the issue's comments and history", &detail.problems);
             state.store.merge_detail(&issue_id, &detail);
             super::relations::reapply_in_flight(state);
+            super::comments::reapply_in_flight(state);
+            super::reactions::reapply_in_flight(state);
             // The detail can bring newer copies of related issues.
             state.rebuild_lists();
             DetailLoad::Loaded
