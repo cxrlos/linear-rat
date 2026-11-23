@@ -278,12 +278,23 @@ fn comments_and_history_show_once_loaded_on_a_narrow_terminal() {
 
 #[test]
 fn comments_and_history_show_once_loaded_on_a_wide_terminal() {
-    let (index, _) = richest_detail();
+    let (index, issue_id) = richest_detail();
     let mut app = app(200, 60, &AssignedIssues::demo());
 
-    let effects = send(&mut app, (0..index).map(|_| key('j')));
-    answer(&mut app, effects);
+    send(&mut app, (0..index).map(|_| key('j')));
+    // The side panel asks for the focused issue's detail as soon as it
+    // shows, which may be before the first key; answer it by its id.
+    answer(
+        &mut app,
+        vec![Effect::LoadIssueDetail {
+            issue_id,
+            urgency: Urgency::Background,
+        }],
+    );
 
+    let lines = screen(&app).join("\n");
+    assert!(!lines.contains("Loading…"), "{lines}");
+    app.redraw_all().unwrap();
     assert_snapshot!(app.backend());
 }
 
