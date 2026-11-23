@@ -438,7 +438,10 @@ pub fn perform(state: &mut State, action: Action) -> Update {
         }
         Action::Close if state.screen == Screen::Results && state.results.pane() == Pane::List => {
             results::close(state);
-            Update::redraw()
+            Update {
+                redraw: true,
+                effects: browse::shown(state),
+            }
         }
         Action::MoveDown
         | Action::MoveUp

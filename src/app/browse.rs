@@ -1,13 +1,18 @@
 //! The Cycles and Projects screens: a team's recent cycles and the projects
 //! of the viewer's teams. Enter lists the focused one's issues in the
 //! results list, so every issue action works on them, and Esc comes back
-//! here with the focus where it was.
+//! here with the focus where it was. `r` loads what the screen shows again,
+//! and showing a screen whose rows are older than the active poll interval
+//! reloads it in the background, keeping the rows until the new ones come.
 
 use std::cmp::Reverse;
 
+use jiff::{SignedDuration, Timestamp};
+
 use super::modal::{Choice, Purpose};
 use super::{
-    Action, Arrangement, Effect, Failure, Modal, Progress, Screen, State, results, team_issues,
+    Action, Arrangement, Effect, Failure, Listing, Modal, Progress, Screen, State, results, sync,
+    team_issues,
 };
 use crate::linear::model::{Cycle, ProjectOverview};
 use crate::linear::{ProjectList, SearchResults};
@@ -22,6 +27,12 @@ pub struct Cycles {
     focused: usize,
     /// The cycle whose issues are on their way, to list once they are in.
     opening: Option<String>,
+    /// When the cycles shown finished loading, by the latest tick.
+    loaded_at: Option<Timestamp>,
+    /// The cycles are loading again behind the ones shown.
+    reloading: bool,
+    /// The cycle whose issue list in Results is loading again.
+    relisting: Option<String>,
 }
 
 impl Cycles {
@@ -63,6 +74,12 @@ pub struct Projects {
     focused: usize,
     /// The project whose issues are on their way, to list once they are in.
     opening: Option<String>,
+    /// When the projects shown finished loading, by the latest tick.
+    loaded_at: Option<Timestamp>,
+    /// The projects are loading again behind the ones shown.
+    reloading: bool,
+    /// The project whose issue list in Results is loading again.
+    relisting: Option<String>,
 }
 
 impl Projects {
@@ -102,12 +119,16 @@ pub fn cycle_counts(cycle: &Cycle) -> Option<(u32, u32)> {
 }
 
 /// Asks for what the Cycles screen needs as it shows: the viewer's teams,
-/// then the first team's cycles; or the cycles again after they failed.
+/// then the first team's cycles; the cycles again after they failed; or,
+/// in the background, once they are stale.
 pub(super) fn open_cycles(state: &mut State) -> Vec<Effect> {
     match (&state.cycles.team_id, &state.cycles.load) {
         (Some(team_id), Progress::Failed(_)) => {
             let team_id = team_id.clone();
             switch_team(state, team_id)
+        }
+        (Some(_), Progress::Done) if is_stale(state, state.cycles.loaded_at) => {
+            reload_cycles(state)
         }
         (Some(_), _) => Vec::new(),
         (None, _) => match first_team(state) {
@@ -170,24 +191,35 @@ pub(super) fn pick_team(state: &mut State, nth: Option<usize>) -> Option<Vec<Eff
     })
 }
 
-/// Takes in `team_id`'s cycles if that team is still shown. Returns
-/// whether the screen changed.
+/// Takes in `team_id`'s cycles if that team is still shown, the focus
+/// kept on the same cycle. A reload that failed keeps the cycles shown.
+/// Returns whether the screen changed.
 pub(super) fn cycles_loaded(
     state: &mut State,
     team_id: &str,
     result: Result<Vec<Cycle>, Failure>,
 ) -> bool {
+    let now = state.sync_status.now();
     let cycles = &mut state.cycles;
     if cycles.team_id.as_deref() != Some(team_id) {
         return false;
     }
+    let reloading = std::mem::take(&mut cycles.reloading);
     match result {
         Ok(mut loaded) => {
             loaded.sort_by_key(|cycle| Reverse(cycle.starts_at));
+            let focused = cycles.focused().map(|cycle| cycle.id.clone());
+            cycles.focused = focused
+                .and_then(|id| loaded.iter().position(|cycle| cycle.id == id))
+                .unwrap_or(0);
             cycles.cycles = loaded;
-            cycles.focused = 0;
             cycles.load = Progress::Done;
+            cycles.loaded_at = now;
+            if reloading {
+                sync::reloaded(state, None);
+            }
         }
+        Err(failure) if reloading => sync::reloaded(state, Some(failure)),
         Err(failure) => {
             cycles.load = Progress::Failed(failure.message.clone());
             state.record(failure);
@@ -196,20 +228,26 @@ pub(super) fn cycles_loaded(
     true
 }
 
-/// Asks for the projects the first time the Projects screen shows, and
-/// again each time it shows after they failed.
+/// Asks for the projects the first time the Projects screen shows, again
+/// each time it shows after they failed, and in the background once they
+/// are stale.
 pub(super) fn open_projects(state: &mut State) -> Vec<Effect> {
-    let projects = &mut state.projects;
-    if matches!(projects.load, Progress::Loading | Progress::Done) {
-        return Vec::new();
+    match state.projects.load {
+        Progress::Loading => Vec::new(),
+        Progress::Done if is_stale(state, state.projects.loaded_at) => reload_projects(state),
+        Progress::Done => Vec::new(),
+        Progress::NotAsked | Progress::Failed(_) => {
+            state.projects.load = Progress::Loading;
+            vec![Effect::LoadProjects]
+        }
     }
-    projects.load = Progress::Loading;
-    vec![Effect::LoadProjects]
 }
 
-/// Takes in the projects. What Linear could not give becomes the notice,
-/// unless one is already showing.
+/// Takes in the projects, the focus kept on the same project. What Linear
+/// could not give becomes the notice, unless one is already showing. A
+/// reload that failed keeps the projects shown.
 pub(super) fn projects_loaded(state: &mut State, result: Result<ProjectList, Failure>) {
+    let reloading = std::mem::take(&mut state.projects.reloading);
     match result {
         Ok(list) => {
             if state.notice.is_none() {
@@ -217,16 +255,119 @@ pub(super) fn projects_loaded(state: &mut State, result: Result<ProjectList, Fai
             }
             state.store.merge_projects(&list);
             state.rebuild_lists();
+            let now = state.sync_status.now();
             let projects = &mut state.projects;
-            projects.focused = projects.focused.min(list.projects.len().saturating_sub(1));
+            let focused = projects
+                .focused()
+                .map(|overview| overview.project.id.clone());
+            projects.focused = focused
+                .and_then(|id| {
+                    list.projects
+                        .iter()
+                        .position(|overview| overview.project.id == id)
+                })
+                .unwrap_or(0);
             projects.projects = list.projects;
             projects.load = Progress::Done;
+            projects.loaded_at = now;
+            if reloading {
+                sync::reloaded(state, None);
+            }
         }
+        Err(failure) if reloading => sync::reloaded(state, Some(failure)),
         Err(failure) => {
             state.projects.load = Progress::Failed(failure.message.clone());
             state.record(failure);
         }
     }
+}
+
+/// Whether rows that finished loading at `loaded_at` are older than the
+/// active poll interval. Never before the first tick.
+fn is_stale(state: &State, loaded_at: Option<Timestamp>) -> bool {
+    let Some(now) = state.sync_status.now() else {
+        return false;
+    };
+    let Ok(interval) = SignedDuration::try_from(state.sync.active_poll) else {
+        return false;
+    };
+    loaded_at.is_none_or(|loaded_at| now.duration_since(loaded_at) >= interval)
+}
+
+/// The screen showing again, as Esc from Results back to it: reloads it in
+/// the background when it is stale.
+pub(super) fn shown(state: &mut State) -> Vec<Effect> {
+    match state.screen {
+        Screen::Cycles if state.cycles.load == Progress::Done => open_cycles(state),
+        Screen::Projects if state.projects.load == Progress::Done => open_projects(state),
+        _ => Vec::new(),
+    }
+}
+
+fn reload_cycles(state: &mut State) -> Vec<Effect> {
+    let cycles = &mut state.cycles;
+    match &cycles.team_id {
+        Some(team_id) if !cycles.reloading => {
+            cycles.reloading = true;
+            vec![Effect::LoadCycles(team_id.clone())]
+        }
+        _ => Vec::new(),
+    }
+}
+
+fn reload_projects(state: &mut State) -> Vec<Effect> {
+    if state.projects.reloading {
+        return Vec::new();
+    }
+    state.projects.reloading = true;
+    vec![Effect::LoadProjects]
+}
+
+/// Whether `r` can load what the screen shows again now, or `None` when
+/// the screen is not Cycles, Projects or a cycle's or project's issues.
+pub(super) fn can_reload(state: &State) -> Option<bool> {
+    match state.screen {
+        Screen::Cycles => Some(
+            state.cycles.team_id.is_some()
+                && state.cycles.load != Progress::Loading
+                && !state.cycles.reloading,
+        ),
+        Screen::Projects => {
+            Some(state.projects.load != Progress::Loading && !state.projects.reloading)
+        }
+        Screen::Results => match state.results.listing()? {
+            Listing::Cycle(_) => Some(state.cycles.relisting.is_none()),
+            Listing::Project(_) => Some(state.projects.relisting.is_none()),
+        },
+        _ => None,
+    }
+}
+
+/// `r` on Cycles, Projects or a cycle's or project's issues: loads what
+/// the screen shows again, keeping it on screen until the new rows come.
+/// `None` on any other screen. A screen whose load failed loads from the
+/// start.
+pub(super) fn reload(state: &mut State) -> Option<Vec<Effect>> {
+    if !can_reload(state)? {
+        return Some(Vec::new());
+    }
+    Some(match state.screen {
+        Screen::Cycles if state.cycles.load == Progress::Done => reload_cycles(state),
+        Screen::Cycles => open_cycles(state),
+        Screen::Projects if state.projects.load == Progress::Done => reload_projects(state),
+        Screen::Projects => open_projects(state),
+        _ => match state.results.listing().cloned() {
+            Some(Listing::Cycle(id)) => {
+                state.cycles.relisting = Some(id.clone());
+                vec![Effect::LoadCycleIssues(id)]
+            }
+            Some(Listing::Project(id)) => {
+                state.projects.relisting = Some(id.clone());
+                vec![Effect::LoadProjectIssues(id)]
+            }
+            None => Vec::new(),
+        },
+    })
 }
 
 /// Moves the focus of the Cycles or Projects screen for a list of `rows`
@@ -294,6 +435,11 @@ pub(super) fn cycle_issues_loaded(
     cycle_id: &str,
     result: Result<SearchResults, Failure>,
 ) {
+    if state.cycles.relisting.as_deref() == Some(cycle_id) {
+        state.cycles.relisting = None;
+        relisted(state, Listing::Cycle(cycle_id.to_owned()), result);
+        return;
+    }
     let waiting = state.cycles.opening.as_deref() == Some(cycle_id);
     if waiting {
         state.cycles.opening = None;
@@ -308,6 +454,9 @@ pub(super) fn cycle_issues_loaded(
     take_in(state, result, waiting, |state, ids| {
         if let (true, Some(title)) = (shown, title) {
             results::show_arranged(state, title, ids, Arrangement::CYCLE_ISSUES);
+            state
+                .results
+                .set_listing(Listing::Cycle(cycle_id.to_owned()));
         }
     });
 }
@@ -319,6 +468,11 @@ pub(super) fn project_issues_loaded(
     project_id: &str,
     result: Result<SearchResults, Failure>,
 ) {
+    if state.projects.relisting.as_deref() == Some(project_id) {
+        state.projects.relisting = None;
+        relisted(state, Listing::Project(project_id.to_owned()), result);
+        return;
+    }
     let waiting = state.projects.opening.as_deref() == Some(project_id);
     if waiting {
         state.projects.opening = None;
@@ -333,8 +487,29 @@ pub(super) fn project_issues_loaded(
     take_in(state, result, waiting, |state, ids| {
         if let (true, Some(title)) = (shown, title) {
             results::show_arranged(state, title, ids, Arrangement::PROJECT_ISSUES);
+            state
+                .results
+                .set_listing(Listing::Project(project_id.to_owned()));
         }
     });
+}
+
+/// Takes in the issues of `listing` loaded again by `r`. They go into the
+/// store, and replace the results, the focus kept on the same issue, if
+/// the results are still that list. A failure keeps the list as it was.
+fn relisted(state: &mut State, listing: Listing, result: Result<SearchResults, Failure>) {
+    match result {
+        Ok(found) => {
+            take_in(state, Ok(found), false, |state, ids| {
+                if state.results.listing() == Some(&listing) {
+                    state.results.replace_ids(ids);
+                    results::rebuild(state);
+                }
+            });
+            sync::reloaded(state, None);
+        }
+        Err(failure) => sync::reloaded(state, Some(failure)),
+    }
 }
 
 /// Merges `result`'s issues into the store and hands their ids to `show`.

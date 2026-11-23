@@ -308,7 +308,14 @@ fn due_sync(state: &mut State) -> Vec<Effect> {
 impl State {
     /// Whether a refresh can start now: the snapshot's failed load can be
     /// tried again, or the store is ready to sync and no poll is in flight.
+    /// On Cycles, Projects and a cycle's or project's issues, whether what
+    /// the screen shows can load again.
     pub fn can_refresh(&self) -> bool {
+        if self.sync_status.refresh == Refresh::Done
+            && let Some(can) = super::browse::can_reload(self)
+        {
+            return can;
+        }
         match self.sync_status.refresh {
             Refresh::Failed(_) => true,
             Refresh::Loading => false,
@@ -318,14 +325,23 @@ impl State {
 }
 
 /// `r`: polls now, focused or not, unless a poll is already in flight. While
-/// the snapshot's load has failed, tries that load again instead. Either
-/// way it forgets the writes the API key was denied, so their keys try
-/// again.
+/// the snapshot's load has failed, tries that load again instead. On
+/// Cycles, Projects and a cycle's or project's issues, loads what the
+/// screen shows again instead. Either way it forgets the writes the API key
+/// was denied, so their keys try again.
 pub(super) fn refresh(state: &mut State) -> Update {
     if !state.can_refresh() {
         return Update::default();
     }
     let unmuted = state.store.capabilities_mut().forget_denied_writes();
+    if state.sync_status.refresh == Refresh::Done
+        && let Some(effects) = super::browse::reload(state)
+    {
+        return Update {
+            redraw: unmuted,
+            effects,
+        };
+    }
     let effect = match state.sync_status.refresh {
         Refresh::Failed(_) => retry_load(state),
         Refresh::Loading | Refresh::Done => start_poll(state),
@@ -333,6 +349,20 @@ pub(super) fn refresh(state: &mut State) -> Update {
     Update {
         redraw: unmuted,
         effects: vec![effect],
+    }
+}
+
+/// A reload of the Cycles or Projects screen, or of a cycle's or project's
+/// issues, came back: the sync indicator shows it as it shows a poll that
+/// ended this way, `failure` `None` for one that went well.
+pub(super) fn reloaded(state: &mut State, failure: Option<Failure>) {
+    match failure {
+        None => {
+            let status = &mut state.sync_status;
+            status.last_synced = status.now;
+            status.problem = None;
+        }
+        Some(failure) => note_failure(state, SyncFailure::Failed(failure)),
     }
 }
 
