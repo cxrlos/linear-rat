@@ -3,16 +3,16 @@ use jiff::Timestamp;
 use semver::Version;
 
 use super::{
-    Failure, LifecycleWrite, LoadError, NewComment, NewIssue, RelationWrite, SyncFailure, Write,
-    Writing,
+    Failure, InboxWrite, LifecycleWrite, LoadError, NewComment, NewIssue, RelationWrite,
+    SyncFailure, Write, Writing,
 };
 use crate::linear::model::{
     Cycle, Issue, IssueRelation, Label, Member, ProjectMilestone, Team, WorkflowState,
 };
 use crate::linear::{
-    AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, LiveEvent, PostedComment,
-    ProjectList, SearchQuery, SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage,
-    TeamOptions, TeamQuery,
+    AnalyticsIssues, AnalyticsWindow, AssignedIssues, IssueDetail, LiveEvent, NotificationsLoaded,
+    PostedComment, ProjectList, SearchQuery, SearchResults, TeamAnalyticsIssues, TeamChanges,
+    TeamIssuesPage, TeamOptions, TeamQuery,
 };
 
 /// Something that happened, fed to [`update`](super::update).
@@ -204,4 +204,21 @@ pub enum Event {
     /// The result of [`Effect::CheckRelease`](super::Effect::CheckRelease):
     /// the latest release, or `None` when the check failed.
     ReleaseChecked(Option<Version>),
+
+    /// The result of
+    /// [`Effect::LoadNotifications`](super::Effect::LoadNotifications)
+    /// from `since`.
+    NotificationsLoaded {
+        since: Option<Timestamp>,
+        result: Result<NotificationsLoaded, Failure>,
+    },
+    /// Linear's answer to [`Effect::WriteInbox`](super::Effect::WriteInbox).
+    InboxWritten {
+        write: InboxWrite,
+        result: Result<(), Failure>,
+    },
+    /// Linear's answers to
+    /// [`Effect::ArchiveNotifications`](super::Effect::ArchiveNotifications),
+    /// one per write.
+    InboxBatchWritten(Vec<(InboxWrite, Result<(), Failure>)>),
 }

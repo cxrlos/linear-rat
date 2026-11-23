@@ -104,6 +104,18 @@ pub enum Action {
     SwitchCyclesTeam,
     /// List the issues of the focused cycle or project.
     ListIssues,
+    /// Marks the focused notification read, or unread when it is read.
+    ToggleRead,
+    /// Marks every notification about the focused one's issue read.
+    MarkIssueRead,
+    /// Archives the focused notification.
+    ArchiveNotification,
+    /// Snoozes the focused notification until a preset time.
+    Snooze,
+    /// Opens the focused notification's issue and marks it read.
+    OpenNotification,
+    /// Archives every read notification in the inbox.
+    ArchiveAllRead,
 }
 
 /// What [`Action::Copy`] puts on the clipboard.

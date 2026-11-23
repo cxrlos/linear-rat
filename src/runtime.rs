@@ -17,12 +17,12 @@ use ratatui::backend::Backend;
 use tokio::time::{Instant, MissedTickBehavior};
 
 use crate::app::{
-    App, Effect, Event, Failure, Lifecycle, LifecycleWrite, LoadError, NewComment, NewIssue,
-    RelationWrite, SEARCH_PAUSE, SyncFailure, TeamPoll, Write,
+    App, Effect, Event, Failure, InboxChange, InboxWrite, Lifecycle, LifecycleWrite, LoadError,
+    NewComment, NewIssue, RelationWrite, SEARCH_PAUSE, SyncFailure, TeamPoll, Write,
 };
 use crate::linear::{
-    AnalyticsWindow, ClientError, ErrorKind, LinearClient, LiveEvent, RelationCreate, SearchQuery,
-    Urgency,
+    AnalyticsWindow, ClientError, ErrorKind, LinearClient, LiveEvent, NotificationUpdate, Patch,
+    RelationCreate, SearchQuery, Urgency,
 };
 use crate::release::ReleaseCheck;
 use crate::snapshot::SnapshotCache;
@@ -592,6 +592,18 @@ where
             in_flight.push(Box::pin(update_issue_text(reach.client, write, seen, text)));
             Ok(())
         }
+        Effect::LoadNotifications { since } => {
+            in_flight.push(Box::pin(load_notifications(reach.client, since)));
+            Ok(())
+        }
+        Effect::WriteInbox(write) => {
+            in_flight.push(Box::pin(write_inbox(reach.client, write)));
+            Ok(())
+        }
+        Effect::ArchiveNotifications(writes) => {
+            in_flight.push(Box::pin(archive_notifications(reach.client, writes)));
+            Ok(())
+        }
     };
     if let Err(error) = outcome {
         let failed = effect_failed(action, &error);
@@ -772,6 +784,97 @@ async fn change_lifecycle<C: LinearClient>(client: Option<&C>, write: LifecycleW
         }
     }
     Event::LifecycleChanged { write, result }
+}
+
+async fn load_notifications<C: LinearClient>(
+    client: Option<&C>,
+    since: Option<Timestamp>,
+) -> Event {
+    let result = ask(
+        client,
+        "load the Inbox",
+        "could not load the Inbox",
+        |client| client.notifications(since),
+    )
+    .await;
+    if let Ok(loaded) = &result {
+        tracing::debug!(
+            notifications = loaded.notifications.len(),
+            delta = since.is_some(),
+            "loaded notifications"
+        );
+    }
+    Event::NotificationsLoaded { since, result }
+}
+
+/// Sends the one mutation of `write`, as the viewer waits on it, or in the
+/// background when `urgency` says so.
+async fn send_inbox_write<C: LinearClient>(
+    client: Option<&C>,
+    write: &InboxWrite,
+    urgency: Urgency,
+) -> Result<(), Failure> {
+    let action = format!(
+        "{} a notification on {}",
+        write.change.verb(),
+        write.identifier
+    );
+    let Some(client) = client else {
+        return Err(no_client(&action));
+    };
+    let id = write.notification_id.as_str();
+    let result = match write.change {
+        InboxChange::Read(at) => {
+            let update = NotificationUpdate {
+                read_at: Patch::Set(at),
+                ..NotificationUpdate::default()
+            };
+            client.update_notification(id, &update).await
+        }
+        InboxChange::Unread => {
+            let update = NotificationUpdate {
+                read_at: Patch::Clear,
+                ..NotificationUpdate::default()
+            };
+            client.update_notification(id, &update).await
+        }
+        InboxChange::Snooze(until) => {
+            let update = NotificationUpdate {
+                snoozed_until_at: Some(until),
+                ..NotificationUpdate::default()
+            };
+            client.update_notification(id, &update).await
+        }
+        InboxChange::ReadIssue(at) => {
+            client
+                .mark_issue_notifications_read(&write.issue_id, at)
+                .await
+        }
+        InboxChange::Archive => client.archive_notification(id, urgency).await,
+    };
+    result.map_err(|error| {
+        tracing::warn!(%error, change = ?write.change, "Linear rejected an inbox write");
+        Failure::from_client(&action, &error)
+    })
+}
+
+async fn write_inbox<C: LinearClient>(client: Option<&C>, write: InboxWrite) -> Event {
+    let result = send_inbox_write(client, &write, Urgency::Urgent).await;
+    Event::InboxWritten { write, result }
+}
+
+/// Archives each of `writes` in turn, as background requests, so the
+/// governor spaces them when the budget runs low.
+async fn archive_notifications<C: LinearClient>(
+    client: Option<&C>,
+    writes: Vec<InboxWrite>,
+) -> Event {
+    let mut answers = Vec::with_capacity(writes.len());
+    for write in writes {
+        let result = send_inbox_write(client, &write, Urgency::Background).await;
+        answers.push((write, result));
+    }
+    Event::InboxBatchWritten(answers)
 }
 
 /// Reads the issue's `updatedAt` again and sends `write` only if it is still

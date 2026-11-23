@@ -8,6 +8,7 @@ mod detail;
 mod error;
 mod hints;
 pub mod icons;
+mod inbox;
 pub(crate) mod markdown;
 mod messages;
 mod my_issues;
@@ -64,6 +65,7 @@ pub fn render(state: &State, frame: &mut Frame) {
         Screen::Analytics => analytics::render(state, frame, body_area),
         Screen::Cycles => browse::render_cycles(state, frame, body_area),
         Screen::Projects => browse::render_projects(state, frame, body_area),
+        Screen::Inbox => inbox::render(state, frame, body_area),
         Screen::Results => results::render(state, frame, body_area),
     }
     frame.render_widget(
@@ -109,9 +111,9 @@ fn tab_titles(state: &State, width: u16) -> [String; Screen::ALL.len()] {
 /// The screen's title after the first key that shows it from here, as
 /// `[1] My Issues`, or only the key when `short`, as `[1]`. The bare title
 /// if no key reaches it (unbound, or shadowed by a binding of the current
-/// screen).
+/// screen). The Inbox adds its unread count, as `[6] Inbox 3`.
 fn tab_title(state: &State, screen: Screen, short: bool) -> String {
-    match state
+    let title = match state
         .keymap
         .keys_for(Action::ShowScreen(screen), &keys::screen_contexts(state))
         .first()
@@ -119,6 +121,10 @@ fn tab_title(state: &State, screen: Screen, short: bool) -> String {
         Some(key) if short => format!("[{key}]"),
         Some(key) => format!("[{key}] {}", screen.title()),
         None => screen.title().to_owned(),
+    };
+    match crate::app::unread_count(state) {
+        unread if screen == Screen::Inbox && unread > 0 => format!("{title} {unread}"),
+        _ => title,
     }
 }
 
@@ -236,7 +242,7 @@ pub fn detail_rows(state: &State, viewport: Size) -> (usize, usize) {
         Screen::MyIssues => my_issues::detail_area(state, body_area, state.my_issues.pane()),
         Screen::TeamIssues => team_issues::detail_area(state, body_area),
         Screen::Results => my_issues::detail_area(state, body_area, state.results.pane()),
-        Screen::Analytics | Screen::Cycles | Screen::Projects => None,
+        Screen::Analytics | Screen::Cycles | Screen::Projects | Screen::Inbox => None,
     };
     let Some(pane) = pane else {
         return (0, 0);

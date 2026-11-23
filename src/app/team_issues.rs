@@ -668,7 +668,8 @@ fn carry_out(state: &mut State, purpose: Purpose, id: Option<String>) -> Vec<Eff
         | Purpose::CyclesTeam
         | Purpose::Group
         | Purpose::Sort
-        | Purpose::RelationKind => Vec::new(),
+        | Purpose::RelationKind
+        | Purpose::Snooze => Vec::new(),
         Purpose::Filter(field) => {
             let Some(mut query) = state.team_issues.query.clone() else {
                 return Vec::new();

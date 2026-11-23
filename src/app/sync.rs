@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use jiff::{SignedDuration, Timestamp};
 
-use super::{Effect, Failure, Load, LoadError, State, Update};
+use super::{Effect, Failure, Load, LoadError, State, Update, inbox};
 use crate::config::SyncSettings;
 use crate::linear::{AssignedIssues, ClientError, LiveEvent, TeamChanges};
 
@@ -289,7 +289,9 @@ pub(super) fn due(state: &mut State) -> Vec<Effect> {
 
 fn due_sync(state: &mut State) -> Vec<Effect> {
     if state.sync_status.poll_due(&state.sync) {
-        return vec![start_poll(state)];
+        let mut effects = vec![start_poll(state)];
+        effects.extend(inbox::poll(state));
+        return effects;
     }
     if state.sync_status.reconcile_due(&state.sync) {
         state.sync_status.reconciling = true;
@@ -326,13 +328,17 @@ pub(super) fn refresh(state: &mut State) -> Update {
         return Update::default();
     }
     let unmuted = state.store.capabilities_mut().forget_denied_writes();
-    let effect = match state.sync_status.refresh {
-        Refresh::Failed(_) => retry_load(state),
-        Refresh::Loading | Refresh::Done => start_poll(state),
+    let effects = match state.sync_status.refresh {
+        Refresh::Failed(_) => vec![retry_load(state)],
+        Refresh::Loading | Refresh::Done => {
+            let mut effects = vec![start_poll(state)];
+            effects.extend(inbox::poll(state));
+            effects
+        }
     };
     Update {
         redraw: unmuted,
-        effects: vec![effect],
+        effects,
     }
 }
 
@@ -368,11 +374,14 @@ fn redraw_if_indicator_changes(state: &mut State, change: impl FnOnce(&mut State
 }
 
 pub(super) fn tick(state: &mut State, now: Timestamp) -> Update {
-    let redraw = redraw_if_indicator_changes(state, |state| {
+    let before = state.sync_status.now;
+    let mut redraw = redraw_if_indicator_changes(state, |state| {
         let status = &mut state.sync_status;
         status.now = Some(now);
         status.last_activity.get_or_insert(now);
     });
+    // A snoozed notification coming back changes the Inbox and its tab.
+    redraw |= inbox::wakes(state, before, now);
     Update {
         redraw,
         effects: due(state),
@@ -550,13 +559,16 @@ fn note_failure(state: &mut State, failure: SyncFailure) {
     }
 }
 
-/// My Issues loaded: it fills the screen, and polling may start.
+/// My Issues loaded: it fills the screen, the viewer is confirmed so the
+/// Inbox loads, and polling may start.
 pub(super) fn loaded(state: &mut State, loaded: &AssignedIssues) -> Update {
     state.show_assigned(loaded);
     state.sync_status.refresh = Refresh::Done;
+    let mut effects: Vec<Effect> = inbox::first_load(state).into_iter().collect();
+    effects.extend(due(state));
     Update {
         redraw: true,
-        effects: due(state),
+        effects,
     }
 }
 

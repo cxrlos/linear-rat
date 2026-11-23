@@ -31,7 +31,11 @@ pub fn own_order(screen: Screen) -> Option<&'static str> {
     match screen {
         Screen::MyIssues => Some("active cycle, then priority"),
         Screen::Results => Some("Linear's order"),
-        Screen::TeamIssues | Screen::Analytics | Screen::Cycles | Screen::Projects => None,
+        Screen::TeamIssues
+        | Screen::Analytics
+        | Screen::Cycles
+        | Screen::Projects
+        | Screen::Inbox => None,
     }
 }
 
@@ -97,7 +101,8 @@ pub(super) fn pick(state: &mut State, nth: Option<usize>) -> Option<Vec<Effect>>
         | Purpose::AnalyticsTeam
         | Purpose::CyclesTeam
         | Purpose::Filter(_)
-        | Purpose::RelationKind => {
+        | Purpose::RelationKind
+        | Purpose::Snooze => {
             return None;
         }
     }
@@ -118,6 +123,6 @@ fn apply(state: &mut State, arrangement: Arrangement) -> Vec<Effect> {
             results::rearrange(state, arrangement);
             Vec::new()
         }
-        Screen::Analytics | Screen::Cycles | Screen::Projects => Vec::new(),
+        Screen::Analytics | Screen::Cycles | Screen::Projects | Screen::Inbox => Vec::new(),
     }
 }

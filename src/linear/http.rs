@@ -13,6 +13,7 @@ mod edit;
 mod issue_key;
 mod lifecycle;
 mod live;
+mod notifications;
 mod relations;
 mod search;
 mod team;
@@ -37,9 +38,9 @@ use super::paging::{Next, RepeatedCursor, Stitch};
 use super::search_bucket::SearchBucket;
 use super::{
     AnalyticsIssues, AnalyticsWindow, AssignedIssues, ClientError, Diagnostics, GraphQlError,
-    IssueCreate, IssueDetail, IssueLink, IssueUpdate, LinearClient, LiveEvent, PostedComment,
-    ProjectList, RelationCreate, Response, SearchQuery, SearchResults, TeamAnalyticsIssues,
-    TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
+    IssueCreate, IssueDetail, IssueLink, IssueUpdate, LinearClient, LiveEvent, NotificationUpdate,
+    NotificationsLoaded, PostedComment, ProjectList, RelationCreate, Response, SearchQuery,
+    SearchResults, TeamAnalyticsIssues, TeamChanges, TeamIssuesPage, TeamOptions, TeamQuery,
 };
 use crate::auth::ApiKey;
 
@@ -373,6 +374,33 @@ impl LinearClient for HttpClient {
 
     async fn archive_issue(&self, issue_id: &str) -> Result<(), ClientError> {
         lifecycle::archive(self, issue_id).await
+    }
+
+    async fn notifications(
+        &self,
+        since: Option<Timestamp>,
+    ) -> Result<NotificationsLoaded, ClientError> {
+        notifications::load(self, since).await
+    }
+
+    async fn update_notification(
+        &self,
+        id: &str,
+        update: &NotificationUpdate,
+    ) -> Result<(), ClientError> {
+        notifications::update(self, id, update).await
+    }
+
+    async fn archive_notification(&self, id: &str, urgency: Urgency) -> Result<(), ClientError> {
+        notifications::archive(self, id, urgency).await
+    }
+
+    async fn mark_issue_notifications_read(
+        &self,
+        issue_id: &str,
+        read_at: Timestamp,
+    ) -> Result<(), ClientError> {
+        notifications::mark_issue_read(self, issue_id, read_at).await
     }
 
     async fn unarchive_issue(&self, issue_id: &str) -> Result<(), ClientError> {

@@ -115,6 +115,8 @@ pub enum Purpose {
     Sort,
     /// Add a relation of this kind to the focused issue.
     RelationKind,
+    /// Snooze the focused notification until this time.
+    Snooze,
 }
 
 impl Choice {
@@ -126,6 +128,7 @@ impl Choice {
             Purpose::Group => "Group by".to_owned(),
             Purpose::Sort => "Sort by".to_owned(),
             Purpose::RelationKind => "Add a relation".to_owned(),
+            Purpose::Snooze => "Snooze until".to_owned(),
         }
     }
 

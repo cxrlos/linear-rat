@@ -14,6 +14,7 @@ mod edit_text;
 mod effect;
 mod event;
 mod failure;
+mod inbox;
 mod issue_list;
 mod issue_picker;
 mod lifecycle;
@@ -56,6 +57,11 @@ pub use edit_text::TextOpened;
 pub use effect::Effect;
 pub use event::Event;
 pub use failure::{ERROR_LOG_CAP, ErrorLog, Failure, LoggedFailure};
+pub use inbox::{
+    Inbox, InboxChange, InboxGroup, InboxWrite, focused as focused_notification,
+    groups as inbox_groups, has_read as inbox_has_read, shown as inbox_shown, snooze_presets,
+    unread_count,
+};
 pub use issue_list::{IssueList, Pane};
 pub use issue_picker::{
     IssuePicker, IssuePurpose, Mode, PickerScope, SEARCH_PAUSE, open as open_issue_picker,

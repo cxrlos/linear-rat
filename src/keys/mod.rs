@@ -36,10 +36,12 @@ pub enum Context {
     Browse,
     /// The Cycles screen, ahead of [`Context::Browse`] there.
     Cycles,
+    /// The Inbox screen.
+    Inbox,
 }
 
 impl Context {
-    pub const ALL: [Context; 8] = [
+    pub const ALL: [Context; 9] = [
         Context::Global,
         Context::List,
         Context::TeamIssues,
@@ -48,6 +50,7 @@ impl Context {
         Context::Analytics,
         Context::Browse,
         Context::Cycles,
+        Context::Inbox,
     ];
 
     /// The name of its table in `config.toml`, as in `[keys.list]`.
@@ -61,6 +64,7 @@ impl Context {
             Context::Analytics => "analytics",
             Context::Browse => "browse",
             Context::Cycles => "cycles",
+            Context::Inbox => "inbox",
         }
     }
 
@@ -80,6 +84,7 @@ impl Context {
             Context::Analytics => "Analytics",
             Context::Browse => "Cycles and Projects",
             Context::Cycles => "Cycles",
+            Context::Inbox => "Inbox",
         }
     }
 }
@@ -118,5 +123,6 @@ pub fn screen_contexts(state: &State) -> Vec<Context> {
         Screen::Analytics => vec![Context::Analytics, Context::Global],
         Screen::Cycles => vec![Context::Cycles, Context::Browse, Context::Global],
         Screen::Projects => vec![Context::Browse, Context::Global],
+        Screen::Inbox => vec![Context::Inbox, Context::Global],
     }
 }

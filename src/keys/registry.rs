@@ -181,10 +181,16 @@ const fn views(word: &'static str) -> Option<Hint> {
 const LIST: &[Context] = &[Context::List];
 const TEAM_ISSUES: &[Context] = &[Context::TeamIssues];
 const PANES: &[Context] = &[Context::List, Context::Detail];
-/// Moves also go through the Cycles and Projects lists.
-const MOVES: &[Context] = &[Context::List, Context::Detail, Context::Browse];
+/// Moves also go through the Cycles and Projects lists and the Inbox.
+const MOVES: &[Context] = &[
+    Context::List,
+    Context::Detail,
+    Context::Browse,
+    Context::Inbox,
+];
 const BROWSE: &[Context] = &[Context::Browse];
 const CYCLES: &[Context] = &[Context::Cycles];
+const INBOX: &[Context] = &[Context::Inbox];
 const GLOBAL: &[Context] = &[Context::Global];
 const OVERLAY: &[Context] = &[Context::Overlay];
 const ANALYTICS: &[Context] = &[Context::Analytics];
@@ -893,6 +899,85 @@ pub static ACTIONS: &[ActionSpec] = &[
         available: |state| picker_has(9, state),
     },
     ActionSpec {
+        action: Action::OpenNotification,
+        id: "open-notification",
+        description: "Open the notification's issue and mark it read",
+        label: "open the issue",
+        group: Group::Screen,
+        writes: None,
+        hint: does("open"),
+        contexts: INBOX,
+        overlays: &[],
+        default_keys: &[&[Key::named(KeyCode::Enter)]],
+        available: has_notification,
+    },
+    ActionSpec {
+        action: Action::ToggleRead,
+        id: "toggle-read",
+        description: "Mark the notification read or unread",
+        label: "read / issue read",
+        group: Group::Screen,
+        writes: Some(WriteClass::Inbox),
+        hint: does("read"),
+        contexts: INBOX,
+        overlays: &[],
+        default_keys: &[&[Key::char('m')]],
+        available: has_notification,
+    },
+    ActionSpec {
+        action: Action::MarkIssueRead,
+        id: "mark-issue-read",
+        description: "Mark every notification about the issue read",
+        label: "read / issue read",
+        group: Group::Screen,
+        writes: Some(WriteClass::Inbox),
+        hint: None,
+        contexts: INBOX,
+        overlays: &[],
+        default_keys: &[&[Key::char('M')]],
+        available: has_notification,
+    },
+    ActionSpec {
+        action: Action::ArchiveNotification,
+        id: "archive-notification",
+        description: "Archive the notification",
+        label: "archive / snooze",
+        group: Group::Screen,
+        writes: Some(WriteClass::Inbox),
+        hint: does("archive"),
+        contexts: INBOX,
+        overlays: &[],
+        default_keys: &[&[Key::char('A')]],
+        available: has_notification,
+    },
+    ActionSpec {
+        action: Action::Snooze,
+        id: "snooze",
+        description: "Snooze the notification until a preset time",
+        label: "archive / snooze",
+        group: Group::Screen,
+        writes: Some(WriteClass::Inbox),
+        hint: does("snooze"),
+        contexts: INBOX,
+        overlays: &[],
+        default_keys: &[&[Key::char('z')]],
+        available: has_notification,
+    },
+    // Run from the palette, so it has no key.
+    ActionSpec {
+        action: Action::ArchiveAllRead,
+        id: "archive-all-read",
+        description: "Archive every read notification in the Inbox",
+        label: "archive all read",
+        group: Group::Screen,
+        writes: None,
+        hint: None,
+        contexts: INBOX,
+        overlays: &[],
+        default_keys: &[],
+        available: app::inbox_has_read,
+    },
+    ActionSpec {
         action: Action::SwitchTeam,
         id: "switch-team",
         description: "Switch the team of Team Issues",
@@ -1293,6 +1378,19 @@ pub static ACTIONS: &[ActionSpec] = &[
         available: |state| state.screen != Screen::Projects,
     },
     ActionSpec {
+        action: Action::ShowScreen(Screen::Inbox),
+        id: "show-inbox",
+        description: "Show the Inbox",
+        label: "inbox",
+        group: Group::App,
+        writes: None,
+        hint: None,
+        contexts: GLOBAL,
+        overlays: &[],
+        default_keys: &[&[Key::char('6')]],
+        available: |state| state.screen != Screen::Inbox,
+    },
+    ActionSpec {
         action: Action::Refresh,
         id: "refresh",
         description: "Refresh now",
@@ -1543,6 +1641,11 @@ fn continues_word(query: &str) -> bool {
         .is_some_and(|c| c.is_alphanumeric() || c == '-')
 }
 
+/// Whether the Inbox is on screen with a notification focused.
+fn has_notification(state: &State) -> bool {
+    state.screen == Screen::Inbox && app::focused_notification(state).is_some()
+}
+
 fn has_team(state: &State) -> bool {
     state.team_issues.query().is_some()
 }
@@ -1590,7 +1693,7 @@ fn in_detail(state: &State) -> bool {
         Screen::MyIssues => state.my_issues.pane() == Pane::Detail,
         Screen::TeamIssues => state.team_issues.pane() == Pane::Detail,
         Screen::Results => state.results.pane() == Pane::Detail,
-        Screen::Analytics | Screen::Cycles | Screen::Projects => false,
+        Screen::Analytics | Screen::Cycles | Screen::Projects | Screen::Inbox => false,
     }
 }
 

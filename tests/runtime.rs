@@ -758,7 +758,11 @@ async fn quitting_saves_the_snapshot_the_next_launch_paints_from() {
 
     assert!(matches!(quit, Ok(Ok(()))), "{quit:?}");
     let saved = cache.load().unwrap();
-    assert_eq!(saved.store, app.state().store);
+    // What the session keeps to itself, as the Inbox, is not saved.
+    assert_eq!(
+        serde_json::to_value(&saved.store).unwrap(),
+        serde_json::to_value(&app.state().store).unwrap()
+    );
     assert!(saved.store.issues().count() > 0);
     assert!(saved.synced_at.is_some());
 }

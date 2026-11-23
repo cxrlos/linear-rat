@@ -274,7 +274,7 @@ fn the_tab_row_at_80_columns() {
 #[test]
 fn the_notice_goes_first_when_the_tab_row_is_too_narrow() {
     let mut app = app_at(
-        60,
+        64,
         synced(state(true, Channel::CargoBin, with_latest(newer()))),
     );
     app.handle(Event::Tick(now())).unwrap();
@@ -423,7 +423,7 @@ async fn run_checking(server: &MockServer, record: &Record) -> (App<TestBackend>
         cache: cache.clone(),
     };
     let state = State::demo().with_release(Release::new(true, Channel::CargoBin, cache.load()));
-    let mut app = App::new(TestBackend::new(80, 24), state).unwrap();
+    let mut app = App::new(TestBackend::new(100, 24), state).unwrap();
     let running = runtime::run_with_job_control(
         &mut app,
         Some(&FakeClient),

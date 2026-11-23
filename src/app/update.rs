@@ -4,8 +4,8 @@ use ratatui::layout::Size;
 use super::edit::{self, Editable};
 use super::{
     Action, Copyable, Effect, Event, Load, Modal, Palette, Pane, Purpose, Screen, State,
-    analytics_screen, browse, compose, create, detail, issue_picker, lifecycle, links, palette,
-    rearrange, relations, release, results, search, sync, team_issues,
+    analytics_screen, browse, compose, create, detail, inbox, issue_picker, lifecycle, links,
+    palette, rearrange, relations, release, results, search, sync, team_issues,
 };
 use crate::keys::{self, Key, Resolution};
 use crate::linear::SearchQuery;
@@ -241,6 +241,9 @@ fn apply(state: &mut State, event: Event) -> Update {
         Event::EditorClosed { writing, result } => compose::closed(state, writing, result),
         Event::CommentCreated { comment, result } => compose::commented(state, &comment, result),
         Event::IssueCreated { issue, result } => compose::created(state, &issue, result),
+        Event::NotificationsLoaded { since, result } => inbox::loaded(state, since, result),
+        Event::InboxWritten { write, result } => inbox::finished(state, &write, result),
+        Event::InboxBatchWritten(answers) => inbox::batch_finished(state, answers),
     }
 }
 
@@ -338,7 +341,7 @@ pub fn perform(state: &mut State, action: Action) -> Update {
                 Screen::Analytics => analytics_screen::request_missing(state),
                 Screen::Cycles => browse::open_cycles(state),
                 Screen::Projects => browse::open_projects(state),
-                Screen::MyIssues | Screen::Results => Vec::new(),
+                Screen::MyIssues | Screen::Results | Screen::Inbox => Vec::new(),
             };
             Update {
                 redraw: true,
@@ -477,6 +480,26 @@ pub fn perform(state: &mut State, action: Action) -> Update {
                 effects: Vec::new(),
             }
         }
+        Action::MoveDown
+        | Action::MoveUp
+        | Action::MoveToTop
+        | Action::MoveToBottom
+        | Action::HalfPageDown
+        | Action::HalfPageUp
+            if state.screen == Screen::Inbox =>
+        {
+            let rows = ui::list_rows(state, state.viewport);
+            Update {
+                redraw: inbox::perform(state, action, rows),
+                effects: Vec::new(),
+            }
+        }
+        Action::ToggleRead => inbox::toggle_read(state),
+        Action::MarkIssueRead => inbox::mark_issue_read(state),
+        Action::ArchiveNotification => inbox::archive(state),
+        Action::Snooze => inbox::open_snooze(state),
+        Action::OpenNotification => inbox::open(state),
+        Action::ArchiveAllRead => inbox::archive_all_read(state),
         Action::ListIssues => {
             let effects = browse::list_issues(state);
             Update {
@@ -604,6 +627,9 @@ fn choose(state: &mut State, nth: Option<usize>) -> Update {
     };
     if choice.purpose == Purpose::RelationKind {
         return relations::kind_chosen(state, nth);
+    }
+    if choice.purpose == Purpose::Snooze {
+        return inbox::snooze_chosen(state, nth);
     }
     if choice.purpose == Purpose::CyclesTeam {
         browse::pick_team(state, nth).map_or_else(Update::default, |effects| Update {

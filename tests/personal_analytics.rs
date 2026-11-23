@@ -186,7 +186,13 @@ fn opening_analytics_before_my_issues_load_waits_for_them() {
         )))
         .unwrap();
 
-    assert_eq!(effects, [load(TWELVE_WEEKS, None)]);
+    assert_eq!(
+        effects,
+        [
+            Effect::LoadNotifications { since: None },
+            load(TWELVE_WEEKS, None)
+        ]
+    );
 }
 
 #[test]
