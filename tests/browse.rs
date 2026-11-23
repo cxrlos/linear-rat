@@ -521,6 +521,30 @@ async fn a_reload_keeps_the_focused_cycle_by_id() {
 }
 
 #[tokio::test]
+async fn a_failed_cycles_reload_keeps_the_rows_and_marks_sync_failing() {
+    let mut app = sized(100, 24);
+    run(&mut app, "4").await;
+    let team_id = app.state().cycles.team_id().unwrap().to_owned();
+    let count = app.state().cycles.cycles().len();
+    let title = cycle_title(&app.state().cycles.cycles()[0]);
+    press(&mut app, "r");
+
+    app.handle(Event::CyclesLoaded {
+        team_id,
+        result: Err(Failure::new(
+            ErrorKind::Other,
+            "load the cycles",
+            "Linear could not be reached",
+        )),
+    })
+    .unwrap();
+
+    assert_eq!(app.state().cycles.cycles().len(), count);
+    assert!(shows(&app, &title), "{:#?}", screen(&app));
+    assert!(app.state().sync_status.indicator().unwrap().alert);
+}
+
+#[tokio::test]
 async fn a_reload_shows_in_the_sync_indicator_like_a_poll() {
     let mut app = sized(100, 24);
     run(&mut app, "5").await;
